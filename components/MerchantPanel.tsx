@@ -21,6 +21,7 @@ type Tab = "sell" | "buy" | "enhance";
 export function MerchantPanel({
   save,
   onSellAll,
+  onSellAllGear,
   onSellOne,
   onBuyStones,
   onEnhance,
@@ -29,6 +30,7 @@ export function MerchantPanel({
 }: {
   save: AdventureSave;
   onSellAll: () => void;
+  onSellAllGear: () => void;
   onSellOne: (item: Item) => void;
   onBuyStones: (n: number) => void;
   onEnhance: (item: Item) => void;
@@ -40,6 +42,7 @@ export function MerchantPanel({
   const trashWorth = trash.reduce((n, i) => n + itemValue(i), 0);
   // Gear you're not wearing can be sold too; equip/unequip happens in the bag.
   const gear = save.inventory.filter((i) => base(i.baseId).kind !== "trash");
+  const gearWorth = gear.reduce((n, i) => n + itemValue(i), 0);
 
   // Anything enhanceable: equipped gear plus weapons in the bag.
   const enhanceable: Item[] = [
@@ -89,6 +92,13 @@ export function MerchantPanel({
             )}
             {gear.length > 0 && (
               <>
+                <button
+                  className="btn btn-danger"
+                  style={{ width: "100%", marginBottom: 12 }}
+                  onClick={onSellAllGear}
+                >
+                  Sell all gear ({gear.length}) for {gearWorth}g
+                </button>
                 <h3 className="section-title">Gear</h3>
                 <div className="item-list" style={{ marginBottom: 12 }}>
                   {gear.map((i) => (

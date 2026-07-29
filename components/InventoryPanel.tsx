@@ -37,7 +37,7 @@ function statScore(item: Item): number {
 }
 
 /** Difference in attack/hp against whatever occupies the same slot. */
-function compare(item: Item, equipped?: Item): { text: string; good: boolean } | null {
+export function compare(item: Item, equipped?: Item): { text: string; good: boolean } | null {
   if (!equipped) return null;
   const d = statScore(item) - statScore(equipped);
   if (Math.abs(d) < 0.5) return null;

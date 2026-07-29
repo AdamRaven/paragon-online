@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
 import { ClassPortrait } from "@/components/ClassPortrait";
+import { DevLevelTools } from "@/components/DevTools";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { MapPanel } from "@/components/MapPanel";
@@ -27,6 +28,7 @@ import { emptyIntent, type Intent } from "@/lib/arena/engine";
 import { ArenaInput } from "@/lib/arena/input";
 import { STAGES } from "@/lib/arena/mobs";
 import {
+  MAX_LEVEL,
   STAT_META,
   clearAdventure,
   createAdventureSave,
@@ -244,6 +246,13 @@ export function AdventureClient() {
     setRev((r) => r + 1);
   };
 
+  // Dev-only: never reachable in a production build (see DevLevelTools).
+  const devAdjustLevel = (delta: number) =>
+    mutate((e) => {
+      e.save.level = Math.max(1, Math.min(MAX_LEVEL, e.save.level + delta));
+      e.save.exp = 0;
+    });
+
   const equip = (item: Item) =>
     mutate((e) => {
       const slot = base(item.baseId).slot;
@@ -279,6 +288,18 @@ export function AdventureClient() {
       e.save.inventory = e.save.inventory.filter((i) => base(i.baseId).kind !== "trash");
       e.save.gold += worth;
       setShopMsg(`Sold ${trash.length} trash items for ${worth}g.`);
+      playSound("loot");
+    });
+
+  // Only unequipped gear in the backpack — equipped items live in
+  // save.equipped and are never touched here, so nothing worn is at risk.
+  const sellAllGear = () =>
+    mutate((e) => {
+      const gear = e.save.inventory.filter((i) => base(i.baseId).kind !== "trash");
+      const worth = gear.reduce((n, i) => n + itemValue(i), 0);
+      e.save.inventory = e.save.inventory.filter((i) => base(i.baseId).kind === "trash");
+      e.save.gold += worth;
+      setShopMsg(`Sold ${gear.length} gear items for ${worth}g.`);
       playSound("loot");
     });
 
@@ -379,6 +400,10 @@ export function AdventureClient() {
       <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
       {hud && <ArenaHud hud={hud} logs={logs} />}
 
+      {process.env.NODE_ENV !== "production" && (
+        <DevLevelTools level={live.level} maxLevel={MAX_LEVEL} onAdjust={devAdjustLevel} />
+      )}
+
       {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
       <div className="camp-bar">
         <div className="camp-level">
@@ -461,6 +486,7 @@ export function AdventureClient() {
         <MerchantPanel
           save={live}
           onSellAll={sellAllTrash}
+          onSellAllGear={sellAllGear}
           onSellOne={sellOne}
           onBuyStones={buyStones}
           onEnhance={enhance}

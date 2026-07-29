@@ -1,0 +1,476 @@
+| **Shedim Stage** | **Input**                                            | **Name / Common Name** | **Description**                                                         | **Knock Downs at End of Combo** | **Stoic** |
+| ---------------- | ---------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------- | ------------------------------- | --------- |
+| **Shedim**       | `LMB LMB LMB LMB`                                    | 4 Slash Combo          | Four sword slashes. Final hit knocks down.                              | **Yes**                         | **No**    |
+| Shedim           | `LMB LMB LMB RMB`                                    | Fire Finish            | Three slashes followed by a Groundslam fire burst. Good finisher.       | **Yes**                         | **No**    |
+| Shedim           | `RMB RMB RMB LMB`                                    | Polearm Slash          | Three claw attacks ending with an upward slash that launches the enemy. | **Yes**                         | **No**    |
+| Shedim           | `RMB RMB RMB RMB`                                    | Slayer Combo           | Two heavy strikes followed by a powerful blast.                         | **No**                          | **No**    |
+| Shedim           | `DD LMB LMB` *(or `AA LMB LMB`)*                     | Dash Slash             | Dash into two quick sword slashes.                                      | **No**                          | **No**    |
+| Shedim           | `DD RMB RMB` *(or `AA RMB RMB`)*                     | Dash Polearm Grab      | Dash attack that briefly stuns/grabs.                                   | **No**                          | **No**    |
+| Shedim           | `WJump LMB`                                          | Jump Slash             | Single aerial sword slash.                                              | **No**                          | **No**    |
+| Shedim           | `WJump RMB`                                          | Jump Hint              | Single aerial claw strike with knockdown.                               | **No**                          | **No**    |
+| Shedim           | `DD WJump LMB LMB` *(or `AA WJump LMB LMB`)*         | Dash Jump Slash        | Air dash into two sword slashes.                                        | **No**                          | **No**    |
+| Shedim           | `DD WJump RMB` *(or `AA WJump RMB`)*                 | Dash Jump Fire         | Air dash followed by a heavy slam.                                      | **No**                          | **No**    |
+| Shedim           | `LMB LMB LMB W+LMB`                                  | Launch Combo           | Three slashes ending with an uppercut launcher.                         | **Yes**                         | **No**    |
+| Shedim           | `DD LMB LMB W+LMB` *(or `AA LMB LMB W+LMB`)*         | Dash Launch            | Dash combo ending in a launcher.                                        | **Yes**                         | **No**    |
+| Shedim           | `LMB LMB LMB W+LMB LMB`                              | Extended Launch        | Launcher followed by two aerial sword slashes before landing.           | **No**                          | **Yes**   |
+| Shedim           | `DD LMB LMB W+LMB LMB` *(or `AA LMB LMB W+LMB LMB`)* | Dash Extended Launch   | Dash launcher with aerial follow-up.                                    | **No**                          | **Yes**   |
+| Shedim           | `DD WJump LMB LMB` *(or `AA WJump LMB LMB`)*         | Air Chase              | Improved aerial pursuit after launching an enemy.                       | **No**                          | **No**    |
+| Shedim           | `DD WJump LMB RMB` *			          | Air Chase              | Improved aerial pursuit, launches wave slash.            	             | **No**                          | **No**    |
+
+
+
+
+
+
+
+
+
+
+
+| **Kacper Stage** | **Input**               | **Name / Common Name** | **Description**                                                 | **Knock Downs at End of Combo** | **Stoic?** 		|
+| ---------------- | ----------------------- | ---------------------- | --------------------------------------------------------------- | ------------------------------- | --------------------|
+| **Kacper**       | `LMB LMB LMB LMB`       | 4 Slash Combo          | Standard four-hit sword combo. Final hit knocks the enemy down. | **Yes**                         | **No**     		|
+| Kacper           | `LMB LMB LMB RMB`       | Stab Finish            | Three slashes followed by a powerful thrust.                    | **Yes**                         | **No**     		|
+| Kacper           | `RMB RMB RMB`           | Heavy Slash            | Heavy sword combo ending in a knockdown attack.                 | **Yes**                         | **No**     		|
+| Kacper           | `RMB RMB LMB`           | Upper Slash            | Heavy attacks ending in a launcher.                             | **No**                          | **No**     		|
+| Kacper           | `DD LMB LMB`            | Dash Slash             | Dash into two quick slashes.                                    | **Yes**                         | **No**     		|
+| Kacper           | `AA LMB LMB`            | Back Dash Slash        | Dash left into two quick slashes.                               | **Yes**                         | **No**     		|
+| Kacper           | `DD RMB`                | Dash Heavy Slash       | Powerful advancing slash.                                       | **Yes**                         | **No**     		|
+| Kacper           | `AA RMB`                | Back Dash Heavy Slash  | Powerful backward advancing slash.                              | **Yes**                         | **No**     		|
+| Kacper           | `WJump LMB`             | Jump Slash             | Basic aerial slash.                                             | **No**                          | **No**     		|
+| Kacper           | `WJump RMB`             | Jump Heavy Slash       | Heavy aerial attack.                                            | **Yes**                         | **No**     		|
+| Kacper           | `DD WJump LMB LMB`      | Dash Jump Slash        | Air dash into double slash.                                     | **No**                          | **No**     		|
+| Kacper           | `AA WJump LMB LMB`      | Back Dash Jump Slash   | Air dash backwards into double slash.                           | **No**                          | **No**     		|
+| Kacper           | `LMB LMB LMB W+LMB`     | Rising Slash           | Launcher attack that sends enemies upward.                      | **No**                          | **Yes**    		|
+| Kacper           | `DD LMB LMB W+LMB`      | Dash Rising Slash      | Dash launcher.                                                  | **No**                          | **No**     		|
+| Kacper           | `AA LMB LMB W+LMB`      | Back Dash Rising Slash | Back dash launcher.                                             | **No**                          | **No**     		|
+| Kacper           | `LMB LMB LMB W+LMB LMB` | Rising Combo           | Launcher with aerial follow-up slash.                           | **Yes**                         | **No**     		|
+| Kacper           | `DD LMB LMB W+LMB LMB`  | Dash Rising Combo      | Dash launcher with follow-up.                                   | **Yes**                         | **No**     		|
+| Kacper           | `AA LMB LMB W+LMB LMB`  | Back Dash Rising Combo | Back dash launcher with follow-up.                              | **Yes**                         | **No**     		|
+| Kacper           | `DD WJump LMB LMB`      | Air Chase              | Air pursuit after launcher.                                     | **No**                          | **No**    		|
+| Kacper           | `AA WJump LMB LMB`      | Back Air Chase         | Backward air pursuit.                                           | **No**                          | **No**     		|
+| Kacper           | Hold RMB                | Stance                 | Holds(RMB forover 4 Seconds to gain Stoic until lets (RMB) go   | **No**                          | After 4Sec /yes     |
+
+
+
+
+
+
+
+
+
+| **Paragon Stage** | **Input**                                            | **Name / Common Name**        | **Description**                                                                    | **Knock Downs at End of Combo** | **Stoic** |
+| ----------------- | ---------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- | ------------------------------- | --------- |
+| Paragon	    | `LMB LMB LMB LMB`                                    | 4 Fist Combo                  | Four fist strikes. Final hit creates a gauntlet impact that knocks the enemy down. | **Yes**                         | **No**    |
+| Paragon           | `LMB LMB LMB RMB`                                    | Gauntlet Burst Finish         | Three fist strikes followed by a powerful gauntlet burst.                          | **Yes**                         | **No**    |
+| Paragon           | `RMB RMB RMB LMB`                                    | Heavy Gauntlet Strike         | Heavy gauntlet attacks ending with an upward fist strike.                          | **Yes**                         | **No**    |
+| Paragon           | `RMB RMB RMB RMB`                                    | Impact Combo                  | Heavy attacks followed by a powerful gauntlet explosion.                           | **Yes**                         | **No**    |
+| Paragon           | `DD LMB LMB` *(or `AA LMB LMB`)*                     | Dash Fist Combo               | Dash forward into two quick fist strikes.                                          | **No**                          | **No**    |
+| Paragon           | `DD RMB RMB` *(or `AA RMB RMB`)*                     | Dash Gauntlet Grab            | Dash attack followed by a heavy gauntlet strike.                                   | **Yes**                         | **No**    |
+| Paragon           | `WJump LMB`                                          | Jump Fist Strike              | Single aerial fist attack.                                                         | **No**                          | **No**    |
+| Paragon           | `WJump RMB`                                          | Jump Gauntlet Smash           | Aerial gauntlet attack.                                                            | **No**                          | **No**    |
+| Paragon           | `DD WJump LMB LMB` *(or `AA WJump LMB LMB`)*         | Dash Jump Fist Combo          | Air dash into two fist strikes.                                                    | **No**                          | **No**    |
+| Paragon           | `DD WJump RMB` *(or `AA WJump RMB`)*                 | Dash Jump Impact              | Air dash followed by a heavy gauntlet attack.                                      | **No**                          | **No**    |
+| Paragon           | `LMB LMB LMB W+LMB`                                  | Rising Fist                   | Three fist strikes ending with an upward launcher.                                 | **No**                          | **No**    |
+| Paragon           | `DD LMB LMB W+LMB` *(or `AA LMB LMB W+LMB`)*         | Dash Rising Fist              | Dash combo ending in an upward launcher.                                           | **No**                          | **No**    |
+| Paragon           | `LMB LMB LMB W+LMB LMB`                              | Extended Rising Gauntlet      | Launcher followed by aerial gauntlet strikes.                                      | **Yes**                         | **No**    |
+| Paragon           | `DD LMB LMB W+LMB LMB` *(or `AA LMB LMB W+LMB LMB`)* | Dash Extended Rising Gauntlet | Dash launcher followed by aerial gauntlet strikes.                                 | **Yes**                         | **No**    |
+| Paragon           | `DD WJump LMB LMB` *(or `AA WJump LMB LMB`)*         | Air Chase Fist Combo          | Air pursuit combo after launching an enemy.                                        | **No**                          | **No**    |
+| Paragon           | `LMB LMB RMB`                                        | Gauntlet Impact Cancel        | Fist combo ending with a gauntlet impact attack.                                   | **No**                          | **No**    |
+| Paragon           | `LMB LMB RMB RMB`                                    | Gauntlet Explosion Combo      | Fist attacks followed by a stronger gauntlet explosion.                            | **Yes**                         | **No**    |
+| Paragon           | `RMB LMB`                                            | Rising Gauntlet Punch         | Gauntlet-powered rising attack.                                                    | **No**                          | **No**    |
+
+
+
+
+
+
+
+| **Category**        | **Input**              | **Meaning**               | **Description**                                                                                                                       |
+| ------------------- | ---------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Basic Attack**    | `LMB`                  | Light Attack              | Main basic attack button (`LMB`). Used for normal combo strings.                                                                      |
+| **Heavy Attack**    | `RMB`                  | Heavy Attack              | Secondary attack button (`RMB`). Usually stronger attacks, launchers, or special properties.                                          |
+| **Dash Right**      | `DD`                   | Dash Forward              | Double tap right movement key. Used for dash attacks and mobility combos.                                                             |
+| **Dash Left**       | `AA`                   | Dash Backward             | Double tap left movement key. Used for backward dash attacks.                                                                         |
+| **Jump**            | `WJump`                | Jump                      | Jump input (`W + Space`). Used for aerial attacks and air combos.                                                                     |
+| **Hold Up**         | `W`                    | Up Direction              | Holding the up direction during a combo input. Usually creates launchers or aerial follow-ups.                                        |
+| **Hold Down**       | `S`                    | Down Direction            | Holding down direction. Used for certain downward attacks or special inputs.                                                          |
+| **Dash Jump**       | `DD WJump`             | Forward Air Movement      | Dash forward then jump. Used for aerial chase attacks.                                                                                |
+| **Back Dash Jump**  | `AA WJump`             | Backward Air Movement     | Dash backward then jump. Used for retreating aerial attacks.                                                                          |
+| **Neutral Attack**  | `LMB / RMB`            | Standing Attack           | Attack without movement input.                                                                                                        |
+| **Movement Cancel** | `DD / AA` after attack | Dash Cancel               | Used to continue combos, reset positioning, and avoid knockdown.                                                                      |
+| **Launcher**        | `W + Attack`           | Launch Attack             | Attack that sends the enemy upward for air combos.                                                                                    |
+| **Air Follow-up**   | `WJump LMB/RMB`        | Aerial Combo              | Attack performed after launching an enemy.                                                                                            |
+| **Repeat Loop**     | `→ Repeat`             | Infinite / Extended Combo | Continue the combo string if the enemy remains airborne.                                                                              |
+| **Awakening**       | `Ctrl`                 | Awakening Activation      | Activates the character's awakening state/passive ability. Used to trigger enhanced attacks, buffs, or special effects during combat. |
+
+
+
+
+
+
+| **Category**        | **Kacper (Heavy Class)** | **Shedim (Hybrid Class)** | **Paragon (Fast Class)** |
+| ------------------- | ------------------------ | -------------------------- | ------------------------- |
+
+| **Health**          | 3000 HP                   | 2400 HP                    | 1800 HP                   |
+| **Damage**          | 120%                      | 100%                       | 115%                      |
+| **Defense**         | 130%                      | 100%                       | 80%                       |
+| **Movement Speed**  | 70%                       | 100%                       | 140%                      |
+| **Attack Speed**    | 75%                       | 120%                       | 110%                      |
+| **Combat Style**    | Slow powerful      	  | Flexible and adaptable     | Fast and aggressive       |
+
+
+
+
+
+
+
+
+
+| Character   | Type    | Name                  | Input / Key              | Mana Cost     | Cooldown      | Description                                                                                                                                                                                                                                                                                                | Knock Downs at End of Skill | Throws Player Into Air? | Stoic During Cast?   |
+| ----------- | ------- | --------------------- | ------------------------ | ------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ----------------------- | -------------------- |
+| **Paragon** | Skill   | **Fist of Heaven**    | (Skill Input)            | 150 MP        | 22 seconds    | Paragon stands still and charges a powerful fist attack while gaining Stoic status. The skill has 3 charge stages with a maximum charge time of 6 seconds. Damage received during charging increases charge speed. When fully charged, the fist deals maximum damage and launches the target into the air. | No                          | Yes                     | Yes                  |
+| **Paragon** | Skill   | **Exploding Fist**    | (Skill Input)            | 30 MP         | 9 seconds     | Paragon performs a short forward dash and strikes with his gauntlet. After connecting, he backdashes to his starting position. The enemy receives 6 consecutive hits, with each hit burning 3 MP from the enemy.                                                                                           | No                          | No                      | No                   |
+| **Paragon** | Skill   | **North Star**        | (Skill Input)            | 200 MP        | Not specified | Can only be cast mid-air. Paragon freezes time while airborne and drops toward the spell's center point. The target directly underneath receives 200% damage, nearby targets receive 100%, and farther targets receive 50%. Paragon remains Stoic while airborne until touching the ground.                | Not specified               | No                      | Yes (while airborne) |
+| **Paragon** | Skill   | **Throw Sand**        | (Skill Input)            | 90 MP         | Not specified | Paragon throws sand at enemies, applying a Blind effect. The enemy's screen becomes completely white, blocking vision for 2.5 seconds when hit.                                                                                                                                                            | No                          | No                      | No                   |
+| **Paragon** | Passive | **Mountain**          | —                        | —             | —             | Allows Paragon to change his Awakening form between two combat styles. **Mountain Form:** 90% damage and 115% defense. **Fury Form:** 120% damage and 70% defense.                                                                                                                                         | —                           | —                       | —                    |
+| **Paragon** | Passive | **Fury**              | —                        | —             | —             | Each basic attack landed by Paragon grants 1 Fury stack. Each stack increases damage by **5%**, up to **20 stacks** for a total of **100% increased damage**.                                                                                                                                              | —                           | —                       | —                    |
+| **Paragon** | Passive | **Paragon Awakening** | CTRL                     | —             | —             | When Paragon lands hits, he gains Awakening charge. Consecutive hits increase the charge speed. Once fully charged, Paragon can activate Awakening by pressing **CTRL**, gaining **30% increased attack damage, attack speed, and movement speed**. Awakening lasts **30 seconds**.                        | —                           | —                       | —                    |
+| **Shedim**  | Skill   | **Thorns of Aion**    | (Skill Input)            | 150 MP        | Not specified | Shedim empowers his next 5 attacks with thorned spikes. The spikes fly behind him after each empowered attack, dealing heavy damage. Effect lasts **30 seconds**.                                                                                                                                          | No                          | No                      | No                   |
+| **Shedim**  | Skill   | **Eternal War**       | (Skill Input)            | 100 MP        | Not specified | Shedim briefly covers himself in thorns, gaining Stoic status while dealing damage to enemies around him.                                                                                                                                                                                                  | No                          | No                      | Yes                  |
+| **Shedim**  | Skill   | **Thornsdash**        | Shadowdash (Shift) + LMB | 30 MP         | Not specified | After performing Shadowdash, Shedim can press LMB during the dash to leave a trail of thorns that damages enemies over time.                                                                                                                                                                               | No                          | No                      | No                   |
+| **Shedim**  | Passive | **Thorns**            | —                        | —             | —             | Consecutive hits apply Thorns stacks to enemies. Each stack reduces elemental resistance by **1.5%**. Maximum **20 stacks** lasting **30 seconds**. At **9 stacks**, applies Bleeding for **7% of Shedim's base damage**. At **20 stacks**, Bleeding increases to **10% of Shedim's base damage**.         | —                           | —                       | —                    |
+| **Shedim**  | Passive | **Polearm Mastery**   | —                        | —             | —             | Increases Shedim's **critical damage** by **2% per level**.                                                                                                                                                                                                                                                | —                           | —                       | —                    |
+| **Kacper**  | Skill   | **Sandstorm**         | (Skill Input)            | Not specified | Not specified | Kacper begins spinning for **6 seconds**, creating a sandstorm around himself. All enemies within a **1.5-meter radius** take continuous damage while inside the area.                                                                                                                                     | No                          | No                      | No                   |
+| **Kacper**  | Skill   | **Spinish Slash**     | (Skill Input)            | 100 MP        | Not specified | Kacper performs a long-range spinning slash that can only be used while airborne. During the skill, Kacper gains **Stoic status**.                                                                                                                                                                         | Not specified               | No                      | Yes                  |
+| **Kacper**  | Passive | **Regen**             | —                        | —             | —             | After being hit, Kacper gains **Regen stacks**. Each stack restores **0.025% of maximum HP every 4 seconds**. The effect can stack up to **10 times**.                                                                                                                                                     | —                           | —                       | —                    |
+
+
+Create a Table ingame that shows the Combomenu, when you on Shedim then shows the Shedim Table, the table should be separated by BasesCombo and ClassCombo
+Every Class has 300 Mana Base
+
+
+
+
+UI:
+# Player HUD UI Layout
+
+## Top Left — Player Status Panel
+
+### Awakening Charge
+
+* Located above the HP bar.
+* Displays awakening energy as a purple progression bar.
+* Shows current charge:
+
+  * Example: `0/100`
+* Fills as the player gains awakening energy.
+
+### Health (HP)
+
+* Located in the upper-left corner below the awakening bar.
+* Displays current health.
+* Uses a large HP bar with readable value.
+
+### Mana (MP)
+
+* Located directly below HP.
+* Displays current mana.
+* Mana is separated into 3 progression levels:
+
+  * Level 1: 0–100 Mana
+  * Level 2: 101–200 Mana
+  * Level 3: 201–300 Mana
+* Each 100 mana segment is visually separated to indicate the current mana level.
+
+---
+
+# Bottom Left — Consumable Hotbar
+
+### Consumable Slots
+
+* Small horizontal hotbar in the lower-left corner.
+* Contains 6 item slots:
+
+`[1] [2] [3] [4] [5] [6]`
+
+### Functionality
+
+* Players can assign consumables to each slot.
+* Each slot displays:
+
+  * Item icon
+  * Remaining quantity
+  * Assigned key number
+
+---
+
+# Bottom Center — Skill Bar
+
+## Active Skill Presets
+
+The player has two skill presets that can be swapped during gameplay.
+
+### Preset Swap Button
+
+* Keybind:
+
+  * `V`
+* Function:
+
+  * Swaps between Skill Preset 1 and Skill Preset 2.
+* The active preset changes the available skills shown in the skill bar.
+* The UI should clearly indicate which preset is currently active.
+
+Example:
+
+**Preset 1 Active**
+
+```
+[Q] [E] [R] [F] [Z] [X]
+```
+
+Press **V**
+
+**Preset 2 Active**
+
+```
+[Q] [E] [R] [F] [Z] [X]
+```
+
+(The icons, cooldowns, and abilities change based on the selected preset.)
+
+---
+
+# Main Skills
+
+### Standard Skill Slots
+
+Located at the bottom center.
+
+Controls:
+
+| Key | Ability |
+| --- | ------- |
+| Q   | Skill 1 |
+| E   | Skill 2 |
+| R   | Skill 3 |
+| F   | Skill 4 |
+| Z   | Skill 5 |
+| X   | Skill 6 |
+
+Each slot displays:
+
+* Skill icon
+* Cooldown timer
+* Resource cost if applicable
+* Current preset state
+
+---
+
+# Special Skill
+
+### Shift Ability
+
+* Located next to the main skill bar.
+* Activated by holding/pressing:
+
+  * `Shift`
+* Separate visual design to indicate a powerful or unique ability.
+* Has its own cooldown/resource indicator.
+
+---
+
+# Overall HUD Layout
+
+```
+             Awakening
+          ███████░░░ 0/100
+
+             HP
+          ███████████
+
+             MP
+          ██████  Level 1/2/3
+
+
+Consumables                         Skills
+[1][2][3][4][5][6]      [Q][E][R][F][Z][X][SHIFT]
+                                  ↑
+                            Press V = Swap
+                         Preset 1 ↔ Preset 2
+```
+
+## UI Goals
+
+* Fast combat readability.
+* Clear resource tracking.
+* Easy access to consumables.
+* Two complete combat ability setups accessible through the V swap system.
+* Strong visual distinction between normal skills, special skills, and awakening state.
+
+
+
+
+
+Overall Balance
+| Class Speed | Attack Timer |          Speed Difference | Combat Role                                        |
+| ----------- | -----------: | ------------------------: | -------------------------------------------------- |
+| **Fast**    |    **0.50s** |                         — | Quick attacks, pressure, wins close timing clashes |
+| **Normal**  |    **0.85s** |   +0.35s slower than Fast | Balanced speed, standard combat pace               |
+| **Slow**    |    **1.40s** | +0.55s slower than Normal | Heavy attacks, slower but stronger commitment      |
+
+
+| Range Class     | Range Value | Character | Weapon     | Combat Role                                        |
+| --------------- | ----------: | --------- | ---------- | -------------------------------------------------- |
+| **Short Range** |    **2.0m** | Paragon   | Gauntlets  | Close combat, aggressive pressure                  |
+| **Mid Range**   |    **2.5m** | Kacper    | Greatsword | Balanced spacing, powerful swings, flexible combat |
+| **Long Range**  |   **3.25m** | Shedim    | Polearm    | Distance control, safer attacks                    |
+
+
+
+| Action / State                | Visual Effect        | Color     | Purpose                                                  |
+| ----------------------------- | -------------------- | --------- | -------------------------------------------------------- |
+| **Stoic State**               | Character body glow  | **Red**   | Shows the player is in a defensive/empowered Stoic state |
+| **LMB Attack (Light Attack)** | Weapon attack effect | **Blue**  | Indicates normal attacks and fast weapon strikes         |
+| **RMB Heavy Attack**          | Weapon attack effect | **Green** | Indicates heavy attacks and stronger charged swings      |
+
+
+
+
+
+Break Escape System
+
+Break Escape is a defensive mechanic that allows players to escape enemy combos by spending a limited combat resource.
+
+To activate Break Escape, the player must first be hit by an enemy attack. The system cannot be activated freely; the enemy player must successfully land a hit and begin a combo before Break Escape becomes available.
+
+Once the player is being hit:
+
+Hold LMB + RMB together to charge Break Escape.
+Continue holding for several seconds until the desired Break level is reached.
+When the required resource cost is reached, Break Escape activates.
+The player escapes the combo and gains brief invulnerability.
+
+The longer you hold LMB + RMB, the higher the Break level becomes, but the more resource you spend.
+
+Break Levels
+
+Maximum Break Resource: 300
+
+Level 1 Break
+
+Cost: 100 Resource
+
+Requires holding LMB + RMB until the first stage is reached.
+Quick escape option.
+Stops combos early while preserving resource.
+
+Example:
+
+Resource: 300
+Enemy lands a hit → Hold LMB + RMB
+Reach Level 1 → Break Escape activates
+
+Cost: -100
+Remaining: 200
+Level 2 Break
+
+Cost: 200 Resource
+
+Requires holding LMB + RMB longer until the second stage is reached.
+Used against stronger or longer combos.
+Provides a safer escape but uses more resource.
+
+Example:
+
+Resource: 300
+Enemy lands a hit → Hold LMB + RMB
+Reach Level 2 → Break Escape activates
+
+Cost: -200
+Remaining: 100
+Level 3 Break
+
+Cost: 300 Resource
+
+Requires holding LMB + RMB for the longest duration.
+Emergency escape option.
+Completely drains your resource but gives the strongest escape.
+
+Example:
+
+Resource: 300
+Enemy lands a hit → Hold LMB + RMB
+Reach Level 3 → Break Escape activates
+
+Cost: -300
+Remaining: 0
+Combat Strategy
+
+Break Escape creates a mind game between attackers and defenders.
+
+Attackers:
+
+Must successfully land hits to pressure the opponent.
+Can try to bait the defender into wasting Break Resource.
+Become more dangerous once the opponent has no resource left.
+
+Defenders:
+
+Must decide when to hold LMB + RMB and escape.
+Using Break Escape too early wastes resources.
+Waiting too long risks taking heavy damage.
+
+The key decision is:
+
+"Is avoiding this combo worth spending my Break Resource?"
+
+
+
+
+
+| Section                 | Details                                                                                                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dungeon Name**        | The Tree                                                                                                                                                                                                    |
+| **Theme**               | Forest / Nature                                                                                                                                                                                             |
+| **Number of Stages**    | 3                                                                                                                                                                                                           |
+| **Normal Enemies**      | Pigs and Cows                                                                                                                                                                                               |
+| **Stage 1**             | Contains 4–7 mobs. Players must defeat all Pigs and Cows. When the mob counter reaches 0, the white teleport circle activates on the right side of the stage and sends players to Stage 2.                  |
+| **Stage 2**             | Contains 4–7 mobs. Players must clear all enemies. After the mob counter reaches 0, the white teleport circle activates and sends players to Stage 3. Includes more difficult platforms, jumps, and cliffs. |
+| **Stage 3 (Boss Room)** | Final room containing the boss.                                                                                                                                                                             |
+| **Boss**                | Giant Humanoid Orc Pig  named Prometheum                                                                                                                                                                    |
+| **Boss HP**             | 4000 HP                                                                                                                                                                                                     |
+| **Stage Design**        | Forest platforms, short/long platforms, jumping sections, cliffs where players can fall and lose HP.                                                                                                        |
+| **Rewards**             | Coins, Alchemy Stones, Armor Pieces, Boss Accessories, Chests containing Potions, Elixirs, and Meals.                                                                                                       |
+
+
+
+| Section                 | Details                                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dungeon Name**        | The Tree in the Night                                                                                                                                               |
+| **Theme**               | Dark Forest / Night                                                                                                                                                 |
+| **Number of Stages**    | 4                                                                                                                                                                   |
+| **Normal Enemies**      | Bats and Wolves                                                                                                                                                     |
+| **Stage 1**             | Contains 4–7 mobs. Players must defeat all Bats and Wolves. After the mob counter reaches 0, a teleport circle appears at the top of a platform leading to Stage 2. |
+| **Stage 2**             | Contains 4–7 mobs. Players must clear all enemies. Teleport appears at the end of the stage on top of a platform.                                                   |
+| **Stage 3**             | Contains 4–7 mobs. Players must clear all enemies. More difficult platforming and stronger enemy groups. Teleport appears at the end of the stage.                  |
+| **Stage 4 (Boss Room)** | Final room containing the boss.                                                                                                                                     |
+| **Boss**                | Giant Wolf                                                                                                                                                          |
+| **Boss HP**             | 6000 HP                                                                                                                                                             |
+| **Boss Skill**          | **Doombringer:** A countdown appears above the boss: 5 → 4 → 3 → 2 → 1. When it reaches 1, players must jump or their HP becomes 0 and they die.                    |
+| **Stoic Interaction**   | Players with Stoic status ignore the Doombringer skill and do not need to jump.                                                                                     |
+| **Stage Design**        | Night forest environment, platforms, cliffs, jumping sections, and higher elevation areas.                                                                          |
+| **Rewards**             | Coins, Alchemy Stones, Armor Pieces, Boss Accessories, Chests containing Potions, Elixirs, and Meals.                                                               |
+
+
+
+
+
+
+
+
+
+
+
+

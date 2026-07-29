@@ -269,6 +269,14 @@ const BIOMES: Record<string, {
     sky: ["#0a0616", "#180a2e", "#241040"], far: "#1c0e38", near: "#120a24",
     accent: "#c4b5fd", stars: true, cap: "#2e1a4a", capLit: "#5b3a8f",
   },
+  frost: {
+    sky: ["#0c1c2e", "#1c3c56", "#3f6f92"], far: "#193349", near: "#122636",
+    accent: "#dff3ff", stars: true, cap: "#cfe9fb", capLit: "#ffffff",
+  },
+  forge: {
+    sky: ["#170a08", "#3a140c", "#5c1f0f"], far: "#2a0f0a", near: "#1a0a07",
+    accent: "#fb923c", stars: false, cap: "#241210", capLit: "#5a2416",
+  },
 };
 
 /**
@@ -331,9 +339,33 @@ function drawSky(
     }
     b.globalAlpha = 1;
   }
+  if (biomeId === "frost") {
+    // Snow drifting straight down, gently swaying side to side.
+    b.fillStyle = "#ffffff";
+    for (let i = 0; i < 40; i++) {
+      const sway = Math.sin(i + Date.now() * 0.0016) * 6;
+      const ex = ((i * 97 - camX * 0.35 + sway) % vw + vw) % vw;
+      const ey = ((i * 61 + Date.now() * 0.05) % (vh + 20)) - 10 + vshift(0.25);
+      b.globalAlpha = 0.35 + 0.35 * Math.sin(i * 1.7);
+      b.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+    }
+    b.globalAlpha = 1;
+  }
+  if (biomeId === "forge") {
+    // Hot sparks and drifting ash thrown up from the forge floor — brighter
+    // and denser than the keep's lava embers, to sell "furnace" over "castle".
+    for (let i = 0; i < 30; i++) {
+      const ex = ((i * 131 - camX * 0.4) % vw + vw) % vw;
+      const ey = vh - ((i * 67 + Date.now() * 0.02) % vh) + vshift(0.3);
+      b.fillStyle = i % 3 === 0 ? "#fff7ed" : B.accent;
+      b.globalAlpha = 0.5 + 0.4 * Math.sin(i * 2.1 + Date.now() * 0.002);
+      b.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+    }
+    b.globalAlpha = 1;
+  }
 
   const skyline = (speed: number, colour: string, baseTop: number, kind: string) => {
-    const gap = kind === "trees" ? 34 : kind === "houses" ? 52 : kind === "spires" ? 46 : 74;
+    const gap = kind === "trees" ? 34 : kind === "houses" ? 52 : kind === "spires" ? 46 : kind === "peaks" ? 64 : 74;
     const off = -Math.round(camX * speed) % gap;
     const top = baseTop + vshift(speed);
     // Layers are drawn to well past the bottom edge so a rising camera never
@@ -375,6 +407,30 @@ function drawSky(
           px(b, x - wdt / 2 + lean * (t / 6), yy, wdt, (bottom - peak) / 6 + 1, colour);
         }
         pxGlow(b, x + lean, peak + 2, 5, BIOMES.abyss.accent, 0.5);
+      } else if (kind === "peaks") {
+        // Snow-capped mountain silhouettes: a stepped triangle, white at the
+        // tip and shading down into the biome colour toward the base.
+        const peak = top - 6 - (Math.abs(Math.round(x * 0.7)) % 30);
+        const steps = 8;
+        const rowH = (bottom - peak) / steps;
+        const halfGap = gap / 2;
+        for (let t = 0; t <= steps; t++) {
+          const wdt = halfGap * (0.15 + (t / steps) * 1.1);
+          px(b, x + halfGap - wdt / 2, peak + t * rowH, wdt, rowH + 1, t <= 1 ? "#ffffff" : colour);
+        }
+      } else if (kind === "chimneys") {
+        // Furnace stacks: a dark tower with a molten slit glowing near the
+        // top and a thin trail of rising smoke.
+        const wdt = 18;
+        const jitter = Math.abs(Math.round(x * 1.3)) % 22;
+        const hy = top + jitter;
+        px(b, x, hy, wdt, bottom - hy, colour);
+        px(b, x + 3, hy + 6, wdt - 6, 3, B.accent);
+        pxGlow(b, x + wdt / 2, hy + 7, 6, B.accent, 0.55);
+        for (let s = 0; s < 3; s++) {
+          const sy = hy - 6 - s * 8 - Math.round(((Date.now() * 0.02 + x) / 6) % 8);
+          px(b, x + wdt / 2 - 1 + (s % 2), sy, 2, 2, "#2a1410");
+        }
       } else {
         // Castle battlements.
         px(b, x, top, 30, bottom - top, colour);
@@ -387,7 +443,9 @@ function drawSky(
     biomeId === "town" ? "houses" :
     biomeId === "outskirts" ? "trees" :
     biomeId === "undercity" ? "arches" :
-    biomeId === "abyss" ? "spires" : "towers";
+    biomeId === "abyss" ? "spires" :
+    biomeId === "frost" ? "peaks" :
+    biomeId === "forge" ? "chimneys" : "towers";
   skyline(0.25, B.far, Math.round(vh * 0.36), kind);
   skyline(0.5, B.near, Math.round(vh * 0.52), kind);
 }
@@ -1150,6 +1208,54 @@ function drawMobFlourish(
         px(b, x + Math.round(Math.cos(a) * (half + 6)), haloY + Math.round(Math.sin(a) * 3), 2, 2, "#f0abfc");
       }
       px(b, x - half, topY + 3, w, 1, "#e9d5ff");
+      break;
+    }
+    case "frostfang": {
+      // A lean ice-wraith: jagged frost shards along the spine and a pale
+      // frozen-breath wisp, so it reads as fast and cold rather than heavy.
+      pxGlow(b, x, y - h * 0.45, h * 0.35, "#bfe8ff", 0.45);
+      for (let i = 0; i < 4; i++) {
+        px(b, x - half - 1 + i * 3, torsoY - 2 - (i % 2) * 2, 2, 4, col(m.accent));
+      }
+      px(b, x + dir * 3, topY + 2, 3, 1, "#eaf9ff");
+      px(b, x + dir * 5, topY + 1, 2, 1, "#eaf9ff");
+      break;
+    }
+    case "frostking": {
+      // The reach's frozen monarch: a jagged ice crown and a wide, slow
+      // aura in near-white — the coldest, biggest presence on the map.
+      pxGlow(b, x, y - h * 0.55, h * 0.95, "#eaf9ff", 0.6);
+      px(b, x - half - 3, torsoY - 2, 5, 8, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 5, 8, col(m.accent));
+      for (let i = 0; i < 5; i += 2) {
+        px(b, x - half + i * 2, topY - 5, 1, 4, "#ffffff");
+      }
+      px(b, x - half, topY + 3, w, 1, "#eaf9ff");
+      px(b, x + dir * 2, topY + 4, 2, 1, "#bfe8ff");
+      break;
+    }
+    case "cinderwraith": {
+      // A molten wraith: cracked, glowing seams across the body and a
+      // heat-shimmer trail instead of a solid cloak.
+      pxGlow(b, x, y - h * 0.45, h * 0.4, "#fb923c", 0.5);
+      for (let i = 0; i < 4; i++) {
+        px(b, x - half + i * 3, torsoY + 1 + (i % 2) * 3, 2, 2, "#fed7aa");
+      }
+      px(b, x + dir * 2, topY + 3, 2, 1, "#fff7ed");
+      px(b, x - dir * (half + 2), y - 4, 2, 3, col(m.accent));
+      break;
+    }
+    case "forgeheart": {
+      // The forge's molten heart: cracked white-hot plating and the widest,
+      // brightest aura of any mob — unmistakably the endgame boss.
+      pxGlow(b, x, y - h * 0.55, h, "#fde68a", 0.65);
+      px(b, x - half - 3, torsoY - 2, 5, 8, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 5, 8, col(m.accent));
+      for (let i = 0; i < 3; i++) {
+        px(b, x - half + 2 + i * 4, torsoY + 2 + i * 3, 2, 2, "#fff7ed");
+      }
+      px(b, x - half, topY + 3, w, 1, "#fde68a");
+      px(b, x + dir * 2, topY + 4, 2, 1, "#fb923c");
       break;
     }
   }

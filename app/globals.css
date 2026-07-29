@@ -971,6 +971,46 @@ kbd {
   margin-left: 6px;
 }
 
+.dev-tools {
+  position: absolute;
+  left: 14px;
+  top: 130px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(251, 191, 36, 0.14) 0 8px,
+    rgba(251, 191, 36, 0.06) 8px 16px
+  ), #12141f;
+  border: 1px dashed #fbbf24;
+  padding: 6px 10px;
+  font-size: 11px;
+  pointer-events: auto;
+}
+
+.dev-tools-tag {
+  color: #fbbf24;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.dev-tools-level {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.dev-tools-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.dev-tools .btn.tiny {
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
 .escape-menu {
   width: min(380px, 100%);
 }
@@ -1138,7 +1178,7 @@ kbd {
   background: #05070a;
 }
 
-.arena-stage canvas {
+.arena-stage > canvas {
   display: block;
   position: absolute;
   left: 50%;
@@ -1504,7 +1544,7 @@ kbd {
 /* ====================================================================== */
 
 /* Never smooth the upscaled game buffer. */
-.arena-stage canvas {
+.arena-stage > canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
@@ -1663,12 +1703,18 @@ body {
 
 /* --------------------------------------------------------------------- map */
 
+.map-sheet { width: min(1040px, 96vw); }
+
 .map-trail {
   display: flex;
   align-items: flex-start;
   gap: 0;
   overflow-x: auto;
   padding: 28px 4px 8px;
+  /* A soft fade at both edges hints that the trail scrolls sideways once
+     there are more stages than fit — without needing JS to detect it. */
+  mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
 }
 
 .map-node-wrap {
@@ -1676,7 +1722,7 @@ body {
   flex-direction: column;
   align-items: center;
   flex: none;
-  width: 130px;
+  width: 116px;
   position: relative;
 }
 

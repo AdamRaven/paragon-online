@@ -143,6 +143,76 @@ export const MOB_TYPES: Record<string, MobType> = {
     accent: "#4a044e",
     isBoss: true,
   },
+  frostfang: {
+    id: "frostfang",
+    name: "Frostfang Stalker",
+    level: 27,
+    maxHp: 1900,
+    damage: 85,
+    speed: 2.9,
+    expValue: 1700,
+    range: 84,
+    windup: 0.24,
+    recover: 0.28,
+    aggro: 560,
+    w: 36,
+    h: 84,
+    color: "#7dd3fc",
+    accent: "#1e5a8a",
+  },
+  frostking: {
+    id: "frostking",
+    name: "The Frostking",
+    level: 32,
+    maxHp: 5400,
+    damage: 98,
+    speed: 2.4,
+    expValue: 7200,
+    range: 100,
+    windup: 0.3,
+    recover: 0.34,
+    aggro: 750,
+    w: 56,
+    h: 104,
+    color: "#e0f4ff",
+    accent: "#2b6ca3",
+    isBoss: true,
+  },
+  cinderwraith: {
+    id: "cinderwraith",
+    name: "Cinder Wraith",
+    level: 36,
+    maxHp: 2600,
+    damage: 110,
+    speed: 2.7,
+    expValue: 2400,
+    range: 88,
+    windup: 0.22,
+    recover: 0.26,
+    aggro: 580,
+    w: 38,
+    h: 86,
+    color: "#f97316",
+    accent: "#7c2d12",
+  },
+  forgeheart: {
+    id: "forgeheart",
+    name: "The Forgeheart",
+    level: 40,
+    maxHp: 7400,
+    damage: 128,
+    speed: 2.3,
+    expValue: 9800,
+    range: 106,
+    windup: 0.32,
+    recover: 0.34,
+    aggro: 820,
+    w: 60,
+    h: 110,
+    color: "#fde68a",
+    accent: "#9a3412",
+    isBoss: true,
+  },
 };
 
 /** The single melee swing every mob uses. */
@@ -186,7 +256,7 @@ export interface Stage {
   biome: Biome;
 }
 
-export type Biome = "town" | "outskirts" | "undercity" | "keep" | "abyss";
+export type Biome = "town" | "outskirts" | "undercity" | "keep" | "abyss" | "frost" | "forge";
 
 const GROUND_Y = 560;
 
@@ -341,6 +411,70 @@ export const STAGES: Stage[] = [
       { typeId: "revenant", x: 2420 },
       { typeId: "colossus", x: 2700 },
       { typeId: "sovereign", x: 3300 },
+    ],
+  },
+  {
+    id: "frostbound",
+    biome: "frost",
+    name: "The Frostbound Reach",
+    subtitle: "Beyond the Sanctum — the Frostking rules an endless winter",
+    requiredLevel: 28,
+    map: makeMap(
+      3600,
+      [
+        [0, 780],
+        [1040, 660],
+        [1960, 700],
+        [2920, 680],
+      ],
+      [
+        [800, 380, 220],
+        [1720, 370, 220],
+        [2340, 390, 220],
+        [3060, 380, 220],
+      ]
+    ),
+    spawns: [
+      { typeId: "frostfang", x: 500 },
+      { typeId: "frostfang", x: 740 },
+      { typeId: "revenant", x: 1300 },
+      { typeId: "frostfang", x: 1540 },
+      { typeId: "frostfang", x: 2150 },
+      { typeId: "sovereign", x: 2450 },
+      { typeId: "frostfang", x: 2960 },
+      { typeId: "frostking", x: 3400 },
+    ],
+  },
+  {
+    id: "forge",
+    biome: "forge",
+    name: "The Sundered Forge",
+    subtitle: "Beyond the Reach — the Forgeheart burns at the far end",
+    requiredLevel: 36,
+    map: makeMap(
+      3600,
+      [
+        [0, 780],
+        [1040, 660],
+        [1960, 700],
+        [2920, 680],
+      ],
+      [
+        [800, 380, 220],
+        [1720, 370, 220],
+        [2340, 390, 220],
+        [3060, 380, 220],
+      ]
+    ),
+    spawns: [
+      { typeId: "cinderwraith", x: 500 },
+      { typeId: "cinderwraith", x: 740 },
+      { typeId: "frostking", x: 1300 },
+      { typeId: "cinderwraith", x: 1540 },
+      { typeId: "cinderwraith", x: 2150 },
+      { typeId: "frostking", x: 2450 },
+      { typeId: "cinderwraith", x: 2960 },
+      { typeId: "forgeheart", x: 3400 },
     ],
   },
 ];

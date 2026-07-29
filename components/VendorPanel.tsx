@@ -1,7 +1,7 @@
 "use client";
 
 import { ItemIcon } from "@/components/ItemIcon";
-import { statLine } from "@/components/InventoryPanel";
+import { compare, statLine } from "@/components/InventoryPanel";
 import {
   ITEM_BASES,
   RARITY_META,
@@ -60,13 +60,23 @@ export function VendorPanel({
             const item = preview(b.id);
             const price = itemValue(item);
             const afford = save.gold >= price;
+            const equipped = b.slot ? save.equipped[b.slot] : undefined;
+            const cmp = compare(item, equipped);
+            const slotEmpty = !!b.slot && !equipped;
             return (
               <div className="item-row" key={b.id} style={{ borderLeft: `4px solid ${RARITY_META.common.color}` }}>
                 <ItemIcon icon={b.icon} color={RARITY_META.common.color} />
                 <span className="item-main">
                   <strong>{itemName(item)}</strong>
                   <small className="item-stats">{statLine(item)}</small>
-                  <small className="item-sub">{b.kind} · tier {b.tier}</small>
+                  <small className="item-sub">
+                    {b.kind} · tier {b.tier}
+                    {cmp ? (
+                      <em className={cmp.good ? "cmp-up" : "cmp-down"}> · {cmp.text}</em>
+                    ) : (
+                      slotEmpty && <em className="cmp-up"> · EQUIP</em>
+                    )}
+                  </small>
                 </span>
                 <span className="item-value">{price}g</span>
                 <button className="btn tiny" disabled={!afford} onClick={() => onBuy(b.id)}>

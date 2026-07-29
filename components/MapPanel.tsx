@@ -6,6 +6,8 @@ const BIOME_GLYPH: Record<Biome, string> = {
   undercity: "🕳️",
   keep: "🔥",
   abyss: "🌀",
+  frost: "❄️",
+  forge: "🌋",
 };
 
 const BIOME_TINT: Record<Biome, string> = {
@@ -14,6 +16,8 @@ const BIOME_TINT: Record<Biome, string> = {
   undercity: "#7c5cc4",
   keep: "#e05a3c",
   abyss: "#c4b5fd",
+  frost: "#dff3ff",
+  forge: "#fb923c",
 };
 
 export function MapPanel({
@@ -36,7 +40,7 @@ export function MapPanel({
           <div>
             <h2>World Map</h2>
             <span style={{ color: "var(--muted)", fontSize: 12 }}>
-              The road from Emberhold to the Abyssal Sanctum
+              The road from {stages[0]?.name} to {stages[stages.length - 1]?.name}
             </span>
           </div>
           <button className="btn btn-ghost" onClick={onClose}>
