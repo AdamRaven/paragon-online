@@ -79,6 +79,18 @@ export class AdventureEngine extends ArenaEngine {
     return Math.abs(this.player.x - this.stage.npcX) < 90;
   }
 
+  /** True when the player is close enough to the gear vendor to buy. */
+  get nearVendor(): boolean {
+    if (!this.stage.isTown || this.stage.vendorX === undefined) return false;
+    return Math.abs(this.player.x - this.stage.vendorX) < 90;
+  }
+
+  /** True when the player is close enough to the bank keeper to store items. */
+  get nearBank(): boolean {
+    if (!this.stage.isTown || this.stage.bankX === undefined) return false;
+    return Math.abs(this.player.x - this.stage.bankX) < 90;
+  }
+
   get inTown(): boolean {
     return !!this.stage.isTown;
   }

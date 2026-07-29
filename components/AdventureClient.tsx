@@ -5,12 +5,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { MerchantPanel } from "@/components/MerchantPanel";
+import { VendorPanel } from "@/components/VendorPanel";
+import { StoragePanel } from "@/components/StoragePanel";
 import {
   STONE_PRICE,
   attemptEnhance,
   base,
   itemName,
   itemValue,
+  makeItem,
   type EquipSlot,
   type Item,
 } from "@/lib/arena/items";
@@ -51,7 +54,7 @@ export function AdventureClient() {
   const [exp, setExp] = useState({ exp: 0, next: 1, level: 1, points: 0 });
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [panel, setPanel] = useState<
-    "none" | "sheet" | "map" | "inventory" | "merchant"
+    "none" | "sheet" | "map" | "inventory" | "merchant" | "vendor" | "storage"
   >("none");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   /** Bumped whenever the save mutates, to re-render the panels. */
@@ -166,12 +169,20 @@ export function AdventureClient() {
         setRev((r) => r + 1);
         setPanel((p) => (p === "inventory" ? "none" : "inventory"));
       } else if (e.code === "KeyE") {
-        // E doubles as "talk" when standing at the merchant's stall.
+        // E doubles as "talk" when standing at any of the town NPCs.
         const eng = engineRef.current;
-        if (eng?.nearMerchant) {
+        if (!eng) return;
+        if (eng.nearMerchant) {
           setShopMsg(null);
           setRev((r) => r + 1);
           setPanel((p) => (p === "merchant" ? "none" : "merchant"));
+        } else if (eng.nearVendor) {
+          setShopMsg(null);
+          setRev((r) => r + 1);
+          setPanel((p) => (p === "vendor" ? "none" : "vendor"));
+        } else if (eng.nearBank) {
+          setRev((r) => r + 1);
+          setPanel((p) => (p === "storage" ? "none" : "storage"));
         }
       } else if (e.code === "Escape") setPanel("none");
     };
@@ -243,6 +254,29 @@ export function AdventureClient() {
       e.save.gold -= cost;
       e.save.stones += n;
       setShopMsg(`Bought ${n} stone${n > 1 ? "s" : ""} for ${cost}g.`);
+    });
+
+  const buyGear = (baseId: string) =>
+    mutate((e) => {
+      const item = makeItem(baseId, "common");
+      const price = itemValue(item);
+      if (e.save.gold < price) return;
+      e.save.gold -= price;
+      e.save.inventory.push(item);
+      setShopMsg(`Bought ${itemName(item)} for ${price}g.`);
+      pushLog(`Bought ${itemName(item)}.`, "good");
+    });
+
+  const storeItem = (item: Item) =>
+    mutate((e) => {
+      e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
+      e.save.storage.push(item);
+    });
+
+  const retrieveItem = (item: Item) =>
+    mutate((e) => {
+      e.save.storage = e.save.storage.filter((i) => i.uid !== item.uid);
+      e.save.inventory.push(item);
     });
 
   const enhance = (item: Item) =>
@@ -389,6 +423,26 @@ export function AdventureClient() {
           onBuyStones={buyStones}
           onEnhance={enhance}
           lastResult={shopMsg}
+          onClose={() => setPanel("none")}
+        />
+      )}
+
+      {panel === "vendor" && (
+        <VendorPanel
+          key={rev}
+          save={live}
+          onBuy={buyGear}
+          lastResult={shopMsg}
+          onClose={() => setPanel("none")}
+        />
+      )}
+
+      {panel === "storage" && (
+        <StoragePanel
+          key={rev}
+          save={live}
+          onStore={storeItem}
+          onRetrieve={retrieveItem}
           onClose={() => setPanel("none")}
         />
       )}

@@ -763,6 +763,9 @@ export class ArenaEngine {
       facing: f.facing,
     };
     this.hitboxes.push(hb);
+    if (spec.kind === "lmb" || spec.kind === "rmb" || spec.kind === "skill") {
+      this.spawnSlashArc(f, reach, spec.height, spec.kind, a.chainIndex);
+    }
 
     if (pierce) {
       this.spawnText(f.x, f.y - f.h - 10, "SLASH THROUGH", "#ffd36b", 15);
@@ -1015,11 +1018,18 @@ export class ArenaEngine {
 
     target.hitFlash = 0.1;
     this.shake = Math.max(this.shake, hb.kind === "rmb" ? 6 : 3);
+    const impactColor = hb.kind === "skill" ? "#fbbf24" : "#f87171";
     this.burst(
       target.x + hb.facing * 10,
       target.y - target.h * 0.6,
-      hb.kind === "skill" ? "#fbbf24" : "#f87171",
+      impactColor,
       hb.kind === "rmb" ? 14 : 8
+    );
+    this.spawnImpactStar(
+      target.x + hb.facing * 10,
+      target.y - target.h * 0.6,
+      impactColor,
+      hb.kind === "rmb" ? 4 : 3
     );
   }
 
@@ -1493,6 +1503,67 @@ export class ArenaEngine {
       upHeld: false,
     };
     this.cb.onLog(`${f.name} hurls them skyward!`, "big");
+  }
+
+  /**
+   * A bright crescent swipe swept in front of an attack, MapleStory-style:
+   * a curved run of particles rather than a single blob, with every 4th one
+   * white so the arc reads as a glinting edge instead of a flat streak.
+   * Bigger chain hits (finishers, heavies, skills) get a wider, denser arc.
+   */
+  private spawnSlashArc(
+    f: Fighter,
+    reach: number,
+    height: number,
+    kind: "lmb" | "rmb" | "skill",
+    chainIndex: number
+  ) {
+    const cls = getClass(f.classId);
+    const color =
+      kind === "skill" ? cls.colors.aura : kind === "rmb" ? cls.colors.trim : cls.colors.secondary;
+    const dir = f.facing;
+    const big = kind === "skill" || kind === "rmb" || chainIndex >= LMB_CHAIN_FINISHER;
+    const steps = big ? 16 : 10;
+    const arcR = Math.max(16, reach * (big ? 0.6 : 0.5));
+    const vScale = Math.max(0.6, height / 70);
+    const originX = f.x + dir * reach * 0.3;
+    const originY = f.y - f.h * 0.55;
+    // Swept overhand: high behind the attacker down to low in front.
+    const startA = -Math.PI * 0.6;
+    const endA = Math.PI * 0.2;
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      const a = startA + (endA - startA) * t;
+      this.particles.push({
+        x: originX + Math.cos(a) * arcR * dir,
+        y: originY + Math.sin(a) * arcR * vScale,
+        vx: Math.cos(a) * dir * (big ? 2.2 : 1.4),
+        vy: Math.sin(a) * (big ? 2.2 : 1.4) - 0.3,
+        life: 0.1 + t * 0.06,
+        maxLife: 0.16,
+        color: i % 4 === 0 ? "#ffffff" : color,
+        size: big ? 4 : 3,
+        gravity: 0,
+      });
+    }
+  }
+
+  /** The classic 8-point flash star that snaps a hit into focus. */
+  private spawnImpactStar(x: number, y: number, color: string, size: number) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * 5,
+        vy: Math.sin(a) * 5,
+        life: 0.12,
+        maxLife: 0.12,
+        color: i % 2 === 0 ? "#ffffff" : color,
+        size,
+        gravity: 0,
+      });
+    }
   }
 
   private burst(x: number, y: number, color: string, count: number) {

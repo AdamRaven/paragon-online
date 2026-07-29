@@ -65,6 +65,8 @@ export interface AdventureSave {
   /** Backpack contents, including trash waiting to be sold. */
   inventory: Item[];
   equipped: Partial<Record<EquipSlot, Item>>;
+  /** Items parked at the bank — doesn't count against anything, just storage. */
+  storage: Item[];
   gold: number;
   stones: number;
 }
@@ -161,6 +163,7 @@ export function createAdventureSave(classId: string): AdventureSave {
     stage: DEFAULT_STAGE,
     inventory: [],
     equipped: {},
+    storage: [],
     gold: 0,
     stones: 0,
   };
@@ -181,6 +184,7 @@ export function loadAdventure(): AdventureSave | null {
       stats: { ...base.stats, ...(parsed.stats ?? {}) },
       inventory: parsed.inventory ?? [],
       equipped: parsed.equipped ?? {},
+      storage: parsed.storage ?? [],
       gold: parsed.gold ?? 0,
       stones: parsed.stones ?? 0,
       version: SAVE_VERSION,

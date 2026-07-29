@@ -7,6 +7,7 @@ import {
   pxCircle,
   pxDither,
   pxGlow,
+  pxOutline,
   pxText,
 } from "./pixel";
 import type { Fighter } from "./types";
@@ -59,6 +60,8 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
     drawBlackHole(b, wx(bh.x), wy(bh.y), bh.radius / S, bh.life / bh.maxLife, engine.time);
   }
   drawMerchant(b, engine, wx, wy, engine.time);
+  drawVendor(b, engine, wx, wy, engine.time);
+  drawBank(b, engine, wx, wy, engine.time);
   for (const f of engine.fighters) drawFighter(b, f, wx, wy, engine.time);
   drawHitboxes(b, engine, wx, wy);
   for (const p of engine.projectiles) {
@@ -320,6 +323,101 @@ function drawMerchant(
   }
 }
 
+/** The gear vendor: a rack of weapons/armour behind a mail-clad trader. */
+function drawVendor(
+  b: CanvasRenderingContext2D,
+  engine: ArenaEngine,
+  wx: (v: number) => number,
+  wy: (v: number) => number,
+  time: number
+) {
+  const stage = (engine as ArenaEngine & {
+    stage?: { isTown?: boolean; vendorX?: number };
+  }).stage;
+  if (!stage?.isTown || stage.vendorX === undefined) return;
+
+  const gy = engine.groundAtX(stage.vendorX);
+  if (gy === null) return;
+  const x = wx(stage.vendorX);
+  const y = wy(gy);
+  const bob = Math.round(Math.sin(time * 2 + 1) * 1);
+
+  // Weapon rack behind him: two uprights and a crossbar hung with gear.
+  px(b, x - 18, y - 36, 2, 36, "#4a3626");
+  px(b, x + 16, y - 36, 2, 36, "#4a3626");
+  px(b, x - 18, y - 36, 36, 2, "#5c4530");
+  // A sword, an axe-head and a shield hung along the bar.
+  px(b, x - 14, y - 34, 2, 12, "#c3cad4");
+  px(b, x - 15, y - 34, 4, 2, "#8b93a0");
+  px(b, x - 2, y - 33, 6, 5, "#8a3a22");
+  px(b, x, y - 33, 2, 5, "#5c5040");
+  px(b, x + 8, y - 34, 6, 8, "#3a4050");
+  px(b, x + 8, y - 34, 6, 1, "#565f73");
+  px(b, x + 10, y - 31, 2, 2, "#c9b896");
+
+  // The vendor: banded mail vest over a tunic, thicker-set than the enhancer.
+  px(b, x - 6, y - 21 + bob, 12, 19, "#5a5f6b");
+  px(b, x - 6, y - 21 + bob, 12, 2, "#7a8090");
+  px(b, x - 6, y - 8, 12, 6, "#3f4450");
+  for (let i = 0; i < 12; i += 3) px(b, x - 6 + i, y - 15 + bob, 2, 8, "#454a55");
+  px(b, x - 4, y - 29 + bob, 8, 8, "#d9a878");
+  px(b, x - 5, y - 30 + bob, 10, 3, "#3a2a1c");
+  px(b, x - 2, y - 25 + bob, 1, 1, PAL.ink);
+  px(b, x + 1, y - 25 + bob, 1, 1, PAL.ink);
+  px(b, x - 6, y - 5, 12, 1, "#c9a24a");
+
+  const near = (engine as ArenaEngine & { nearVendor?: boolean }).nearVendor;
+  if (near) {
+    const pulse = Math.sin(time * 6) > 0 ? "#ffffff" : "#f6b352";
+    pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
+  }
+}
+
+/** The bank keeper: a robed figure minding a reinforced vault chest. */
+function drawBank(
+  b: CanvasRenderingContext2D,
+  engine: ArenaEngine,
+  wx: (v: number) => number,
+  wy: (v: number) => number,
+  time: number
+) {
+  const stage = (engine as ArenaEngine & {
+    stage?: { isTown?: boolean; bankX?: number };
+  }).stage;
+  if (!stage?.isTown || stage.bankX === undefined) return;
+
+  const gy = engine.groundAtX(stage.bankX);
+  if (gy === null) return;
+  const x = wx(stage.bankX);
+  const y = wy(gy);
+  const bob = Math.round(Math.sin(time * 2 + 2) * 1);
+
+  // A squat, iron-banded vault chest beside her.
+  px(b, x + 8, y - 14, 16, 14, "#3a4050");
+  px(b, x + 8, y - 14, 16, 2, "#565f73");
+  px(b, x + 8, y - 8, 16, 2, "#2a2f3a");
+  px(b, x + 14, y - 12, 4, 4, "#c9a24a");
+  px(b, x + 15, y - 11, 2, 2, "#1c1f28");
+  pxGlow(b, x + 16, y - 10, 5, "#7dd3fc", 0.5);
+
+  // The keeper: deep violet robe (distinct from the enhancer's blue), calm hood.
+  px(b, x - 5, y - 23 + bob, 10, 23, "#463a6b");
+  px(b, x - 5, y - 23 + bob, 10, 2, "#6a5a96");
+  px(b, x - 5, y - 4, 10, 4, "#2e2648");
+  px(b, x - 4, y - 31 + bob, 8, 8, "#e8c9a0");
+  px(b, x - 5, y - 32 + bob, 10, 4, "#332a4a");
+  px(b, x - 2, y - 27 + bob, 1, 1, PAL.ink);
+  px(b, x + 1, y - 27 + bob, 1, 1, PAL.ink);
+  px(b, x - 5, y - 21 + bob, 10, 1, "#c9a24a");
+  pxGlow(b, x - 12, y - 18, 6, "#7dd3fc", 0.5);
+
+  const near = (engine as ArenaEngine & { nearBank?: boolean }).nearBank;
+  if (near) {
+    const pulse = Math.sin(time * 6) > 0 ? "#ffffff" : "#f6b352";
+    pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
+  }
+}
+
 // ------------------------------------------------------------------ fighters
 
 interface Pal {
@@ -463,22 +561,32 @@ function drawFighter(
   const airborne = f.state === "air";
 
   // --- proportions, in art pixels ---------------------------------------
-  const headH = Math.max(5, Math.round(h * 0.27));
+  const headH = Math.max(5, Math.round(h * 0.25));
   const legH = Math.max(4, Math.round(h * 0.3));
-  const torsoH = h - headH - legH;
+  // A thin neck row keeps the head from visually fusing into the torso when
+  // both share a similar tone (bare-chested Paragon, for instance).
+  const neckH = 2;
+  const torsoH = h - headH - legH - neckH;
   const torsoW = Math.max(5, w - 2);
   const topY = y - h + bob;
-  const torsoY = topY + headH;
+  const neckY = topY + headH;
+  const torsoY = neckY + neckH;
   const legY = y - legH;
   const half = Math.floor(torsoW / 2);
+  // Hips read slightly narrower than the shoulder line, so the silhouette
+  // tapers instead of reading as a straight-sided rectangle.
+  const hipHalf = Math.max(2, half - 1);
   const ink = p.outline;
   const back = -dir; // the trailing side of the sprite
 
   // --- rear-hand ice crystal (behind everything) --------------------------
   if (hero) {
-    const ix = x + back * (half + 2);
+    // Pushed a little further from the body than the pauldron above it, so
+    // the two shapes stay visually separate instead of fusing together.
+    const ix = x + back * (half + 3);
     const iyTop = torsoY + Math.round(torsoH * 0.55);
     const iceH = Math.round(h * 0.34);
+    pxOutline(b, ix - 2, iyTop - 1, 6, iceH + 2, ink);
     px(b, ix - 1, iyTop, 4, iceH, col(KIT.ice));
     px(b, ix - 2, iyTop + 2, 1, iceH - 5, col(KIT.iceDark));
     px(b, ix + 3, iyTop + 1, 1, iceH - 3, col(KIT.iceDark));
@@ -506,13 +614,26 @@ function drawFighter(
     px(b, gx, sy2 + 2, 1, 1, col(KIT.goldDark));
     px(b, gx, sy2 + 6, 1, 1, col(KIT.goldDark));
     px(b, back === 1 ? sx2 - 1 : sx2 - 4, sy2 + 8, 5, 1, col(KIT.gold));
+    // A dark seam beneath separates the pauldron from the arm below it.
+    px(b, back === 1 ? sx2 - 1 : sx2 - 4, sy2 + 9, 5, 1, ink);
+  }
+
+  // --- neck seam ------------------------------------------------------------
+  // A dark line right under the head plus a narrow shaded bridge down to the
+  // torso, so the head-to-body boundary reads even when their fill colours
+  // match (Paragon's bare chest is the same tone as his face).
+  {
+    const neckW = Math.max(2, half);
+    const neckColor = hero ? KIT.skinShade : knight ? SKIT.plateDark : p.shade;
+    px(b, x - Math.floor(neckW / 2) - 1, neckY - 1, neckW + 2, 1, ink);
+    px(b, x - Math.floor(neckW / 2), neckY, neckW, neckH, col(neckColor));
   }
 
   // --- legs ---------------------------------------------------------------
   const swing = airborne ? 2 : step === 1 ? 2 : step === 3 ? -2 : 0;
   const legW = Math.max(2, Math.round(torsoW * 0.36));
-  const frontLegX = x - half + Math.round(swing * 0.5);
-  const backLegX = x + half - legW - Math.round(swing * 0.5);
+  const frontLegX = x - hipHalf + Math.round(swing * 0.5);
+  const backLegX = x + hipHalf - legW - Math.round(swing * 0.5);
   const legCol = hero ? KIT.pants : knight ? SKIT.plate : p.primary;
   const legShade = hero ? KIT.pants : knight ? SKIT.plateDark : p.shade;
   for (const [lx, tone] of [
@@ -543,23 +664,29 @@ function drawFighter(
 
   // --- torso --------------------------------------------------------------
   if (hero) {
-    // Bare, muscled chest.
+    // Bare, muscled chest. Collar and belt are proportional to torsoH (and
+    // kept to 2 rows each) so a good, unambiguous band of skin always shows
+    // between them — the whole point of a shirtless build.
+    const collarH = Math.min(2, Math.max(1, Math.round(torsoH * 0.18)));
+    const beltH = Math.min(2, Math.max(1, Math.round(torsoH * 0.18)));
     px(b, x - half, torsoY, torsoW, torsoH, col(KIT.skin));
     px(b, dir === 1 ? x - half : x + half - 3, torsoY, 3, torsoH, col(KIT.skinShade));
-    // Pectoral split and two ab lines.
-    px(b, x - half + 1, torsoY + 4, torsoW - 2, 1, col(KIT.skinShade));
-    px(b, x, torsoY + 5, 1, 4, col(KIT.skinShade));
-    px(b, x - half + 2, torsoY + 8, torsoW - 4, 1, col(KIT.skinShade));
+    // Pectoral split and two ab lines, spaced across the visible skin band.
+    const skinTop = torsoY + collarH;
+    const skinH = Math.max(1, torsoH - collarH - beltH);
+    px(b, x - half + 1, skinTop + Math.round(skinH * 0.15), torsoW - 2, 1, col(KIT.skinShade));
+    px(b, x, skinTop + Math.round(skinH * 0.3), 1, Math.max(2, Math.round(skinH * 0.4)), col(KIT.skinShade));
+    px(b, x - half + 2, skinTop + Math.round(skinH * 0.75), torsoW - 4, 1, col(KIT.skinShade));
     // Black collar / neck guard over the shoulders.
-    px(b, x - half - 1, torsoY - 1, torsoW + 2, 3, col(KIT.mask));
+    px(b, x - half - 1, torsoY - 1, torsoW + 2, collarH + 1, col(KIT.mask));
     px(b, x - half - 1, torsoY - 1, torsoW + 2, 1, col(KIT.maskLit));
     // Gold chain hanging from the collar on the leading side.
-    px(b, x + dir, torsoY + 2, 3, 1, col(KIT.gold));
-    px(b, x + dir * 3, torsoY + 3, 1, 1, col(KIT.goldDark));
+    px(b, x + dir, torsoY + collarH, 3, 1, col(KIT.gold));
+    px(b, x + dir * 3, torsoY + collarH + 1, 1, 1, col(KIT.goldDark));
     // Belted waist.
-    px(b, x - half, torsoY + torsoH - 4, torsoW, 4, col(KIT.pants));
-    px(b, x - half, torsoY + torsoH - 4, torsoW, 1, col(KIT.pantsLit));
-    px(b, x - 1, torsoY + torsoH - 3, 2, 2, col(KIT.gold));
+    px(b, x - half, torsoY + torsoH - beltH, torsoW, beltH, col(KIT.pants));
+    px(b, x - half, torsoY + torsoH - beltH, torsoW, 1, col(KIT.pantsLit));
+    px(b, x - 1, torsoY + torsoH - beltH, 2, Math.max(1, beltH), col(KIT.gold));
   } else if (knight) {
     // Segmented cuirass.
     px(b, x - half, torsoY, torsoW, torsoH, col(SKIT.plate));
@@ -588,42 +715,67 @@ function drawFighter(
     px(b, x - half, beltY, torsoW, 3, col(f.isMob ? p.trim : p.secondary));
     px(b, x + dir * (half - 2), beltY, 2, 4, col(f.isMob ? p.trim : p.secondary));
   }
-  // Side outline columns.
+  // Full torso outline (top, bottom, both sides) — the single biggest thing
+  // that keeps the silhouette crisp against similarly-toned backgrounds and
+  // against the character's own limbs.
+  px(b, x - half - 1, torsoY - 1, torsoW + 2, 1, ink);
+  px(b, x - half - 1, torsoY + torsoH, torsoW + 2, 1, ink);
   px(b, x - half - 1, torsoY, 1, torsoH, ink);
   px(b, x + half, torsoY, 1, torsoH, ink);
 
   // --- arms ---------------------------------------------------------------
   const reach = armReach(f);
-  const armY = torsoY + Math.round(torsoH * 0.2);
+  // Attached at shoulder height (overlapping the collar band, which is where
+  // a real shoulder joint sits) rather than mid-torso — anything lower and
+  // the arm's skin tone paints straight over the bare chest it should be
+  // hanging in front of, hiding it entirely.
+  const armY = torsoY - 1;
   const armLen = half + 2 + reach;
-  // Rear arm sliver.
-  px(
-    b,
-    x - dir * (half - 1),
-    armY + 1,
-    2,
-    Math.max(3, Math.round(torsoH * 0.55)),
-    col(hero ? KIT.skinShade : p.shade)
-  );
   const armX = dir === 1 ? x : x - armLen;
   const handX = x + dir * armLen;
 
+  // Rear arm: a short shaded stub ending in its own rounded fist, so it
+  // reads as a limb tucked behind the torso rather than a stray bar.
+  {
+    const rearLen = Math.max(3, Math.round(torsoH * 0.4));
+    const rearTone = hero ? KIT.skinShade : knight ? SKIT.plateDark : p.shade;
+    const rx = x - dir * (half - 1);
+    px(b, rx - 1, armY + 1, 2, rearLen, col(rearTone));
+    drawFist(b, rx, armY + 1 + rearLen, 2, col(rearTone), ink);
+  }
+
   if (hero) {
-    // Crimson demon gauntlet: the arm he punches with.
-    px(b, armX, armY, armLen, 4, col(KIT.crimson));
-    px(b, armX, armY, armLen, 1, col(KIT.crimsonLit));
-    px(b, armX, armY + 4, armLen, 1, ink);
-    px(b, dir === 1 ? handX - 4 : handX + 1, armY - 1, 4, 6, col(KIT.crimsonDark));
-    px(b, dir === 1 ? handX - 3 : handX + 1, armY, 2, 2, col(KIT.crimsonLit));
-    // Claws.
-    px(b, dir === 1 ? handX : handX - 2, armY, 2, 1, col(KIT.crimsonDark));
-    px(b, dir === 1 ? handX : handX - 2, armY + 3, 2, 1, col(KIT.crimsonDark));
+    // Bare-skin forearm capped by a crimson gauntlet at just the hand, with a
+    // seam between them — a colour change plus a gap, not one long red smear
+    // fused into the chest.
+    const gauntletLen = Math.min(armLen - 2, 6);
+    const foreLen = Math.max(2, armLen - gauntletLen);
+    const foreLeft = dir === 1 ? x : x - foreLen;
+    const gauntLeft = dir === 1 ? x + foreLen : handX;
+    const seamX = dir === 1 ? x + foreLen : x - foreLen;
+
+    px(b, foreLeft, armY, foreLen, 4, col(KIT.skin));
+    px(b, foreLeft, armY, foreLen, 1, col(KIT.skinShade));
+    px(b, foreLeft, armY + 4, foreLen, 1, ink);
+    px(b, seamX, armY - 1, 1, 6, ink);
+    px(b, gauntLeft, armY - 1, gauntletLen, 6, col(KIT.crimson));
+    px(b, gauntLeft, armY - 1, gauntletLen, 1, col(KIT.crimsonLit));
+    px(b, gauntLeft, armY + 4, gauntletLen, 1, ink);
+    // Claws jutting past the knuckles.
+    px(b, dir === 1 ? handX : handX - 2, armY - 1, 2, 1, col(KIT.crimsonDark));
+    px(b, dir === 1 ? handX : handX - 2, armY + 4, 2, 1, col(KIT.crimsonDark));
   } else {
     px(b, armX, armY, armLen, 3, col(knight ? SKIT.plate : p.primary));
     if (knight) px(b, armX, armY, armLen, 1, col(SKIT.plateLit));
     px(b, armX, armY + 3, armLen, 1, ink);
-    px(b, dir === 1 ? handX - 3 : handX, armY, 3, 3,
-       col(knight ? SKIT.plateDark : p.skin));
+    drawFist(
+      b,
+      dir === 1 ? handX - 1 : handX + 1,
+      armY + 1,
+      2,
+      col(knight ? SKIT.plateDark : p.skin),
+      ink
+    );
     if (knight) drawScythe(b, f, x, handX, armY, h, dir, col);
     else if (!f.isMob && f.classId === "kacper") {
       // Greatsword: a broad blade, held low at rest and swept flat on contact.
@@ -810,7 +962,9 @@ function drawScythe(
     for (let i = 0; i < haft; i++) {
       px(b, handX + dir * Math.round(i * 0.42), armY + 2 - i, 2, 1, col(SKIT.haft));
     }
-    const bx = handX - dir * 6;
+    // Held out to the rear, well clear of the torso, the way the ice crystal
+    // sits on Paragon's off hand — otherwise it overlaps the chest plate.
+    const bx = x - dir * Math.round(h * 0.34);
     const by = armY + 6;
     // Crescent blade.
     for (let i = 0; i < 8; i++) {
@@ -871,6 +1025,23 @@ function ringOutline(
     const rad = (a * Math.PI) / 180;
     b.fillRect(Math.round(cx + Math.cos(rad) * r), Math.round(cy + Math.sin(rad) * r), 1, 1);
   }
+}
+
+/**
+ * A small rounded fist: an ink ring behind a filled circle. Used at the end
+ * of every limb so hands read as distinct rounded shapes rather than the
+ * flat rectangles a straight `px` block produces.
+ */
+function drawFist(
+  b: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  color: string,
+  ink: string
+) {
+  pxCircle(b, cx, cy, r + 1, ink);
+  pxCircle(b, cx, cy, r, color);
 }
 
 function drawNameplate(

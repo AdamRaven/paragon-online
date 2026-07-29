@@ -4,14 +4,19 @@ export type ItemKind = "weapon" | "armor" | "trinket" | "trash";
 export type EquipSlot = "weapon" | "armor" | "trinket";
 export type Rarity = "common" | "uncommon" | "rare" | "epic";
 
+/**
+ * Four visible tiers: white (common), green (uncommon), blue (rare) and gold
+ * (epic, the best gear). Colors are chosen to read clearly both on the dark
+ * panel background and as a small icon border.
+ */
 export const RARITY_META: Record<
   Rarity,
-  { label: string; color: string; statMult: number; valueMult: number }
+  { label: string; color: string; glow: string; statMult: number; valueMult: number }
 > = {
-  common: { label: "Common", color: "#b9c2d4", statMult: 1, valueMult: 1 },
-  uncommon: { label: "Uncommon", color: "#6ee7b7", statMult: 1.35, valueMult: 2 },
-  rare: { label: "Rare", color: "#7dd3fc", statMult: 1.8, valueMult: 4 },
-  epic: { label: "Epic", color: "#c4b5fd", statMult: 2.5, valueMult: 8 },
+  common: { label: "Common", color: "#eef1f7", glow: "#8892a6", statMult: 1, valueMult: 1 },
+  uncommon: { label: "Uncommon", color: "#3ddc70", glow: "#1f9e4d", statMult: 1.35, valueMult: 2 },
+  rare: { label: "Rare", color: "#3fa1ff", glow: "#1f6fd6", statMult: 1.8, valueMult: 4 },
+  epic: { label: "Epic", color: "#ffc93f", glow: "#e0961a", statMult: 2.5, valueMult: 8 },
 };
 
 export interface ItemStats {
@@ -53,81 +58,87 @@ export const MAX_PLUS = 10;
 
 // ---------------------------------------------------------------- item bases
 
+/**
+ * Every base has its own `icon` key so it draws as a visually distinct pixel
+ * icon (see `itemIcons.ts`) rather than sharing one shape with its whole
+ * category — two weapons of the same kind should still be tellable apart at a
+ * glance.
+ */
 export const ITEM_BASES: Record<string, ItemBase> = {
   // --- weapons (light -> heavy) -------------------------------------------
   "worn-knuckles": {
     id: "worn-knuckles", name: "Worn Knuckles", kind: "weapon", slot: "weapon",
-    tier: 1, stats: { attack: 3 }, value: 40, weight: 1, icon: "knuckle",
+    tier: 1, stats: { attack: 3 }, value: 40, weight: 1, icon: "worn-knuckles",
   },
   "iron-claws": {
     id: "iron-claws", name: "Iron Claws", kind: "weapon", slot: "weapon",
-    tier: 3, stats: { attack: 6, speed: 0.02 }, value: 90, weight: 1.15, icon: "knuckle",
+    tier: 3, stats: { attack: 6, speed: 0.02 }, value: 90, weight: 1.15, icon: "iron-claws",
   },
   "ember-gauntlet": {
     id: "ember-gauntlet", name: "Ember Gauntlet", kind: "weapon", slot: "weapon",
-    tier: 6, stats: { attack: 10 }, value: 180, weight: 1.4, icon: "knuckle",
+    tier: 6, stats: { attack: 10 }, value: 180, weight: 1.4, icon: "ember-gauntlet",
   },
   "hooked-scythe": {
     id: "hooked-scythe", name: "Hooked Scythe", kind: "weapon", slot: "weapon",
-    tier: 4, stats: { attack: 9 }, value: 150, weight: 1.7, icon: "scythe",
+    tier: 4, stats: { attack: 9 }, value: 150, weight: 1.7, icon: "hooked-scythe",
   },
   "void-reaper": {
     id: "void-reaper", name: "Void Reaper", kind: "weapon", slot: "weapon",
-    tier: 8, stats: { attack: 16, mana: 12 }, value: 340, weight: 2.1, icon: "scythe",
+    tier: 8, stats: { attack: 16, mana: 12 }, value: 340, weight: 2.1, icon: "void-reaper",
   },
   "warden-maul": {
     id: "warden-maul", name: "Warden's Maul", kind: "weapon", slot: "weapon",
-    tier: 12, stats: { attack: 24 }, value: 620, weight: 2.6, icon: "maul",
+    tier: 12, stats: { attack: 24 }, value: 620, weight: 2.6, icon: "warden-maul",
   },
 
   // --- armour ---------------------------------------------------------------
   "tattered-wrap": {
     id: "tattered-wrap", name: "Tattered Wrap", kind: "armor", slot: "armor",
-    tier: 1, stats: { hp: 25 }, value: 35, icon: "armor",
+    tier: 1, stats: { hp: 25 }, value: 35, icon: "tattered-wrap",
   },
   "scaled-vest": {
     id: "scaled-vest", name: "Scaled Vest", kind: "armor", slot: "armor",
-    tier: 4, stats: { hp: 60, speed: 0.01 }, value: 110, icon: "armor",
+    tier: 4, stats: { hp: 60, speed: 0.01 }, value: 110, icon: "scaled-vest",
   },
   "onyx-plate": {
     id: "onyx-plate", name: "Onyx Plate", kind: "armor", slot: "armor",
-    tier: 9, stats: { hp: 130 }, value: 300, icon: "armor",
+    tier: 9, stats: { hp: 130 }, value: 300, icon: "onyx-plate",
   },
 
   // --- trinkets -------------------------------------------------------------
   "cracked-charm": {
     id: "cracked-charm", name: "Cracked Charm", kind: "trinket", slot: "trinket",
-    tier: 2, stats: { mana: 15 }, value: 45, icon: "charm",
+    tier: 2, stats: { mana: 15 }, value: 45, icon: "cracked-charm",
   },
   "swift-band": {
     id: "swift-band", name: "Swift Band", kind: "trinket", slot: "trinket",
-    tier: 5, stats: { speed: 0.06, mana: 20 }, value: 140, icon: "charm",
+    tier: 5, stats: { speed: 0.06, mana: 20 }, value: 140, icon: "swift-band",
   },
   "heart-of-ash": {
     id: "heart-of-ash", name: "Heart of Ash", kind: "trinket", slot: "trinket",
-    tier: 10, stats: { hp: 70, attack: 6 }, value: 380, icon: "charm",
+    tier: 10, stats: { hp: 70, attack: 6 }, value: 380, icon: "heart-of-ash",
   },
 
   // --- trash: no stats, sold for gold --------------------------------------
   "rusted-scrap": {
     id: "rusted-scrap", name: "Rusted Scrap", kind: "trash",
-    tier: 1, stats: {}, value: 9, icon: "scrap",
+    tier: 1, stats: {}, value: 9, icon: "rusted-scrap",
   },
   "cracked-fang": {
     id: "cracked-fang", name: "Cracked Fang", kind: "trash",
-    tier: 1, stats: {}, value: 14, icon: "fang",
+    tier: 1, stats: {}, value: 14, icon: "cracked-fang",
   },
   "tarnished-coin": {
     id: "tarnished-coin", name: "Tarnished Coin", kind: "trash",
-    tier: 3, stats: {}, value: 26, icon: "coin",
+    tier: 3, stats: {}, value: 26, icon: "tarnished-coin",
   },
   "ashen-dust": {
     id: "ashen-dust", name: "Ashen Dust", kind: "trash",
-    tier: 5, stats: {}, value: 40, icon: "dust",
+    tier: 5, stats: {}, value: 40, icon: "ashen-dust",
   },
   "warden-sigil": {
     id: "warden-sigil", name: "Warden Sigil", kind: "trash",
-    tier: 10, stats: {}, value: 120, icon: "coin",
+    tier: 10, stats: {}, value: 120, icon: "warden-sigil",
   },
 };
 

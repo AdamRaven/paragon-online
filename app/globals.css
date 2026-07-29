@@ -851,7 +851,7 @@ kbd {
 }
 
 .manabar {
-  height: 9px;
+  height: 12px;
 }
 
 .manabar .bar-fill {
@@ -1137,8 +1137,22 @@ body {
 
 .bar-text {
   font-size: 9px;
+  font-weight: 700;
   letter-spacing: 0.1em;
-  text-shadow: 1px 1px 0 #05070c;
+  color: #f7f9fc;
+  line-height: 1;
+  white-space: nowrap;
+  /* A hard 4-direction pixel outline so the label stays legible over any
+     fill colour, bright or dark, instead of a single soft drop shadow. */
+  text-shadow:
+    1px 0 0 #05070c,
+    -1px 0 0 #05070c,
+    0 1px 0 #05070c,
+    0 -1px 0 #05070c,
+    1px 1px 0 #05070c,
+    -1px -1px 0 #05070c,
+    1px -1px 0 #05070c,
+    -1px 1px 0 #05070c;
 }
 
 .btn {
@@ -1256,6 +1270,33 @@ body {
   border: 2px solid var(--border);
   background: #05070c;
   font-size: 13px;
+}
+
+.item-icon-canvas {
+  flex: 0 0 auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: 26px;
+  height: 26px;
+}
+
+.icon-plus-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.icon-plus-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  background: #0d1017;
+  border: 1px solid var(--border);
+  color: var(--exp);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 1px 3px;
 }
 
 .item-main { flex: 1; min-width: 0; display: grid; gap: 1px; }

@@ -139,9 +139,14 @@ export interface Stage {
   requiredLevel: number;
   map: ArenaMap;
   spawns: MobSpawn[];
-  /** Towns are safe: no mobs, and a merchant stands at `npcX`. */
+  /** Towns are safe: no mobs, and NPCs are stationed at fixed spots. */
   isTown?: boolean;
+  /** The enhancer: sells trash + gear, buys stones, enhances weapons. */
   npcX?: number;
+  /** The gear vendor: sells fresh gear for gold. */
+  vendorX?: number;
+  /** The bank keeper: stores items outside the backpack. */
+  bankX?: number;
   /** Drives the backdrop the renderer paints for this stage. */
   biome: Biome;
 }
@@ -171,12 +176,14 @@ export const STAGES: Stage[] = [
   {
     id: "town",
     name: "Emberhold",
-    subtitle: "Safe ground. Trade and enhance here.",
+    subtitle: "Safe ground. Trade, buy gear and store your loot here.",
     requiredLevel: 1,
     isTown: true,
-    npcX: 780,
+    npcX: 500,
+    vendorX: 1000,
+    bankX: 1500,
     biome: "town",
-    map: makeMap(1400, [[0, 1400]], [[420, 410, 200], [900, 400, 200]]),
+    map: makeMap(2000, [[0, 2000]], [[420, 410, 200], [900, 400, 200], [1380, 410, 200]]),
     spawns: [],
   },
   {

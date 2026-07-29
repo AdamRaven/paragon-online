@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ItemIcon } from "@/components/ItemIcon";
 import {
   RARITY_META,
   base,
@@ -16,11 +17,6 @@ const SLOT_META: Record<EquipSlot, { label: string; hint: string; glyph: string 
   weapon: { label: "Weapon", hint: "Raises attack power", glyph: "⚔" },
   armor: { label: "Armour", hint: "Raises health", glyph: "🛡" },
   trinket: { label: "Trinket", hint: "Mana and speed", glyph: "◈" },
-};
-
-export const ICONS: Record<string, string> = {
-  knuckle: "✊", scythe: "⚔", maul: "🔨", armor: "🛡", charm: "◈",
-  scrap: "⚙", fang: "🦴", coin: "◉", dust: "✦",
 };
 
 /** "+8 ATK  +40 HP" — the stat contribution of one item. */
@@ -60,7 +56,7 @@ export function ItemRow({
   const cmp = compare(item, compareTo);
   return (
     <div className="item-row" style={{ borderLeft: `4px solid ${r.color}` }}>
-      <span className="item-icon">{ICONS[b.icon] ?? "?"}</span>
+      <ItemIcon icon={b.icon} color={r.color} />
       <span className="item-main">
         <strong style={{ color: r.color }}>{itemName(item)}</strong>
         <small className="item-stats">{statLine(item)}</small>
@@ -124,7 +120,11 @@ export function InventoryPanel({
                     className={`slot-card${item ? "" : " empty"}`}
                     style={r ? { borderColor: r.color } : undefined}
                   >
-                    <span className="slot-glyph">{meta.glyph}</span>
+                    {item ? (
+                      <ItemIcon icon={base(item.baseId).icon} color={r!.color} size={34} />
+                    ) : (
+                      <span className="slot-glyph">{meta.glyph}</span>
+                    )}
                     <span className="slot-body">
                       <span className="slot-name">{meta.label}</span>
                       {item ? (

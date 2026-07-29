@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ItemIcon } from "@/components/ItemIcon";
 import { ItemRow, statLine } from "@/components/InventoryPanel";
 import {
   DOWNGRADE_FLOOR,
@@ -37,6 +38,8 @@ export function MerchantPanel({
   const [tab, setTab] = useState<Tab>("sell");
   const trash = save.inventory.filter((i) => base(i.baseId).kind === "trash");
   const trashWorth = trash.reduce((n, i) => n + itemValue(i), 0);
+  // Gear you're not wearing can be sold too; equip/unequip happens in the bag.
+  const gear = save.inventory.filter((i) => base(i.baseId).kind !== "trash");
 
   // Anything enhanceable: equipped gear plus weapons in the bag.
   const enhanceable: Item[] = [
@@ -76,13 +79,33 @@ export function MerchantPanel({
         {tab === "sell" && (
           <>
             <p className="hint" style={{ marginBottom: 12 }}>
-              Trash loot has no stats — sell it for gold, then buy stones.
+              Trash loot has no stats — sell it for gold, then buy stones. Gear
+              you&apos;re not wearing can be sold too (unequip it from the bag first).
             </p>
             {trash.length > 0 && (
               <button className="btn" style={{ width: "100%", marginBottom: 12 }} onClick={onSellAll}>
                 Sell all trash ({trash.length}) for {trashWorth}g
               </button>
             )}
+            {gear.length > 0 && (
+              <>
+                <h3 className="section-title">Gear</h3>
+                <div className="item-list" style={{ marginBottom: 12 }}>
+                  {gear.map((i) => (
+                    <ItemRow
+                      key={i.uid}
+                      item={i}
+                      actions={
+                        <button className="btn tiny" onClick={() => onSellOne(i)}>
+                          Sell
+                        </button>
+                      }
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+            <h3 className="section-title">Trash</h3>
             <div className="item-list">
               {trash.length === 0 && <p className="hint">Nothing to sell.</p>}
               {trash.map((i) => (
@@ -106,7 +129,7 @@ export function MerchantPanel({
               Each enhancement attempt consumes one stone, win or lose.
             </p>
             <div className="buy-row">
-              <span className="item-icon" style={{ borderColor: "#7dd3fc" }}>◆</span>
+              <ItemIcon icon="enh-stone" color="#7dd3fc" />
               <span className="item-main">
                 <strong>Enhancement Stone</strong>
                 <small>{STONE_PRICE} gold each</small>
@@ -145,11 +168,9 @@ export function MerchantPanel({
                 const risky = i.plus >= DOWNGRADE_FLOOR;
                 return (
                   <div className="item-row" key={i.uid}>
-                    <span
-                      className="item-icon"
-                      style={{ borderColor: RARITY_META[i.rarity].color }}
-                    >
-                      {i.plus}
+                    <span className="icon-plus-wrap">
+                      <ItemIcon icon={b.icon} color={RARITY_META[i.rarity].color} />
+                      {i.plus > 0 && <span className="icon-plus-badge">+{i.plus}</span>}
                     </span>
                     <span className="item-main">
                       <strong style={{ color: RARITY_META[i.rarity].color }}>
