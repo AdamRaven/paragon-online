@@ -13,6 +13,19 @@
   --danger: #f87171;
   --radius: 0px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --display: var(--font-display), "Cinzel", serif;
+
+  /* Premium chrome: gold filigree + per-class aura glows, lifted straight
+     from the reference art (paragon.webp / shaedim.webp) so the menus read
+     as the same object as the fight itself. */
+  --gold: #d8b45c;
+  --gold-lit: #f3dc9a;
+  --gold-dim: #6b551f;
+  --ink: #05070c;
+  --aura-paragon: #95d9e4;
+  --aura-shedim: #3fe0e8;
+  --aura-kacper: #ff6b4a;
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 * {
@@ -44,51 +57,256 @@ button {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 32px 20px;
+  padding: 48px 20px;
+  position: relative;
+  overflow: hidden;
   background:
-    radial-gradient(1000px 600px at 50% -10%, rgba(110, 231, 183, 0.12), transparent 60%),
-    radial-gradient(800px 500px at 80% 110%, rgba(244, 114, 182, 0.1), transparent 60%),
+    radial-gradient(1100px 650px at 50% -12%, rgba(216, 180, 92, 0.1), transparent 60%),
+    radial-gradient(900px 560px at 84% 8%, rgba(63, 224, 232, 0.08), transparent 60%),
+    radial-gradient(900px 600px at 6% 100%, rgba(255, 107, 74, 0.07), transparent 60%),
     var(--bg);
+}
+
+/* Slow drifting embers behind the content — cheap, GPU-only motion that
+   reads as atmosphere rather than a static screenshot. */
+.landing::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(2px 2px at 12% 82%, rgba(216, 180, 92, 0.55), transparent 60%),
+    radial-gradient(1.5px 1.5px at 28% 64%, rgba(63, 224, 232, 0.4), transparent 60%),
+    radial-gradient(2px 2px at 46% 90%, rgba(255, 107, 74, 0.45), transparent 60%),
+    radial-gradient(1.5px 1.5px at 63% 72%, rgba(216, 180, 92, 0.4), transparent 60%),
+    radial-gradient(2px 2px at 79% 86%, rgba(63, 224, 232, 0.35), transparent 60%),
+    radial-gradient(1.5px 1.5px at 91% 60%, rgba(216, 180, 92, 0.5), transparent 60%);
+  animation: ember-drift 18s linear infinite;
+  opacity: 0.8;
+}
+
+@keyframes ember-drift {
+  0% { transform: translateY(4%); }
+  50% { transform: translateY(-3%); }
+  100% { transform: translateY(4%); }
 }
 
 .landing-inner {
   width: min(980px, 100%);
   display: grid;
   gap: 28px;
+  position: relative;
+  z-index: 1;
 }
 
 .title {
-  font-size: clamp(38px, 8vw, 76px);
-  line-height: 0.95;
+  font-family: var(--display);
+  font-size: clamp(40px, 8vw, 80px);
+  line-height: 1;
   margin: 0;
-  letter-spacing: -0.03em;
-  font-weight: 800;
-  background: linear-gradient(180deg, #ffffff, #7dd3fc 60%, #6ee7b7);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  letter-spacing: 0.02em;
+  font-weight: 700;
 }
 
 .tagline {
   color: var(--muted);
   font-size: 15px;
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   max-width: 60ch;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .card {
-  background: var(--panel);
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.03), transparent 40%),
+    var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px;
-  
+  padding: 22px;
+  position: relative;
+  opacity: 0;
+  animation: card-in 0.55s var(--ease-premium) forwards;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.card:nth-of-type(2) { animation-delay: 0.08s; }
+.card:nth-of-type(3) { animation-delay: 0.16s; }
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Gold corner brackets — the recurring "important panel" tell across every
+   game in this genre, built from two 1px lines rather than an image. */
+.card::before,
+.card::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--gold-dim);
+  border-style: solid;
+  opacity: 0.8;
+  transition: border-color 0.25s ease;
+}
+
+.card::before {
+  top: -1px;
+  left: -1px;
+  border-width: 2px 0 0 2px;
+}
+
+.card::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 2px 2px 0;
+}
+
+.card:hover {
+  border-color: var(--border);
+  box-shadow: 0 0 0 1px rgba(216, 180, 92, 0.08), 0 18px 40px -20px rgba(0, 0, 0, 0.6);
+}
+
+.card:hover::before,
+.card:hover::after {
+  border-color: var(--gold);
 }
 
 .grid-2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
+}
+
+/* --------------------------------------------------------------------- hero */
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.hero-art {
+  display: flex;
+  flex: none;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.55));
+}
+
+.hero-art-img {
+  width: clamp(120px, 16vw, 200px);
+  height: auto;
+  image-rendering: pixelated;
+  opacity: 0.94;
+}
+
+.hero-art-img.left {
+  margin-right: -28px;
+  transform: translateY(-6px);
+  animation: hero-bob 6s ease-in-out infinite;
+}
+
+.hero-art-img.right {
+  animation: hero-bob 6s ease-in-out infinite 0.4s;
+}
+
+@keyframes hero-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@media (max-width: 820px) {
+  .hero { flex-wrap: wrap; }
+  .hero-art { display: none; }
+}
+
+/* ------------------------------------------------------------------ classes */
+
+.class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.class-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #0d1017;
+  border: 1px solid var(--border);
+  padding: 14px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--ease-premium);
+}
+
+.class-card:hover {
+  border-color: var(--aura, var(--gold));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--aura, var(--gold)) 45%, transparent),
+    0 14px 30px -18px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+.class-card-body { min-width: 0; }
+
+.class-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.class-card-head strong { font-size: 15px; }
+
+.class-weapon {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.class-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.class-portrait {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--aura) 20%, #0a0c14), #05070c 72%);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 3px color-mix(in srgb, var(--aura) 55%, var(--border)),
+    0 0 22px -4px color-mix(in srgb, var(--aura) 65%, transparent);
+  overflow: hidden;
+}
+
+.class-portrait-img {
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+  object-position: center 85%;
+  image-rendering: pixelated;
+}
+
+.class-portrait-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
 }
 
 .label {
@@ -117,6 +335,10 @@ button {
 }
 
 .btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--accent);
   color: #06231a;
   border: none;
@@ -125,11 +347,27 @@ button {
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.02em;
-  transition: transform 0.08s ease, filter 0.15s ease;
+  text-decoration: none;
+  overflow: hidden;
+  transition: transform 0.08s ease, filter 0.15s ease, box-shadow 0.2s ease;
+}
+
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.35) 45%, transparent 60%);
+  transform: translateX(-120%);
+  transition: transform 0.5s ease;
+}
+
+.btn:hover:not(:disabled)::after {
+  transform: translateX(120%);
 }
 
 .btn:hover:not(:disabled) {
   filter: brightness(1.1);
+  box-shadow: 0 0 18px -2px rgba(110, 231, 183, 0.55);
 }
 
 .btn:active:not(:disabled) {
@@ -169,6 +407,11 @@ button {
   color: var(--muted);
 }
 
+.key-list-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 24px;
+}
+
 kbd {
   background: #0d1017;
   border: 1px solid var(--border);
@@ -185,7 +428,19 @@ kbd {
   text-transform: uppercase;
   letter-spacing: 0.16em;
   color: var(--accent);
-  margin: 0 0 14px;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  position: relative;
+}
+
+.section-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 28px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
 }
 
 /* --------------------------------------------------------------------- game */
@@ -507,7 +762,12 @@ kbd {
   place-items: center;
   padding: 20px;
   z-index: 20;
-  
+  animation: overlay-in 0.25s ease;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .sheet {
@@ -518,6 +778,12 @@ kbd {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 24px;
+  animation: sheet-in 0.4s var(--ease-premium);
+}
+
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .sheet-head {
@@ -617,6 +883,7 @@ kbd {
 }
 
 .zone-option {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -628,6 +895,13 @@ kbd {
   color: var(--text);
   text-align: left;
   width: 100%;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s var(--ease-premium);
+}
+
+.zone-option:hover:not(:disabled) {
+  border-color: var(--gold-dim);
+  background: #101420;
+  transform: translateX(2px);
 }
 
 .zone-option:disabled {
@@ -637,6 +911,21 @@ kbd {
 
 .zone-option.current {
   border-color: var(--accent-dim);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.class-option {
+  gap: 14px;
+}
+
+.class-option > span:not(.badge) {
+  flex: 1;
+  min-width: 0;
+}
+
+.class-option.current {
+  border-color: color-mix(in srgb, var(--aura) 70%, var(--border));
+  box-shadow: inset 3px 0 0 var(--aura), 0 0 16px -6px var(--aura);
 }
 
 .zone-option small {
@@ -647,6 +936,7 @@ kbd {
 }
 
 .badge {
+  display: inline-block;
   background: rgba(110, 231, 183, 0.14);
   color: var(--accent);
   border-radius: 20px;
@@ -654,11 +944,17 @@ kbd {
   font-size: 10px;
   letter-spacing: 0.08em;
   white-space: nowrap;
+  animation: pop-in 0.25s var(--ease-premium);
 }
 
 .badge.warn {
   background: rgba(248, 113, 113, 0.14);
   color: var(--danger);
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .pip {
@@ -675,14 +971,73 @@ kbd {
   margin-left: 6px;
 }
 
+.escape-menu {
+  width: min(380px, 100%);
+}
+
+.escape-settings {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.volume-slider {
+  width: 140px;
+  accent-color: var(--accent);
+}
+
 .death-card {
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.death-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  background: radial-gradient(circle, var(--result-glow, rgba(110, 231, 183, 0.16)), transparent 65%);
+  animation: result-glow-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes result-glow-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.death-card .result-portrait {
+  margin: 0 auto 14px;
+  animation: result-portrait-in 0.6s var(--ease-premium) 0.1s backwards;
+}
+
+@keyframes result-portrait-in {
+  from { opacity: 0; transform: scale(0.6) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .death-card h2 {
+  font-family: var(--display);
   color: var(--danger);
-  font-size: 30px;
-  margin: 0 0 8px;
+  font-size: 40px;
+  letter-spacing: 0.06em;
+  margin: 0 0 10px;
+  animation: result-title-in 0.5s var(--ease-premium) 0.05s backwards;
+}
+
+@keyframes result-title-in {
+  from { opacity: 0; transform: translateY(-10px); letter-spacing: 0.3em; }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .hint {
@@ -795,6 +1150,22 @@ kbd {
      every art pixel maps to the same block of screen pixels. */
 }
 
+/* The crisp portrait layer sits pixel-for-pixel over the chunky game
+   canvas, but at real display resolution and without the pixelated
+   upscale, and never intercepts input. */
+.arena-fx-canvas {
+  z-index: 1;
+  pointer-events: none;
+  cursor: default;
+}
+
+/* Higher specificity than the later "never smooth the game buffer" rule
+   below — the fx canvas backing store is sized to real device resolution,
+   so unlike the art buffer it should scale smoothly, not blocky. */
+.arena-stage canvas.arena-fx-canvas {
+  image-rendering: auto;
+}
+
 .arena-hud {
   position: absolute;
   inset: 0;
@@ -817,7 +1188,16 @@ kbd {
   border-radius: var(--radius);
   padding: 10px 12px;
   width: min(320px, 32vw);
-  
+  transition: box-shadow 0.3s ease;
+}
+
+.fighter-panel.critical {
+  animation: critical-pulse 1s ease-in-out infinite;
+}
+
+@keyframes critical-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15); }
+  50% { box-shadow: 0 0 22px 1px rgba(239, 68, 68, 0.45); }
 }
 
 .fighter-panel.right {
@@ -827,8 +1207,7 @@ kbd {
 
 .fighter-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   margin-bottom: 8px;
 }
@@ -837,17 +1216,40 @@ kbd {
   flex-direction: row-reverse;
 }
 
+.fighter-id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .fighter-head strong {
   font-size: 14px;
 }
 
-.fighter-head span {
+.fighter-head span span {
   font-size: 10px;
   color: var(--muted);
 }
 
 .hpbar .bar-fill {
   background: linear-gradient(90deg, #dc2626, #f87171);
+  position: relative;
+}
+
+.hpbar .bar-fill::after,
+.manabar .bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.35) 50%, rgba(255, 255, 255, 0) 100%);
+  background-size: 200% 100%;
+  animation: bar-sheen 3.5s ease-in-out infinite;
+}
+
+@keyframes bar-sheen {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .manabar {
@@ -876,6 +1278,12 @@ kbd {
   background: rgba(17, 21, 30, 0.85);
   border: 1px solid var(--border);
   white-space: nowrap;
+  animation: tag-in 0.22s var(--ease-premium);
+}
+
+@keyframes tag-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.85); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .arena-tag.sprint { color: var(--accent); border-color: rgba(110,231,183,0.5); }
@@ -954,9 +1362,38 @@ kbd {
   text-align: center;
   padding: 4px;
   overflow: hidden;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.15s ease;
 }
 
 .skill.poor { opacity: 0.4; }
+
+/* Off cooldown and affordable: a slow breathing glow in the class's aura
+   colour, the "this is worth pressing" tell that a flat icon can't give. */
+.skill.ready {
+  border-color: color-mix(in srgb, var(--aura, var(--accent)) 55%, var(--border));
+  animation: skill-ready-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes skill-ready-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--aura, var(--accent)) 0%, transparent); }
+  50% { box-shadow: 0 0 12px 1px color-mix(in srgb, var(--aura, var(--accent)) 55%, transparent); }
+}
+
+/* Fired once when a cast lands and the cooldown starts climbing. */
+.skill-flash {
+  animation: skill-activate 0.4s ease-out;
+}
+
+@keyframes skill-activate {
+  0% {
+    transform: scale(1.14);
+    box-shadow: 0 0 0 2px #fff, 0 0 20px 4px color-mix(in srgb, var(--aura, #fff) 80%, white);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
 
 .skill-key {
   position: absolute;
@@ -965,6 +1402,7 @@ kbd {
   font-size: 10px;
   font-weight: 700;
   color: var(--accent);
+  z-index: 2;
 }
 
 .skill-name {
@@ -980,16 +1418,27 @@ kbd {
   right: 6px;
   font-size: 9px;
   color: var(--ki);
+  z-index: 2;
+}
+
+/* The radial cooldown wipe: a dark conic-gradient wedge whose angle is set
+   inline from React each HUD tick, shrinking clockwise as the timer counts
+   down rather than just showing a number over a flat block. */
+.skill-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .skill-cd {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
   display: grid;
   place-items: center;
   font-size: 17px;
   font-weight: 700;
+  z-index: 2;
+  text-shadow: 0 1px 3px #000, 0 0 6px #000;
 }
 
 @media (max-width: 720px) {
@@ -1104,17 +1553,29 @@ body {
   font-smooth: never;
 }
 
+/* The display face (titles) is the one deliberate exception to the crunchy
+   pixel-text rule above: an engraved gold serif reads as premium precisely
+   because it stays smooth against the chunky HUD around it. */
 .title {
-  background: none;
-  -webkit-background-clip: initial;
-  background-clip: initial;
-  color: #f3f6ff;
-  text-shadow:
-    3px 0 0 #1e2440,
-    0 3px 0 #1e2440,
-    3px 3px 0 #1e2440,
-    6px 6px 0 #0a0c14;
-  letter-spacing: 0.04em;
+  font-family: var(--display);
+  -webkit-font-smoothing: antialiased;
+  font-smooth: auto;
+  background: linear-gradient(180deg, var(--gold-lit) 0%, var(--gold) 45%, #a3812f 100%);
+  background-size: 100% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter:
+    drop-shadow(0 1px 0 #4a3712)
+    drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 26px rgba(216, 180, 92, 0.22));
+  animation: title-shimmer 7s ease-in-out infinite;
+}
+
+@keyframes title-shimmer {
+  0%, 100% { background-position: 0 0%; }
+  50% { background-position: 0 60%; }
 }
 
 /* Health / mana / exp bars become segmented pixel meters. */
@@ -1199,6 +1660,107 @@ body {
 /* ------------------------------------------------------- inventory & shop */
 
 .sheet.wide { width: min(920px, 100%); }
+
+/* --------------------------------------------------------------------- map */
+
+.map-trail {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  overflow-x: auto;
+  padding: 28px 4px 8px;
+}
+
+.map-node-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+  width: 130px;
+  position: relative;
+}
+
+.map-link {
+  position: absolute;
+  top: 30px;
+  right: 50%;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--border), var(--tint));
+  z-index: 0;
+}
+
+.map-link.locked {
+  background: var(--border);
+  opacity: 0.5;
+}
+
+.map-node {
+  position: relative;
+  z-index: 1;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--tint) 24%, #0a0c14), #05070c 75%);
+  border: 2px solid color-mix(in srgb, var(--tint) 65%, var(--border));
+  box-shadow: 0 0 16px -4px color-mix(in srgb, var(--tint) 70%, transparent);
+  transition: transform 0.2s var(--ease-premium), box-shadow 0.2s ease;
+}
+
+.map-node:not(:disabled):hover {
+  transform: translateY(-3px) scale(1.06);
+  box-shadow: 0 0 22px -2px color-mix(in srgb, var(--tint) 85%, transparent);
+}
+
+.map-node.locked {
+  filter: grayscale(0.7);
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.map-node.here {
+  animation: map-here-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes map-here-glow {
+  0%, 100% { box-shadow: 0 0 12px -2px color-mix(in srgb, var(--tint) 60%, transparent); }
+  50% { box-shadow: 0 0 26px 2px color-mix(in srgb, var(--tint) 90%, transparent); }
+}
+
+.map-node-ping {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--tint);
+  animation: map-ping 1.8s ease-out infinite;
+}
+
+@keyframes map-ping {
+  0% { transform: scale(0.8); opacity: 0.9; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.map-node-label {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.map-node-label strong {
+  display: block;
+  font-size: 12px;
+}
+
+.map-node-label small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 3px;
+  line-height: 1.4;
+  padding: 0 4px;
+}
 
 .inv-layout {
   display: grid;

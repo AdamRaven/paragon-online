@@ -30,26 +30,53 @@ export function statLine(item: Item): string {
   return parts.join("   ") || "—";
 }
 
+/** A single weighted number so items can be ranked, not just labelled. */
+function statScore(item: Item): number {
+  const s = itemStats(item);
+  return (s.attack ?? 0) * 4 + (s.hp ?? 0) * 0.4 + (s.mana ?? 0) * 0.2 + (s.speed ?? 0) * 200;
+}
+
 /** Difference in attack/hp against whatever occupies the same slot. */
 function compare(item: Item, equipped?: Item): { text: string; good: boolean } | null {
   if (!equipped) return null;
-  const a = itemStats(item);
-  const b = itemStats(equipped);
-  const d =
-    (a.attack ?? 0) * 4 + (a.hp ?? 0) * 0.4 + (a.mana ?? 0) * 0.2 + (a.speed ?? 0) * 200 -
-    ((b.attack ?? 0) * 4 + (b.hp ?? 0) * 0.4 + (b.mana ?? 0) * 0.2 + (b.speed ?? 0) * 200);
+  const d = statScore(item) - statScore(equipped);
   if (Math.abs(d) < 0.5) return null;
   return { text: d > 0 ? "UPGRADE" : "worse", good: d > 0 };
+}
+
+/**
+ * Floats upgrades to the top of the backpack so the player never has to hunt
+ * for the one weapon drop that actually helps — an empty slot counts as an
+ * upgrade too (there's nothing better to compare against). Everything else
+ * keeps its original order rather than being fully re-sorted by stats, so
+ * the list doesn't reshuffle itself every time a mob drops junk.
+ */
+function withUpgradesFirst(items: Item[], save: AdventureSave): Item[] {
+  return items
+    .map((item, idx) => {
+      const slot = base(item.baseId).slot;
+      const equipped = slot ? save.equipped[slot] : undefined;
+      const upgrade = !equipped || statScore(item) - statScore(equipped) > 0.5;
+      return { item, idx, upgrade, score: statScore(item) };
+    })
+    .sort((a, b) => {
+      if (a.upgrade !== b.upgrade) return a.upgrade ? -1 : 1;
+      return a.upgrade ? b.score - a.score : a.idx - b.idx;
+    })
+    .map((s) => s.item);
 }
 
 export function ItemRow({
   item,
   actions,
   compareTo,
+  slotEmpty,
 }: {
   item: Item;
   actions?: React.ReactNode;
   compareTo?: Item;
+  /** The item's slot exists but has nothing equipped — always an upgrade. */
+  slotEmpty?: boolean;
 }) {
   const b = base(item.baseId);
   const r = RARITY_META[item.rarity];
@@ -62,8 +89,10 @@ export function ItemRow({
         <small className="item-stats">{statLine(item)}</small>
         <small className="item-sub">
           {r.label} · {b.kind}
-          {cmp && (
+          {cmp ? (
             <em className={cmp.good ? "cmp-up" : "cmp-down"}> · {cmp.text}</em>
+          ) : (
+            slotEmpty && <em className="cmp-up"> · EQUIP</em>
           )}
         </small>
       </span>
@@ -85,7 +114,10 @@ export function InventoryPanel({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"gear" | "trash">("gear");
-  const gear = save.inventory.filter((i) => base(i.baseId).kind !== "trash");
+  const gear = withUpgradesFirst(
+    save.inventory.filter((i) => base(i.baseId).kind !== "trash"),
+    save
+  );
   const trash = save.inventory.filter((i) => base(i.baseId).kind === "trash");
   const trashWorth = trash.reduce((n, i) => n + itemValue(i), 0);
   const list = tab === "gear" ? gear : trash;
@@ -180,6 +212,7 @@ export function InventoryPanel({
                     key={item.uid}
                     item={item}
                     compareTo={slot ? save.equipped[slot] : undefined}
+                    slotEmpty={!!slot && !save.equipped[slot]}
                     actions={
                       slot ? (
                         <button className="btn tiny" onClick={() => onEquip(item)}>

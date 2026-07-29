@@ -3,19 +3,23 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
+import { ClassPortrait } from "@/components/ClassPortrait";
+import { EscapeMenu } from "@/components/EscapeMenu";
 import { ArenaAI, type Difficulty } from "@/lib/arena/ai";
 import { CLASSES, getClass } from "@/lib/arena/classes";
 import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
 import { ArenaEngine, emptyIntent, type Intent } from "@/lib/arena/engine";
 import { ArenaInput } from "@/lib/arena/input";
 import { PIXEL_SCALE, artSize, worldViewSize } from "@/lib/arena/pixel";
-import { renderArena } from "@/lib/arena/render";
+import { renderArena, renderFighterPortraits } from "@/lib/arena/render";
+import { playSound } from "@/lib/arena/sound";
 import type { ClassId, CombatLogEntry } from "@/lib/arena/types";
 
 const MAX_LOGS = 6;
 
 export function ArenaClient() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fxCanvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<ArenaEngine | null>(null);
   const inputRef = useRef<ArenaInput | null>(null);
   const aiRef = useRef<ArenaAI | null>(null);
@@ -29,6 +33,8 @@ export function ArenaClient() {
   const [hud, setHud] = useState<ArenaHudData | null>(null);
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [winner, setWinner] = useState<{ name: string; you: boolean } | null>(null);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
 
   const pushLog = useCallback((text: string, tone: CombatLogEntry["tone"]) => {
     setLogs((prev) => [...prev, { id: logIdRef.current++, text, tone }].slice(-MAX_LOGS));
@@ -45,8 +51,28 @@ export function ArenaClient() {
   const begin = useCallback(() => {
     setLogs([]);
     setWinner(null);
+    setPaused(false);
     setStarted(true);
   }, []);
+
+  useEffect(() => {
+    if (winner) playSound(winner.you ? "victory" : "defeat");
+  }, [winner]);
+
+  // Escape opens/closes the pause menu; it never fires once the fight ends,
+  // since the victory/defeat card already owns the screen at that point.
+  useEffect(() => {
+    if (!started || winner) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Escape" || e.repeat) return;
+      setPaused((p) => {
+        pausedRef.current = !p;
+        return !p;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [started, winner]);
 
   useEffect(() => {
     if (!started) return;
@@ -54,6 +80,8 @@ export function ArenaClient() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const fxCanvas = fxCanvasRef.current;
+    const fxCtx = fxCanvas?.getContext("2d") ?? null;
 
     const input = new ArenaInput();
     input.attach(canvas);
@@ -67,6 +95,8 @@ export function ArenaClient() {
       onEnd: (name, you) => setWinner({ name, you }),
     });
     engineRef.current = engine;
+
+    let fxScale = PIXEL_SCALE;
 
     const resize = () => {
       const w = canvas.parentElement?.clientWidth ?? window.innerWidth;
@@ -82,6 +112,18 @@ export function ArenaClient() {
       // The camera works in world units, which the pixel zoom scales down.
       const view = worldViewSize(w, h);
       engine.setViewport(view.w, view.h);
+
+      // The portrait overlay shares the exact same CSS box as the game
+      // canvas but backs it with real display resolution, so Paragon and
+      // Shedim render crisp while the world underneath stays chunky.
+      if (fxCanvas) {
+        const dpr = window.devicePixelRatio || 1;
+        fxScale = PIXEL_SCALE * dpr;
+        fxCanvas.width = Math.round(art.w * fxScale);
+        fxCanvas.height = Math.round(art.h * fxScale);
+        fxCanvas.style.width = `${art.w * PIXEL_SCALE}px`;
+        fxCanvas.style.height = `${art.h * PIXEL_SCALE}px`;
+      }
     };
     resize();
     window.addEventListener("resize", resize);
@@ -95,16 +137,21 @@ export function ArenaClient() {
       acc += Math.min(200, now - last);
       last = now;
 
-      let guard = 0;
-      while (acc >= DT * 1000 && guard++ < 8) {
-        const intent = readIntent(input);
-        const aiIntent = ai.think(engine.enemy, engine.player);
-        engine.step(intent, aiIntent);
-        input.step(DT);
-        acc -= DT * 1000;
+      if (pausedRef.current) {
+        acc = 0;
+      } else {
+        let guard = 0;
+        while (acc >= DT * 1000 && guard++ < 8) {
+          const intent = readIntent(input);
+          const aiIntent = ai.think(engine.enemy, engine.player);
+          engine.step(intent, aiIntent);
+          input.step(DT);
+          acc -= DT * 1000;
+        }
       }
 
       renderArena(ctx, engine);
+      if (fxCtx) renderFighterPortraits(fxCtx, engine, fxScale);
 
       if (++hudTick >= 4) {
         hudTick = 0;
@@ -142,26 +189,44 @@ export function ArenaClient() {
   return (
     <div className="arena-stage">
       <canvas ref={canvasRef} tabIndex={0} />
+      <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
       {hud && <ArenaHud hud={hud} logs={logs} />}
 
-      {winner && (
-        <div className="overlay">
-          <div className="sheet death-card">
-            <h2 style={{ color: winner.you ? "var(--accent)" : "var(--danger)" }}>
-              {winner.you ? "VICTORY" : "DEFEAT"}
-            </h2>
-            <p className="hint">{winner.name} wins the duel.</p>
-            <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}>
-              <button className="btn" onClick={() => { setStarted(false); setWinner(null); }}>
-                Fight again
-              </button>
-              <Link className="btn btn-ghost" href="/">
-                Home
-              </Link>
+      {paused && !winner && (
+        <EscapeMenu
+          onResume={() => {
+            pausedRef.current = false;
+            setPaused(false);
+          }}
+        />
+      )}
+
+      {winner && (() => {
+        const winnerClassId = winner.you ? playerClass : enemyClass;
+        const winnerAura = getClass(winnerClassId).colors.aura;
+        const glow = winner.you ? "rgba(110, 231, 183, 0.22)" : "rgba(248, 113, 113, 0.2)";
+        return (
+          <div className="overlay">
+            <div className="sheet death-card" style={{ "--result-glow": glow } as React.CSSProperties}>
+              <div className="result-portrait">
+                <ClassPortrait classId={winnerClassId} aura={winnerAura} size={92} />
+              </div>
+              <h2 style={{ color: winner.you ? "var(--accent)" : "var(--danger)" }}>
+                {winner.you ? "VICTORY" : "DEFEAT"}
+              </h2>
+              <p className="hint">{winner.name} wins the duel.</p>
+              <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}>
+                <button className="btn" onClick={() => { setStarted(false); setWinner(null); }}>
+                  Fight again
+                </button>
+                <Link className="btn btn-ghost" href="/">
+                  Home
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -266,13 +331,16 @@ function ClassSelect({
                 return (
                   <button
                     key={id}
-                    className={`zone-option${playerClass === id ? " current" : ""}`}
+                    className={`zone-option class-option${playerClass === id ? " current" : ""}`}
+                    style={{ "--aura": c.colors.aura } as React.CSSProperties}
                     onClick={() => {
+                      playSound("uiClick");
                       setPlayerClass(id);
                       const others = ids.filter((o) => o !== id);
                       setEnemyClass(others[Math.floor(Math.random() * others.length)]);
                     }}
                   >
+                    <ClassPortrait classId={id} aura={c.colors.aura} size={52} />
                     <span>
                       <strong>{c.name}</strong>
                       <small>
@@ -337,14 +405,18 @@ function ClassSelect({
                 <button
                   key={d}
                   className={`zone-option${difficulty === d ? " current" : ""}`}
-                  onClick={() => setDifficulty(d)}
+                  onClick={() => { playSound("uiClick"); setDifficulty(d); }}
                 >
                   <span><strong style={{ textTransform: "capitalize" }}>{d}</strong></span>
                   <span className="badge">{difficulty === d ? "ON" : "SET"}</span>
                 </button>
               ))}
             </div>
-            <button className="btn" style={{ width: "100%", marginTop: 16 }} onClick={onStart}>
+            <button
+              className="btn"
+              style={{ width: "100%", marginTop: 16 }}
+              onClick={() => { playSound("uiClick"); onStart(); }}
+            >
               Enter the arena
             </button>
           </section>

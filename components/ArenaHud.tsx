@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { ClassPortrait } from "@/components/ClassPortrait";
 import { getClass } from "@/lib/arena/classes";
 import {
   COMBOKILLER_MAX_STACKS,
@@ -7,7 +9,8 @@ import {
   MANASTOP_COST,
   SHEDIM_BLAST_MANA_THRESHOLD,
 } from "@/lib/arena/constants";
-import type { CombatLogEntry } from "@/lib/arena/types";
+import { playSound } from "@/lib/arena/sound";
+import type { ClassId, CombatLogEntry } from "@/lib/arena/types";
 
 export interface ArenaHudData {
   playerName: string;
@@ -45,13 +48,43 @@ export function ArenaHud({
   const cls = getClass(hud.playerClass);
   const enemyCls = getClass(hud.enemyClass);
 
+  // Tracks which skills just came off a fresh activation (cooldown rising
+  // from 0) so their icon can flash once, the same "you did a thing" tell
+  // every juicy skill bar gives on cast.
+  const prevCdRef = useRef<Record<string, number>>({});
+  const [flash, setFlash] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const prev = prevCdRef.current;
+    let justUsed: string[] | null = null;
+    for (const s of cls.skills) {
+      const cd = hud.cooldowns[s.id] ?? 0;
+      const prevCd = prev[s.id] ?? 0;
+      if (cd > prevCd + 0.001 && prevCd <= 0.001) {
+        (justUsed ??= []).push(s.id);
+      }
+    }
+    prevCdRef.current = hud.cooldowns;
+    if (justUsed) {
+      const now = Date.now();
+      setFlash((f) => {
+        const next = { ...f };
+        for (const id of justUsed!) next[id] = now;
+        return next;
+      });
+      playSound("skillCast");
+    }
+  }, [hud.cooldowns, cls.skills]);
+
   return (
     <div className="arena-hud">
       <div className="arena-top">
         <FighterPanel
           name={hud.playerName}
+          classId={hud.playerClass as ClassId}
           className={cls.name}
           weapon={cls.weapon}
+          aura={cls.colors.aura}
           hp={hud.playerHp}
           maxHp={hud.playerMaxHp}
           mana={hud.playerMana}
@@ -83,8 +116,10 @@ export function ArenaHud({
         </div>
         <FighterPanel
           name={hud.enemyName}
+          classId={hud.enemyClass as ClassId}
           className={enemyCls.name}
           weapon={enemyCls.weapon}
+          aura={enemyCls.colors.aura}
           hp={hud.enemyHp}
           maxHp={hud.enemyMaxHp}
           mana={hud.enemyMana}
@@ -120,14 +155,19 @@ export function ArenaHud({
               </span>
             </div>
           )}
-          <div className="skill-row">
+          <div className="skill-row" style={{ "--aura": cls.colors.aura } as React.CSSProperties}>
             {cls.skills.map((s) => {
               const cd = hud.cooldowns[s.id] ?? 0;
               const poor = !!s.manaCost && hud.playerMana < s.manaCost;
+              const ready = cd <= 0;
+              const pct = s.cooldown > 0 ? Math.min(1, cd / s.cooldown) : 0;
+              const justUsed = flash[s.id] && Date.now() - flash[s.id] < 400;
               return (
                 <div
                   key={s.id}
-                  className={`skill${poor ? " poor" : ""}`}
+                  className={`skill${poor ? " poor" : ""}${ready && !poor ? " ready" : ""}${
+                    justUsed ? " skill-flash" : ""
+                  }`}
                   title={`${s.label} — ${s.description}`}
                 >
                   <span className="skill-key">{s.slot}</span>
@@ -135,7 +175,17 @@ export function ArenaHud({
                   {s.manaCost ? (
                     <span className="skill-cost">{s.manaCost}</span>
                   ) : null}
-                  {cd > 0 && <span className="skill-cd">{cd.toFixed(1)}</span>}
+                  {cd > 0 && (
+                    <>
+                      <div
+                        className="skill-sweep"
+                        style={{
+                          background: `conic-gradient(rgba(5,7,12,0.86) ${pct * 360}deg, transparent ${pct * 360}deg)`,
+                        }}
+                      />
+                      <span className="skill-cd">{cd.toFixed(1)}</span>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -148,8 +198,10 @@ export function ArenaHud({
 
 function FighterPanel({
   name,
+  classId,
   className,
   weapon,
+  aura,
   hp,
   maxHp,
   mana,
@@ -159,8 +211,10 @@ function FighterPanel({
   align,
 }: {
   name: string;
+  classId: ClassId;
   className: string;
   weapon: string;
+  aura: string;
   hp: number;
   maxHp: number;
   mana: number;
@@ -169,16 +223,23 @@ function FighterPanel({
   hideMana?: boolean;
   align: "left" | "right";
 }) {
+  const hpPct = hp / maxHp;
   return (
-    <div className={`fighter-panel ${align}`}>
+    <div
+      className={`fighter-panel ${align}${hpPct <= 0.25 ? " critical" : ""}`}
+      style={{ "--aura": aura } as React.CSSProperties}
+    >
       <div className="fighter-head">
-        <strong>{name}</strong>
-        <span>
-          {className} · {weapon}
+        <ClassPortrait classId={classId} aura={aura} size={38} />
+        <span className="fighter-id">
+          <strong>{name}</strong>
+          <span>
+            {className} · {weapon}
+          </span>
         </span>
       </div>
       <div className="bar hpbar">
-        <div className="bar-fill" style={{ width: `${(hp / maxHp) * 100}%` }} />
+        <div className="bar-fill" style={{ width: `${hpPct * 100}%` }} />
         <div className="bar-text">
           {hp} / {maxHp}
         </div>

@@ -108,6 +108,41 @@ export const MOB_TYPES: Record<string, MobType> = {
     accent: "#7f1d1d",
     isBoss: true,
   },
+  revenant: {
+    id: "revenant",
+    name: "Revenant",
+    level: 18,
+    maxHp: 1100,
+    damage: 46,
+    speed: 2.6,
+    expValue: 900,
+    range: 80,
+    windup: 0.28,
+    recover: 0.3,
+    aggro: 520,
+    w: 34,
+    h: 80,
+    color: "#7c3aed",
+    accent: "#3b0a6b",
+  },
+  sovereign: {
+    id: "sovereign",
+    name: "The Sovereign",
+    level: 24,
+    maxHp: 3400,
+    damage: 72,
+    speed: 2.2,
+    expValue: 4500,
+    range: 96,
+    windup: 0.32,
+    recover: 0.36,
+    aggro: 700,
+    w: 52,
+    h: 98,
+    color: "#a21caf",
+    accent: "#4a044e",
+    isBoss: true,
+  },
 };
 
 /** The single melee swing every mob uses. */
@@ -151,7 +186,7 @@ export interface Stage {
   biome: Biome;
 }
 
-export type Biome = "town" | "outskirts" | "undercity" | "keep";
+export type Biome = "town" | "outskirts" | "undercity" | "keep" | "abyss";
 
 const GROUND_Y = 560;
 
@@ -274,6 +309,38 @@ export const STAGES: Stage[] = [
       { typeId: "colossus", x: 2200 },
       { typeId: "blade-wraith", x: 2400 },
       { typeId: "warden", x: 2950 },
+    ],
+  },
+  {
+    id: "sanctum",
+    biome: "abyss",
+    name: "The Abyssal Sanctum",
+    subtitle: "Beyond the Keep — the Sovereign holds court at the far end",
+    requiredLevel: 20,
+    map: makeMap(
+      3500,
+      [
+        [0, 760],
+        [1080, 640],
+        [1980, 680],
+        [2940, 560],
+      ],
+      [
+        [820, 380, 220],
+        [1680, 370, 220],
+        [2380, 390, 220],
+        [3080, 380, 220],
+      ]
+    ),
+    spawns: [
+      { typeId: "revenant", x: 480 },
+      { typeId: "colossus", x: 700 },
+      { typeId: "revenant", x: 1300 },
+      { typeId: "blade-wraith", x: 1520 },
+      { typeId: "revenant", x: 2100 },
+      { typeId: "revenant", x: 2420 },
+      { typeId: "colossus", x: 2700 },
+      { typeId: "sovereign", x: 3300 },
     ],
   },
 ];

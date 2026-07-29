@@ -10,6 +10,7 @@ import {
   pxOutline,
   pxText,
 } from "./pixel";
+import { playSound } from "./sound";
 import type { Fighter } from "./types";
 
 /** Palette shared by the terrain and background so everything reads as one set. */
@@ -35,6 +36,138 @@ const PAL = {
 /** In the campaign you are the only non-mob, so your own label is just noise. */
 let showPlayerName = true;
 
+/**
+ * Impact juice: a brief camera punch-in plus a white screen flash, fired
+ * whenever `engine.shake` jumps (a fresh big hit) rather than every frame it
+ * stays elevated while decaying. Kept as render-local state so the combat
+ * engine itself never has to know the presentation reacts to it.
+ */
+let prevTime = 0;
+let prevShake = 0;
+let punchTimer = 0;
+let punchMag = 0;
+let flashTimer = 0;
+let flashMag = 0;
+const PUNCH_DURATION = 0.14;
+const FLASH_DURATION = 0.1;
+
+/**
+ * World camera converted to art-pixel space, including screen shake. Shake
+ * is derived from `engine.time` rather than `Math.random()` so the main
+ * low-res canvas and the crisp portrait overlay (drawn in a separate pass,
+ * possibly against a different canvas) land on exactly the same offset
+ * every frame instead of jittering independently of each other.
+ */
+function cameraArt(engine: ArenaEngine) {
+  const t = engine.time * 43;
+  const shakeX = Math.sin(t) * engine.shake * 0.5;
+  const shakeY = Math.cos(t * 1.3) * engine.shake * 0.5;
+  return {
+    camX: Math.round((engine.camera.x + shakeX) / S),
+    camY: Math.round((engine.camera.y + shakeY) / S),
+  };
+}
+
+/** Previous per-fighter state, so dash/reflect play once on entry rather than every frame. */
+const prevFighterState = new Map<string, string>();
+
+function trackStateSounds(engine: ArenaEngine) {
+  const seen = new Set<string>();
+  for (const f of engine.fighters) {
+    seen.add(f.id);
+    const prev = prevFighterState.get(f.id);
+    if (f.state !== prev) {
+      if (f.state === "dash" || f.state === "sprint") playSound("dash");
+      else if (f.state === "reflect") playSound("block");
+      prevFighterState.set(f.id, f.state);
+    }
+  }
+  // Mobs despawn/respawn with new ids over time; drop anything no longer present.
+  for (const id of prevFighterState.keys()) {
+    if (!seen.has(id)) prevFighterState.delete(id);
+  }
+}
+
+// -------------------------------------------------------------- portraits
+
+/**
+ * Paragon and Shedim have hand-painted reference portraits; Kacper and all
+ * mobs don't, so they stay on the procedural pixel-art renderer below.
+ */
+const PORTRAIT_SRC: Partial<Record<string, string>> = {
+  paragon: "/art/paragon.webp",
+  shedim: "/art/shaedim.webp",
+};
+const portraitCache = new Map<string, HTMLImageElement>();
+
+function getPortraitImage(classId: string): HTMLImageElement | null {
+  const src = PORTRAIT_SRC[classId];
+  if (!src) return null;
+  let img = portraitCache.get(classId);
+  if (!img) {
+    if (typeof Image === "undefined") return null;
+    img = new Image();
+    img.src = src;
+    portraitCache.set(classId, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+/**
+ * Draws the actual reference art for Paragon/Shedim fighters on a separate,
+ * non-pixelated overlay canvas sized to real screen resolution. The main
+ * game buffer is deliberately tiny (a fighter is ~31 art pixels tall) so its
+ * nearest-neighbour upscale stays chunky; that same tininess would turn a
+ * 500px detailed portrait into an unrecognisable smear. Keeping the world at
+ * its native chunky resolution while compositing crisp, smoothly-scaled
+ * character art on top is the only way to get both at once.
+ */
+export function renderFighterPortraits(
+  fxCtx: CanvasRenderingContext2D,
+  engine: ArenaEngine,
+  physicalPerArtPixel: number
+) {
+  const fx = fxCtx;
+  fx.clearRect(0, 0, fx.canvas.width, fx.canvas.height);
+  const { camX, camY } = cameraArt(engine);
+  const px2 = (v: number) => (Math.round(v / S) - camX) * physicalPerArtPixel;
+  const py2 = (v: number) => (Math.round(v / S) - camY) * physicalPerArtPixel;
+
+  for (const f of engine.fighters) {
+    if (f.isMob || f.state === "dead") continue;
+    const img = getPortraitImage(f.classId);
+    if (!img) continue;
+
+    const x = px2(f.x);
+    const yFeet = py2(f.y);
+    const hArt = Math.max(12, f.h / S);
+    // The reference art carries headroom/legroom the crude hitbox doesn't,
+    // so it's drawn a little taller than the box it stands in rather than
+    // exactly filling it — matching height 1:1 made both portraits read as
+    // squashed.
+    const drawH = hArt * physicalPerArtPixel * 1.28;
+    const drawW = drawH * (img.naturalWidth / img.naturalHeight);
+
+    const knockdown = f.state === "knockdown";
+    const flash = f.hitFlash > 0 && Math.floor(engine.time * 30) % 2 === 0;
+
+    fx.save();
+    fx.translate(x, yFeet);
+    if (knockdown) fx.rotate((f.facing === 1 ? 1 : -1) * (Math.PI / 2.1));
+    if (f.facing === -1) fx.scale(-1, 1);
+    fx.imageSmoothingEnabled = true;
+    fx.imageSmoothingQuality = "high";
+    fx.drawImage(img, -drawW / 2, -drawH, drawW, drawH);
+    if (flash) {
+      fx.globalCompositeOperation = "source-atop";
+      fx.fillStyle = "#ffffff";
+      fx.fillRect(-drawW / 2, -drawH, drawW, drawH);
+      fx.globalCompositeOperation = "source-over";
+    }
+    fx.restore();
+  }
+}
+
 export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) {
   showPlayerName = engine.mode === "duel";
   // The canvas is already sized in art pixels, so draw straight into it.
@@ -42,15 +175,38 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   const vw = ctx.canvas.width;
   const vh = ctx.canvas.height;
 
+  const dt = Math.min(0.1, Math.max(0, engine.time - prevTime));
+  prevTime = engine.time;
+  if (engine.shake > prevShake + 1.5) {
+    const mag = Math.min(1, engine.shake / 18);
+    punchMag = mag;
+    punchTimer = PUNCH_DURATION;
+    flashMag = mag * 0.32;
+    flashTimer = FLASH_DURATION;
+    // Reuse the same "a fresh hit just landed" signal to pick a sound —
+    // the engine doesn't need its own audio hooks, just bigger shakes for
+    // bigger moments, which it already had.
+    playSound(engine.shake >= 15 ? "knockdown" : engine.shake >= 8 ? "hitHeavy" : "hitLight");
+  }
+  prevShake = engine.shake;
+  punchTimer = Math.max(0, punchTimer - dt);
+  flashTimer = Math.max(0, flashTimer - dt);
+  const punchScale = 1 + (punchTimer / PUNCH_DURATION) * punchMag * 0.05;
+
+  b.save();
+  if (punchTimer > 0) {
+    b.translate(vw / 2, vh / 2);
+    b.scale(punchScale, punchScale);
+    b.translate(-vw / 2, -vh / 2);
+  }
+
   // Camera in art-pixel space, snapped so the world never sub-pixel jitters.
-  // S converts world units to art pixels; the buffer is then upscaled.
-  const shakeX = (Math.random() - 0.5) * engine.shake;
-  const shakeY = (Math.random() - 0.5) * engine.shake;
-  const camX = Math.round((engine.camera.x + shakeX) / S);
-  const camY = Math.round((engine.camera.y + shakeY) / S);
+  const { camX, camY } = cameraArt(engine);
   /** World units -> art pixels. */
   const wx = (v: number) => Math.round(v / S) - camX;
   const wy = (v: number) => Math.round(v / S) - camY;
+
+  trackStateSounds(engine);
 
   const biome = (engine as ArenaEngine & { stage?: { biome?: string } }).stage?.biome ?? "keep";
   drawSky(b, vw, vh, camX, camY, biome);
@@ -70,6 +226,14 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   drawParticles(b, engine, wx, wy);
   drawTexts(b, engine, wx, wy);
   drawVignette(b, vw, vh);
+  b.restore();
+
+  if (flashTimer > 0) {
+    b.globalAlpha = (flashTimer / FLASH_DURATION) * flashMag;
+    b.fillStyle = "#ffffff";
+    b.fillRect(0, 0, vw, vh);
+    b.globalAlpha = 1;
+  }
 }
 
 // ------------------------------------------------------------------ backdrop
@@ -100,6 +264,10 @@ const BIOMES: Record<string, {
   keep: {
     sky: ["#2a1220", "#43182a", "#5c2130"], far: "#331526", near: "#20101c",
     accent: "#e05a3c", stars: false, cap: "#5b2a22", capLit: "#a34a2c",
+  },
+  abyss: {
+    sky: ["#0a0616", "#180a2e", "#241040"], far: "#1c0e38", near: "#120a24",
+    accent: "#c4b5fd", stars: true, cap: "#2e1a4a", capLit: "#5b3a8f",
   },
 };
 
@@ -151,9 +319,21 @@ function drawSky(
       b.fillRect(Math.round(ex), Math.round(ey), 1, 1);
     }
   }
+  if (biomeId === "abyss") {
+    // Violet motes sinking slowly through the void — the inverse of the
+    // keep's rising embers, to keep the two "hell" biomes reading distinct.
+    b.fillStyle = B.accent;
+    for (let i = 0; i < 34; i++) {
+      const ex = ((i * 113 - camX * 0.3) % vw + vw) % vw;
+      const ey = ((i * 59 + Date.now() * 0.02) % (vh + 40)) - 20 + vshift(0.2);
+      b.globalAlpha = 0.4 + 0.3 * Math.sin(i + Date.now() * 0.001);
+      b.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+    }
+    b.globalAlpha = 1;
+  }
 
   const skyline = (speed: number, colour: string, baseTop: number, kind: string) => {
-    const gap = kind === "trees" ? 34 : kind === "houses" ? 52 : 74;
+    const gap = kind === "trees" ? 34 : kind === "houses" ? 52 : kind === "spires" ? 46 : 74;
     const off = -Math.round(camX * speed) % gap;
     const top = baseTop + vshift(speed);
     // Layers are drawn to well past the bottom edge so a rising camera never
@@ -184,6 +364,17 @@ function drawSky(
         px(b, x, top, 10, bottom - top, colour);
         px(b, x + 14, top, 10, bottom - top, colour);
         px(b, x, top, 24, 3, colour);
+      } else if (kind === "spires") {
+        // Jagged obsidian shards, jutting at a slight lean, each capped with
+        // a faint glowing tip so the abyss reads as lit from within.
+        const lean = ((x / gap) % 2 === 0 ? 1 : -1) * 3;
+        const peak = top - 10 - (Math.abs(Math.round(x)) % 26);
+        for (let t = 0; t <= 6; t++) {
+          const yy = peak + t * ((bottom - peak) / 6);
+          const wdt = 3 + t * 2;
+          px(b, x - wdt / 2 + lean * (t / 6), yy, wdt, (bottom - peak) / 6 + 1, colour);
+        }
+        pxGlow(b, x + lean, peak + 2, 5, BIOMES.abyss.accent, 0.5);
       } else {
         // Castle battlements.
         px(b, x, top, 30, bottom - top, colour);
@@ -195,7 +386,8 @@ function drawSky(
   const kind =
     biomeId === "town" ? "houses" :
     biomeId === "outskirts" ? "trees" :
-    biomeId === "undercity" ? "arches" : "towers";
+    biomeId === "undercity" ? "arches" :
+    biomeId === "abyss" ? "spires" : "towers";
   skyline(0.25, B.far, Math.round(vh * 0.36), kind);
   skyline(0.5, B.near, Math.round(vh * 0.52), kind);
 }
@@ -548,9 +740,19 @@ function drawFighter(
   const flash = f.hitFlash > 0 && Math.floor(time * 30) % 2 === 0;
   const col = (c: string) => (flash ? "#ffffff" : c);
 
+  // Paragon/Shedim's body is drawn by the crisp portrait overlay canvas
+  // instead (see renderFighterPortraits) — this pass only contributes the
+  // shadow/rings already drawn above and the nameplate below.
+  const usesPortrait = (hero || knight) && !!getPortraitImage(f.classId);
+
   if (f.state === "knockdown") {
-    drawDowned(b, x, y, w, h, p, col);
+    if (!usesPortrait) drawDowned(b, x, y, w, h, p, col);
     drawNameplate(b, f, x, y - h - 6);
+    return;
+  }
+
+  if (usesPortrait) {
+    drawNameplate(b, f, x, y - h - 3);
     return;
   }
 
@@ -926,6 +1128,30 @@ function drawMobFlourish(
       px(b, x + dir * 2, topY + 4, 2, 1, "#fde047");
       break;
     }
+    case "revenant": {
+      // A tattered void-wraith: trailing cloak shreds and a hollow violet gaze.
+      pxGlow(b, x, y - h * 0.5, h * 0.45, "#a78bfa", 0.5);
+      for (let i = 0; i < 5; i++) {
+        px(b, x - half + i * 3, y - 3 + (i % 2) * 2, 2, 4 + (i % 3), col(m.accent));
+      }
+      px(b, x + dir * 2, topY + 3, 1, 1, "#e9d5ff");
+      px(b, x + dir * 4, topY + 3, 1, 1, "#e9d5ff");
+      break;
+    }
+    case "sovereign": {
+      // The abyss's crowned ruler: a floating jagged halo and a deep violet
+      // aura heavier than any other mob's, so it reads as the true final boss.
+      pxGlow(b, x, y - h * 0.55, h * 0.9, "#c026d3", 0.65);
+      px(b, x - half - 3, torsoY - 2, 5, 8, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 5, 8, col(m.accent));
+      const haloY = topY - 6;
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + Date.now() * 0.0015;
+        px(b, x + Math.round(Math.cos(a) * (half + 6)), haloY + Math.round(Math.sin(a) * 3), 2, 2, "#f0abfc");
+      }
+      px(b, x - half, topY + 3, w, 1, "#e9d5ff");
+      break;
+    }
   }
 }
 
@@ -1175,9 +1401,22 @@ function drawTexts(
 }
 
 function drawVignette(b: CanvasRenderingContext2D, vw: number, vh: number) {
-  // A narrow dithered rim, kept subtle so it frames rather than textures.
-  const edge = 5;
-  b.globalAlpha = 0.35;
+  // A soft radial falloff toward the corners — the cheap trick that makes a
+  // flat screenshot read as a framed shot instead of a security-camera feed.
+  const cx = vw / 2;
+  const cy = vh / 2;
+  const inner = Math.min(vw, vh) * 0.32;
+  const outer = Math.max(vw, vh) * 0.75;
+  const grad = b.createRadialGradient(cx, cy, inner, cx, cy, outer);
+  grad.addColorStop(0, "rgba(5,7,12,0)");
+  grad.addColorStop(1, "rgba(5,7,12,0.6)");
+  b.fillStyle = grad;
+  b.fillRect(0, 0, vw, vh);
+
+  // A narrow dithered rim on top, kept subtle so it frames rather than
+  // textures — the pixel-art equivalent of a hard vignette edge.
+  const edge = 4;
+  b.globalAlpha = 0.3;
   pxDither(b, 0, 0, vw, edge, PAL.ink);
   pxDither(b, 0, vh - edge, vw, edge, PAL.ink);
   pxDither(b, 0, 0, edge, vh, PAL.ink);

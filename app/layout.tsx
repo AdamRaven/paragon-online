@@ -1,5 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { Cinzel } from "next/font/google";
 import "./globals.css";
+
+const display = Cinzel({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "900"],
+  variable: "--font-display",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Paragon Online — 2D Martial Arts MMO",
@@ -21,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={display.variable}>
       <body>{children}</body>
     </html>
   );

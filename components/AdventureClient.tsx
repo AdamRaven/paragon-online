@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
+import { ClassPortrait } from "@/components/ClassPortrait";
+import { EscapeMenu } from "@/components/EscapeMenu";
 import { InventoryPanel } from "@/components/InventoryPanel";
+import { MapPanel } from "@/components/MapPanel";
 import { MerchantPanel } from "@/components/MerchantPanel";
 import { VendorPanel } from "@/components/VendorPanel";
 import { StoragePanel } from "@/components/StoragePanel";
@@ -35,13 +38,15 @@ import {
   type StatKey,
 } from "@/lib/arena/progression";
 import { PIXEL_SCALE, artSize, worldViewSize } from "@/lib/arena/pixel";
-import { renderArena } from "@/lib/arena/render";
+import { renderArena, renderFighterPortraits } from "@/lib/arena/render";
+import { playSound } from "@/lib/arena/sound";
 import type { ClassId, CombatLogEntry } from "@/lib/arena/types";
 
 const MAX_LOGS = 6;
 
 export function AdventureClient() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fxCanvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<AdventureEngine | null>(null);
   const inputRef = useRef<ArenaInput | null>(null);
   const rafRef = useRef(0);
@@ -54,11 +59,16 @@ export function AdventureClient() {
   const [exp, setExp] = useState({ exp: 0, next: 1, level: 1, points: 0 });
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [panel, setPanel] = useState<
-    "none" | "sheet" | "map" | "inventory" | "merchant" | "vendor" | "storage"
+    "none" | "sheet" | "map" | "inventory" | "merchant" | "vendor" | "storage" | "escape"
   >("none");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   /** Bumped whenever the save mutates, to re-render the panels. */
   const [rev, setRev] = useState(0);
+  const pausedRef = useRef(false);
+
+  useEffect(() => {
+    pausedRef.current = panel === "escape";
+  }, [panel]);
 
   const pushLog = useCallback((text: string, tone: CombatLogEntry["tone"]) => {
     setLogs((prev) => [...prev, { id: logIdRef.current++, text, tone }].slice(-MAX_LOGS));
@@ -76,6 +86,8 @@ export function AdventureClient() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const fxCanvas = fxCanvasRef.current;
+    const fxCtx = fxCanvas?.getContext("2d") ?? null;
 
     const input = new ArenaInput();
     input.attach(canvas);
@@ -84,14 +96,19 @@ export function AdventureClient() {
     const engine = new AdventureEngine(save, {
       onLog: pushLog,
       onEnd: () => {},
-      onPlayerDeath: () => {},
-      onExp: () => {},
+      onPlayerDeath: () => playSound("defeat"),
+      onExp: (_amount, _mobName, result) => {
+        if (result.levelsGained > 0) playSound("levelUp");
+      },
       onLoot: (items) => {
         for (const it of items) pushLog(`Looted ${itemName(it)}.`, "good");
         setRev((r) => r + 1);
+        playSound("loot");
       },
     });
     engineRef.current = engine;
+
+    let fxScale = PIXEL_SCALE;
 
     const resize = () => {
       const w = canvas.parentElement?.clientWidth ?? window.innerWidth;
@@ -107,6 +124,15 @@ export function AdventureClient() {
       // The camera works in world units, which the pixel zoom scales down.
       const view = worldViewSize(w, h);
       engine.setViewport(view.w, view.h);
+
+      if (fxCanvas) {
+        const dpr = window.devicePixelRatio || 1;
+        fxScale = PIXEL_SCALE * dpr;
+        fxCanvas.width = Math.round(art.w * fxScale);
+        fxCanvas.height = Math.round(art.h * fxScale);
+        fxCanvas.style.width = `${art.w * PIXEL_SCALE}px`;
+        fxCanvas.style.height = `${art.h * PIXEL_SCALE}px`;
+      }
     };
     resize();
     window.addEventListener("resize", resize);
@@ -120,13 +146,18 @@ export function AdventureClient() {
     const frame = (now: number) => {
       acc += Math.min(200, now - last);
       last = now;
-      let guard = 0;
-      while (acc >= DT * 1000 && guard++ < 8) {
-        engine.stepAdventure(readIntent(input));
-        input.step(DT);
-        acc -= DT * 1000;
+      if (pausedRef.current) {
+        acc = 0;
+      } else {
+        let guard = 0;
+        while (acc >= DT * 1000 && guard++ < 8) {
+          engine.stepAdventure(readIntent(input));
+          input.step(DT);
+          acc -= DT * 1000;
+        }
       }
       renderArena(ctx, engine);
+      if (fxCtx) renderFighterPortraits(fxCtx, engine, fxScale);
 
       if (++hudTick >= 4) {
         hudTick = 0;
@@ -184,7 +215,9 @@ export function AdventureClient() {
           setRev((r) => r + 1);
           setPanel((p) => (p === "storage" ? "none" : "storage"));
         }
-      } else if (e.code === "Escape") setPanel("none");
+      } else if (e.code === "Escape") {
+        setPanel((p) => (p === "none" ? "escape" : "none"));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -236,6 +269,7 @@ export function AdventureClient() {
       e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
       e.save.gold += worth;
       setShopMsg(`Sold ${itemName(item)} for ${worth}g.`);
+      playSound("loot");
     });
 
   const sellAllTrash = () =>
@@ -245,6 +279,7 @@ export function AdventureClient() {
       e.save.inventory = e.save.inventory.filter((i) => base(i.baseId).kind !== "trash");
       e.save.gold += worth;
       setShopMsg(`Sold ${trash.length} trash items for ${worth}g.`);
+      playSound("loot");
     });
 
   const buyStones = (n: number) =>
@@ -254,6 +289,7 @@ export function AdventureClient() {
       e.save.gold -= cost;
       e.save.stones += n;
       setShopMsg(`Bought ${n} stone${n > 1 ? "s" : ""} for ${cost}g.`);
+      playSound("uiClick");
     });
 
   const buyGear = (baseId: string) =>
@@ -265,6 +301,7 @@ export function AdventureClient() {
       e.save.inventory.push(item);
       setShopMsg(`Bought ${itemName(item)} for ${price}g.`);
       pushLog(`Bought ${itemName(item)}.`, "good");
+      playSound("uiClick");
     });
 
   const storeItem = (item: Item) =>
@@ -290,11 +327,14 @@ export function AdventureClient() {
       if (r.ok) {
         setShopMsg(`Success! ${base(item.baseId).name} is now +${r.to}.`);
         pushLog(`${base(item.baseId).name} enhanced to +${r.to}!`, "big");
+        playSound("enhanceSuccess");
       } else if (r.downgraded) {
         setShopMsg(`Failed — it dropped to +${r.to}.`);
         pushLog(`Enhancement failed: down to +${r.to}.`, "bad");
+        playSound("enhanceFail");
       } else {
         setShopMsg(`Failed, but it held at +${r.to}.`);
+        playSound("enhanceFail");
       }
     });
 
@@ -305,6 +345,9 @@ export function AdventureClient() {
       saveAdventure(e.save);
       setSave({ ...e.save });
       setPanel("none");
+      playSound("travel");
+    } else {
+      playSound("uiError");
     }
   };
 
@@ -333,6 +376,7 @@ export function AdventureClient() {
   return (
     <div className="arena-stage campaign">
       <canvas ref={canvasRef} tabIndex={0} />
+      <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
       {hud && <ArenaHud hud={hud} logs={logs} />}
 
       {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
@@ -406,7 +450,6 @@ export function AdventureClient() {
 
       {panel === "inventory" && (
         <InventoryPanel
-          key={rev}
           save={live}
           onEquip={equip}
           onUnequip={unequip}
@@ -416,7 +459,6 @@ export function AdventureClient() {
 
       {panel === "merchant" && (
         <MerchantPanel
-          key={rev}
           save={live}
           onSellAll={sellAllTrash}
           onSellOne={sellOne}
@@ -429,7 +471,6 @@ export function AdventureClient() {
 
       {panel === "vendor" && (
         <VendorPanel
-          key={rev}
           save={live}
           onBuy={buyGear}
           lastResult={shopMsg}
@@ -439,7 +480,6 @@ export function AdventureClient() {
 
       {panel === "storage" && (
         <StoragePanel
-          key={rev}
           save={live}
           onStore={storeItem}
           onRetrieve={retrieveItem}
@@ -448,43 +488,16 @@ export function AdventureClient() {
       )}
 
       {panel === "map" && (
-        <div className="overlay" onClick={() => setPanel("none")}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-head">
-              <h2>Stages</h2>
-              <button className="btn btn-ghost" onClick={() => setPanel("none")}>
-                Close
-              </button>
-            </div>
-            <div className="zone-list">
-              {STAGES.map((st, i) => {
-                const locked = live.level < st.requiredLevel;
-                const here = live.stage === i;
-                return (
-                  <button
-                    key={st.id}
-                    className={`zone-option${here ? " current" : ""}`}
-                    disabled={locked || here}
-                    onClick={() => travel(i)}
-                  >
-                    <span>
-                      <strong>{st.name}</strong>
-                      <small>{st.subtitle}</small>
-                    </span>
-                    <span className={`badge${locked ? " warn" : ""}`}>
-                      {here ? "HERE" : locked ? `LV ${st.requiredLevel}` : "TRAVEL"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="hint" style={{ marginTop: 14 }}>
-              Enemies more than two levels below you give reduced experience, so
-              move on once a stage stops paying out.
-            </p>
-          </div>
-        </div>
+        <MapPanel
+          stages={STAGES}
+          currentIndex={live.stage}
+          playerLevel={live.level}
+          onTravel={travel}
+          onClose={() => setPanel("none")}
+        />
       )}
+
+      {panel === "escape" && <EscapeMenu onResume={() => setPanel("none")} />}
     </div>
   );
 }
@@ -668,9 +681,11 @@ function CharacterGate({
               return (
                 <button
                   key={id}
-                  className={`zone-option${picked === id ? " current" : ""}`}
+                  className={`zone-option class-option${picked === id ? " current" : ""}`}
+                  style={{ "--aura": c.colors.aura } as React.CSSProperties}
                   onClick={() => setPicked(id)}
                 >
+                  <ClassPortrait classId={id} aura={c.colors.aura} size={52} />
                   <span>
                     <strong>{c.name}</strong>
                     <small>
