@@ -1,5 +1,6 @@
 import type { LootDrop } from "./adventure";
 import { getClass } from "./classes";
+import { JUMP_VELOCITY, MAX_FALL_SPEED } from "./constants";
 import type { ArenaEngine } from "./engine";
 import { RARITY_META } from "./items";
 import { MOB_TYPES } from "./mobs";
@@ -155,6 +156,109 @@ function getWalkSprite(): HTMLImageElement | null {
 }
 
 /**
+ * Paragon's jump arc: 7 poses laid out on the sheet following the actual
+ * trajectory shape (crouch, rising, apex, falling, landing crouch) rather
+ * than a straight row, so each frame's rect was isolated as its own
+ * connected blob of alpha instead of sliced by column.
+ */
+const JUMP_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 18, y: 257, w: 68, h: 73 },
+  { x: 97, y: 195, w: 62, h: 127 },
+  { x: 160, y: 178, w: 59, h: 113 },
+  { x: 223, y: 157, w: 60, h: 95 },
+  { x: 291, y: 218, w: 57, h: 97 },
+  { x: 349, y: 250, w: 56, h: 80 },
+  { x: 404, y: 210, w: 80, h: 122 },
+];
+let jumpSprite: HTMLImageElement | null = null;
+
+function getJumpSprite(): HTMLImageElement | null {
+  if (!jumpSprite) {
+    if (typeof Image === "undefined") return null;
+    jumpSprite = new Image();
+    jumpSprite.src = "/art/paragon-jump.webp";
+  }
+  return jumpSprite.complete && jumpSprite.naturalWidth > 0 ? jumpSprite : null;
+}
+
+/** Paragon's basic-attack jab: guard, punch, recover, punch, guard. */
+const PUNCH_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 19, y: 326, w: 176, h: 267 },
+  { x: 195, y: 326, w: 172, h: 267 },
+  { x: 367, y: 326, w: 148, h: 267 },
+  { x: 515, y: 326, w: 194, h: 267 },
+  { x: 709, y: 326, w: 183, h: 267 },
+];
+let punchSprite: HTMLImageElement | null = null;
+
+function getPunchSprite(): HTMLImageElement | null {
+  if (!punchSprite) {
+    if (typeof Image === "undefined") return null;
+    punchSprite = new Image();
+    punchSprite.src = "/art/paragon-punch.webp";
+  }
+  return punchSprite.complete && punchSprite.naturalWidth > 0 ? punchSprite : null;
+}
+
+/** Paragon's Detonate: crouching charge-up into an outward ki blast. */
+const DETONATE_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 10, y: 197, w: 81, h: 125 },
+  { x: 91, y: 197, w: 75, h: 125 },
+  { x: 166, y: 197, w: 73, h: 125 },
+  { x: 239, y: 197, w: 63, h: 125 },
+  { x: 302, y: 197, w: 71, h: 125 },
+  { x: 373, y: 197, w: 119, h: 125 },
+];
+let detonateSprite: HTMLImageElement | null = null;
+
+function getDetonateSprite(): HTMLImageElement | null {
+  if (!detonateSprite) {
+    if (typeof Image === "undefined") return null;
+    detonateSprite = new Image();
+    detonateSprite.src = "/art/paragon-detonation.webp";
+  }
+  return detonateSprite.complete && detonateSprite.naturalWidth > 0 ? detonateSprite : null;
+}
+
+interface ActionSprite {
+  img: HTMLImageElement;
+  frame: { x: number; y: number; w: number; h: number };
+}
+
+/**
+ * Picks whichever special pose sheet applies to Paragon right now, in
+ * priority order — Detonate and the jab both fully take over the body, so
+ * they win over just being airborne. Everyone else (and Paragon doing
+ * nothing special) falls through to the walk cycle or static portrait.
+ */
+function paragonActionSprite(f: Fighter): ActionSprite | null {
+  if (f.classId !== "paragon") return null;
+  const action = f.action;
+
+  if (action?.spec.id === "detonate") {
+    const img = getDetonateSprite();
+    if (img) {
+      const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
+      return { img, frame: DETONATE_FRAMES[Math.floor(t * DETONATE_FRAMES.length)] };
+    }
+  } else if (f.state === "attack" && action?.spec.kind === "lmb") {
+    const img = getPunchSprite();
+    if (img) {
+      const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
+      return { img, frame: PUNCH_FRAMES[Math.floor(t * PUNCH_FRAMES.length)] };
+    }
+  } else if (f.state === "air") {
+    const img = getJumpSprite();
+    if (img) {
+      const span = JUMP_VELOCITY + MAX_FALL_SPEED;
+      const step = Math.round(((f.vy + JUMP_VELOCITY) / span) * (JUMP_FRAMES.length - 1));
+      return { img, frame: JUMP_FRAMES[Math.max(0, Math.min(JUMP_FRAMES.length - 1, step))] };
+    }
+  }
+  return null;
+}
+
+/**
  * Draws the actual reference art for Paragon/Shedim fighters on a separate,
  * non-pixelated overlay canvas sized to real screen resolution. The main
  * game buffer is deliberately tiny (a fighter is ~31 art pixels tall) so its
@@ -177,11 +281,14 @@ export function renderFighterPortraits(
   for (const f of engine.fighters) {
     if (f.isMob || f.state === "dead") continue;
 
-    // Paragon has a real walk cycle; everyone else (and Paragon when not
-    // moving) falls back to the static reference portrait.
+    // Paragon has real animations for jumping, jabbing and Detonate, plus a
+    // walk cycle; everyone else (and Paragon doing none of the above) falls
+    // back to the static reference portrait.
+    const actionSprite = paragonActionSprite(f);
     const moving = f.state === "walk" || f.state === "sprint";
-    const walkSpriteImg = f.classId === "paragon" && moving ? getWalkSprite() : null;
-    const img = walkSpriteImg ?? getPortraitImage(f.classId);
+    const walkSpriteImg =
+      !actionSprite && f.classId === "paragon" && moving ? getWalkSprite() : null;
+    const img = actionSprite?.img ?? walkSpriteImg ?? getPortraitImage(f.classId);
     if (!img) continue;
 
     const x = px2(f.x);
@@ -203,7 +310,13 @@ export function renderFighterPortraits(
     // 74% fill ratio so both assets put the same actual character height
     // on screen.
     let drawH = hArt * physicalPerArtPixel * 1.28;
-    if (walkSpriteImg) {
+    if (actionSprite) {
+      sx = actionSprite.frame.x;
+      sy = actionSprite.frame.y;
+      sw = actionSprite.frame.w;
+      sh = actionSprite.frame.h;
+      drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
+    } else if (walkSpriteImg) {
       const cadence = f.state === "sprint" ? 14 : 9;
       const step = Math.floor(engine.time * cadence) % WALK_FRAMES.length;
       const frame = WALK_FRAMES[step];
@@ -221,10 +334,11 @@ export function renderFighterPortraits(
     // the actual feet) would land on the ground, making Paragon appear to
     // stand higher when idle than when walking. Shifting the draw down by
     // that margin's share of the frame puts the real feet at yFeet either way.
-    const marginBottomFrac = walkSpriteImg
-      ? 0
-      : (img.naturalHeight - (PORTRAIT_CONTENT_BOTTOM[f.classId] ?? img.naturalHeight)) /
-        img.naturalHeight;
+    const marginBottomFrac =
+      actionSprite || walkSpriteImg
+        ? 0
+        : (img.naturalHeight - (PORTRAIT_CONTENT_BOTTOM[f.classId] ?? img.naturalHeight)) /
+          img.naturalHeight;
     const destTop = -drawH + marginBottomFrac * drawH;
 
     const knockdown = f.state === "knockdown";
