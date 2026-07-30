@@ -981,12 +981,19 @@ function drawTerrain(
 
     px(b, x, y, w, vh - y, PAL.rockBody);
     px(b, x, y + 5, w, vh - y - 5, PAL.rockDark);
-    pxDither(b, x, y + 4, w, 6, PAL.rockBody);
+    // Ground segments now often span an entire (multi-thousand-pixel) map
+    // rather than a short chunk, but the per-pixel texture work below only
+    // ever shows up in the sliver actually on screen — clamping it to the
+    // visible span (with a small margin) turns what used to be thousands of
+    // wasted off-screen fillRect calls a frame into a few hundred at most.
+    const visX0 = Math.max(x, -8);
+    const visX1 = Math.min(x + w, vw + 8);
+    pxDither(b, visX0, y + 4, visX1 - visX0, 6, PAL.rockBody);
     // Surface cap: grass, moss or scorched rock depending on the biome.
     px(b, x, y, w, 3, B.cap);
     px(b, x, y, w, 1, B.capLit);
     // Brick seams.
-    for (let bx = x - (x % 8); bx < x + w; bx += 8) {
+    for (let bx = visX0 - (visX0 % 8); bx < visX1; bx += 8) {
       px(b, bx, y + 3, 1, 7, PAL.rockDeep);
     }
     for (let by = y + 10; by < vh; by += 7) {
@@ -1026,6 +1033,39 @@ function drawTerrain(
 }
 
 /** The town merchant, plus a prompt when the player is close enough to trade. */
+/**
+ * Shared setup for the three town NPCs: resolves a screen position and a
+ * gentle idle bob from a fixed stage-x anchor. Returns null wherever the
+ * NPC doesn't apply (wrong stage, or standing over a gap).
+ */
+function npcAnchor(
+  engine: ArenaEngine,
+  wx: (v: number) => number,
+  wy: (v: number) => number,
+  npcX: number | undefined,
+  time: number,
+  bobPhase: number
+): { x: number; y: number; bob: number } | null {
+  if (npcX === undefined) return null;
+  const gy = engine.groundAtX(npcX);
+  if (gy === null) return null;
+  return { x: wx(npcX), y: wy(gy), bob: Math.round(Math.sin(time * 2 + bobPhase) * 1) };
+}
+
+/** The "PRESS E" prompt shown above any town NPC once the player is close enough. */
+function drawInteractPrompt(
+  b: CanvasRenderingContext2D,
+  near: boolean | undefined,
+  x: number,
+  y: number,
+  bob: number,
+  time: number
+) {
+  if (!near) return;
+  const pulse = Math.sin(time * 6) > 0 ? "#ffffff" : "#f6b352";
+  pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
+}
+
 function drawMerchant(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
@@ -1037,13 +1077,10 @@ function drawMerchant(
     stage?: { isTown?: boolean; npcX?: number };
     nearMerchant?: boolean;
   }).stage;
-  if (!stage?.isTown || stage.npcX === undefined) return;
-
-  const gy = engine.groundAtX(stage.npcX);
-  if (gy === null) return;
-  const x = wx(stage.npcX);
-  const y = wy(gy);
-  const bob = Math.round(Math.sin(time * 2) * 1);
+  if (!stage?.isTown) return;
+  const anchor = npcAnchor(engine, wx, wy, stage.npcX, time, 0);
+  if (!anchor) return;
+  const { x, y, bob } = anchor;
 
   // Stall awning behind him.
   px(b, x - 20, y - 34, 40, 3, "#7a3b2e");
@@ -1079,11 +1116,7 @@ function drawMerchant(
   pxGlow(b, x + 7, y - 21 + bob, 3, "#ffe9a8", 0.5);
   pxGlow(b, x + 12, y - 18, 7, "#f6b352", 0.6);
 
-  const near = (engine as ArenaEngine & { nearMerchant?: boolean }).nearMerchant;
-  if (near) {
-    const pulse = Math.sin(time * 6) > 0 ? "#ffffff" : "#f6b352";
-    pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
-  }
+  drawInteractPrompt(b, (engine as ArenaEngine & { nearMerchant?: boolean }).nearMerchant, x, y, bob, time);
 }
 
 /** The gear vendor: a rack of weapons/armour behind a mail-clad trader. */
@@ -1097,13 +1130,10 @@ function drawVendor(
   const stage = (engine as ArenaEngine & {
     stage?: { isTown?: boolean; vendorX?: number };
   }).stage;
-  if (!stage?.isTown || stage.vendorX === undefined) return;
-
-  const gy = engine.groundAtX(stage.vendorX);
-  if (gy === null) return;
-  const x = wx(stage.vendorX);
-  const y = wy(gy);
-  const bob = Math.round(Math.sin(time * 2 + 1) * 1);
+  if (!stage?.isTown) return;
+  const anchor = npcAnchor(engine, wx, wy, stage.vendorX, time, 1);
+  if (!anchor) return;
+  const { x, y, bob } = anchor;
 
   // Weapon rack behind him: two uprights and a crossbar hung with gear.
   px(b, x - 18, y - 36, 2, 36, "#4a3626");
@@ -1136,11 +1166,7 @@ function drawVendor(
   px(b, x - 1, y - 23 + bob, 2, 1, "#b8875a"); // jaw shade
   px(b, x - 6, y - 5, 12, 1, "#c9a24a");
 
-  const near = (engine as ArenaEngine & { nearVendor?: boolean }).nearVendor;
-  if (near) {
-    const pulse = Math.sin(time * 6) > 0 ? "#ffffff" : "#f6b352";
-    pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
-  }
+  drawInteractPrompt(b, (engine as ArenaEngine & { nearVendor?: boolean }).nearVendor, x, y, bob, time);
 }
 
 /** The bank keeper: a robed figure minding a reinforced vault chest. */
@@ -1154,13 +1180,10 @@ function drawBank(
   const stage = (engine as ArenaEngine & {
     stage?: { isTown?: boolean; bankX?: number };
   }).stage;
-  if (!stage?.isTown || stage.bankX === undefined) return;
-
-  const gy = engine.groundAtX(stage.bankX);
-  if (gy === null) return;
-  const x = wx(stage.bankX);
-  const y = wy(gy);
-  const bob = Math.round(Math.sin(time * 2 + 2) * 1);
+  if (!stage?.isTown) return;
+  const anchor = npcAnchor(engine, wx, wy, stage.bankX, time, 2);
+  if (!anchor) return;
+  const { x, y, bob } = anchor;
 
   // A squat, iron-banded vault chest beside her.
   px(b, x + 8, y - 14, 16, 14, "#3a4050");
@@ -1188,11 +1211,7 @@ function drawBank(
   px(b, x - 5, y - 21 + bob, 10, 1, "#c9a24a");
   pxGlow(b, x - 12, y - 18, 6, "#7dd3fc", 0.5);
 
-  const near = (engine as ArenaEngine & { nearBank?: boolean }).nearBank;
-  if (near) {
-    const pulse = Math.sin(time * 6) > 0 ? "#ffffff" : "#f6b352";
-    pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
-  }
+  drawInteractPrompt(b, (engine as ArenaEngine & { nearBank?: boolean }).nearBank, x, y, bob, time);
 }
 
 /**

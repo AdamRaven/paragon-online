@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PARAGON | Ethereal Combat</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800&amp;family=JetBrains+Mono:wght@600;700&amp;family=Hanken+Grotesk:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#00d2ff",
+                        "primary": "#a5e7ff",
+                        "surface-dim": "#131315",
+                        "primary-fixed-dim": "#47d6ff",
+                        "on-primary-fixed": "#001f28",
+                        "on-secondary-fixed-variant": "#584400",
+                        "on-secondary-fixed": "#241a00",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed": "#23005b",
+                        "on-surface": "#e5e1e4",
+                        "inverse-surface": "#e5e1e4",
+                        "surface-bright": "#39393b",
+                        "outline": "#859399",
+                        "surface-variant": "#353437",
+                        "surface-tint": "#47d6ff",
+                        "outline-variant": "#3c494e",
+                        "on-primary": "#003543",
+                        "surface-container-highest": "#353437",
+                        "ethereal-purple": "#7000ff",
+                        "background": "#131315",
+                        "surface-container-high": "#2a2a2c",
+                        "primary-fixed": "#b6ebff",
+                        "on-primary-container": "#00566a",
+                        "paragon-gold": "#ffcc00",
+                        "tertiary": "#e5d7ff",
+                        "on-tertiary-fixed-variant": "#5700c9",
+                        "secondary": "#ffecc0",
+                        "on-error": "#690005",
+                        "tertiary-fixed": "#e9ddff",
+                        "on-tertiary": "#3c0090",
+                        "error-container": "#93000a",
+                        "tertiary-container": "#ccb6ff",
+                        "tertiary-fixed-dim": "#d1bcff",
+                        "on-primary-fixed-variant": "#004e60",
+                        "surface-container-low": "#1c1b1d",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#e5e1e4",
+                        "on-secondary": "#3d2f00",
+                        "on-tertiary-container": "#6100de",
+                        "on-secondary-container": "#6e5700",
+                        "surface-container": "#201f21",
+                        "inverse-primary": "#00677f",
+                        "secondary-container": "#fecb00",
+                        "void-black": "#0a0a0c",
+                        "surface-container-lowest": "#0e0e10",
+                        "secondary-fixed-dim": "#f1c100",
+                        "inverse-on-surface": "#313032",
+                        "secondary-fixed": "#ffe08b",
+                        "obsidian-grey": "#1a1a1e",
+                        "on-surface-variant": "#bbc9cf",
+                        "surface": "#131315",
+                        "mana-glow": "#00d2ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-max": "1280px",
+                        "stack-md": "24px",
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "stack-lg": "64px"
+                    },
+                    "fontFamily": {
+                        "display-hero": ["Epilogue"],
+                        "section-label": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Epilogue"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Epilogue"],
+                        "keycap-label": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "display-hero": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                        "section-label": ["14px", {"lineHeight": "20px", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "0.02em", "fontWeight": "700"}],
+                        "keycap-label": ["12px", {"lineHeight": "12px", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #0a0a0c;
+            color: #e5e1e4;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(19, 19, 21, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .glow-border-primary {
+            border: 1px solid #00d2ff;
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
+        }
+        .glow-border-gold {
+            border: 1px solid #ffcc00;
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.3);
+        }
+        .gold-glow-text {
+            text-shadow: 0 0 20px rgba(255, 204, 0, 0.5);
+        }
+        .mana-glow-text {
+            text-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
+        }
+        .keycap-inner {
+            box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.1), inset 0 2px 0 rgba(0, 0, 0, 0.5);
+        }
+        .stat-bar-container {
+            background: rgba(255, 255, 255, 0.05);
+            height: 4px;
+            width: 100%;
+        }
+        .stat-bar-hp { background: #ff4d4d; }
+        .stat-bar-mana { background: #00d2ff; }
+        .stat-bar-ap { background: #ffcc00; }
+        
+        .portal-frame {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 2px solid rgba(0, 210, 255, 0.3);
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/60 backdrop-blur-xl border-b border-primary/20 h-20">
+<div class="flex justify-between items-center px-margin-mobile md:px-gutter max-w-container-max mx-auto h-full">
+<div class="font-display-hero text-headline-lg text-paragon-gold tracking-tighter">PARAGON</div>
+<nav class="hidden md:flex space-x-8">
+<a class="font-section-label text-section-label uppercase tracking-widest text-paragon-gold border-b-2 border-paragon-gold pb-1 hover:scale-105 transition-transform duration-200" href="#">Play</a>
+<a class="font-section-label text-section-label uppercase tracking-widest text-on-surface hover:text-mana-glow transition-colors hover:scale-105 transition-transform duration-200" href="#">Classes</a>
+<a class="font-section-label text-section-label uppercase tracking-widest text-on-surface hover:text-mana-glow transition-colors hover:scale-105 transition-transform duration-200" href="#">Controls</a>
+</nav>
+<button class="bg-primary text-on-primary px-6 py-2 font-section-label text-section-label uppercase tracking-widest hover:scale-105 transition-transform active:opacity-80 active:scale-95">
+                Join Discord
+            </button>
+</div>
+</header>
+<main>
+<!-- Hero Section -->
+<section class="relative min-h-screen flex flex-col items-center justify-center pt-20 px-margin-mobile text-center overflow-hidden">
+<!-- Background Decoration -->
+<div class="absolute inset-0 z-0 pointer-events-none">
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-mana-glow/5 rounded-full blur-[120px]"></div>
+<div class="absolute top-1/4 left-1/3 w-[400px] h-[400px] bg-ethereal-purple/5 rounded-full blur-[100px]"></div>
+</div>
+<div class="relative z-10 max-w-3xl mx-auto space-y-stack-md">
+<h1 class="font-display-hero text-display-hero text-paragon-gold gold-glow-text tracking-tighter uppercase leading-none">
+                    PARAGON
+                </h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-xl mx-auto leading-relaxed">
+                    Chain basic attacks into knockdowns, break combos with Manastop, dash through the arena and level up through three stages of enemies.
+                </p>
+<div class="flex flex-col md:flex-row gap-4 justify-center pt-8">
+<button class="bg-paragon-gold text-void-black px-10 py-4 font-section-label text-section-label uppercase tracking-widest font-bold glow-border-gold transition-all hover:scale-105 hover:shadow-[0_0_25px_rgba(255,204,0,0.5)]">
+                        START CAMPAIGN
+                    </button>
+<button class="border-2 border-mana-glow text-mana-glow px-10 py-4 font-section-label text-section-label uppercase tracking-widest font-bold transition-all hover:bg-mana-glow/10 hover:scale-105">
+                        ENTER DUEL ARENA
+                    </button>
+</div>
+</div>
+<!-- Scroll Indicator -->
+<div class="absolute bottom-10 animate-bounce">
+<span class="material-symbols-outlined text-mana-glow">expand_more</span>
+</div>
+</section>
+<!-- Class Showcase -->
+<section class="py-stack-lg px-margin-mobile md:px-gutter max-w-container-max mx-auto">
+<div class="mb-12 text-center">
+<h2 class="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-2">Class Showcase</h2>
+<h3 class="font-headline-lg text-headline-lg md:text-headline-lg text-on-surface">Choose Your Path</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Paragon -->
+<div class="glass-panel border border-primary/20 p-8 flex flex-col items-center group hover:border-paragon-gold transition-colors">
+<div class="portal-frame mb-6 bg-surface-container-high flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="A pixel-art style character portrait of a martial artist warrior with glowing golden gauntlets, looking heroic and fierce. The background is a swirling obsidian void with ethereal golden light rays. High contrast fantasy aesthetic, sharp edges, professional game UI style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8soK-mhdKYR_leJWY7-aO1Z0NekM-1TBfJXVlSrMemNFvMmkAb-HDyeDSAsPqfRMB6UNhaMQLShdn50gcwQC5qwfip25t4sW68vqc9Amutcv0QIvOo8xDVF5BbHYLw0r7b_2I3OeOh1EJ5Xsj7Fw0mss66mPLG-r-sLlT3hrRKIMbRtPQNMe8WRZ0_hwoBJnG0Gh7LE_aXBNeiIgNKahjdDeJ6atC3HlwtiSbeCBPvXmELEjmxbjKeA"/>
+</div>
+<h4 class="font-headline-lg text-headline-lg text-paragon-gold mb-1">Paragon</h4>
+<span class="font-section-label text-section-label text-outline mb-6">Fists • Reach 1</span>
+<div class="w-full space-y-4">
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>HP</span>
+<span>500</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-hp h-full" style="width: 50%"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>Mana</span>
+<span>200</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-mana h-full" style="width: 40%"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>AP</span>
+<span>25</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-ap h-full" style="width: 25%"></div></div>
+</div>
+</div>
+</div>
+<!-- Shedim -->
+<div class="glass-panel border border-primary/20 p-8 flex flex-col items-center group hover:border-ethereal-purple transition-colors scale-105 shadow-2xl">
+<div class="portal-frame mb-6 bg-surface-container-high border-ethereal-purple/40 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="A pixel-art style character portrait of a spectral reaper figure holding a jagged ethereal scythe. The character is shrouded in dark violet mist and glowing purple runes. Deep obsidian background with cinematic ethereal purple highlights. Dark fantasy aggressive design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqtejYSiNySihk-yeeaR3PdekDYkCGlRepVph_R1gjEuaf69eSsrNzCGUW0RsPTFMrLa8oQDtkSlquKnvXFKvVllHLM3g6558HQhJhq7dehBexFQ6tLCUOyiK6nKUSZ-7TzFzatnIlwHDwSQ8XJmKrlFwhroTHNTdtoB3x5ECP4Qfhi6uYYK685UMOIg2lUtRj5XO1mM8ozGL8-2HZeAUVCaCKgEZUtYJx3qhO4WNFmiVgZqjlWN4L0g"/>
+</div>
+<h4 class="font-headline-lg text-headline-lg text-on-surface mb-1">Shedim</h4>
+<span class="font-section-label text-section-label text-outline mb-6">Scythe • Reach 2</span>
+<div class="w-full space-y-4">
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>HP</span>
+<span>600</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-hp h-full" style="width: 60%"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>Mana</span>
+<span>240</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-mana h-full" style="width: 48%"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>AP</span>
+<span>20</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-ap h-full" style="width: 20%"></div></div>
+</div>
+</div>
+</div>
+<!-- Kacper -->
+<div class="glass-panel border border-primary/20 p-8 flex flex-col items-center group hover:border-mana-glow transition-colors">
+<div class="portal-frame mb-6 bg-surface-container-high flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="A pixel-art style character portrait of a heavy armored knight wielding a massive glowing blue greatsword. Cold blue ethereal sparks fly from the blade. Cinematic lighting, deep contrast shadows, and a dark fantasy battle-worn aesthetic. Dark obsidian atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlPs4_Qqmbp2ba72J_1f6zd9bD4-YSPo1ONFmg7VdUxov-7lDXtqdCTEELURFQAJ3N4-LEOQzxG8pNMmIRaMOjUkqJhgxJU_abvl7Jp8tsai5iD_22yU3NmM3Ox_WtI5T0TFJprTUYSbz9Qs39k62F1bDKqr3aquptMXpg6190S8MDq84qkz2mS00MnVdDa73JSG6go24mqiOOfUYeT3GmG2m8PMXEqiBcqv-CrCoTxs3tCWMFGSy9Hg"/>
+</div>
+<h4 class="font-headline-lg text-headline-lg text-primary mb-1">Kacper</h4>
+<span class="font-section-label text-section-label text-outline mb-6">Greatsword • Reach 3</span>
+<div class="w-full space-y-4">
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>HP</span>
+<span>540</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-hp h-full" style="width: 54%"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>Mana</span>
+<span>180</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-mana h-full" style="width: 36%"></div></div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between font-section-label text-[10px] uppercase text-on-surface-variant">
+<span>AP</span>
+<span>14</span>
+</div>
+<div class="stat-bar-container"><div class="stat-bar-ap h-full" style="width: 14%"></div></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Controls Map -->
+<section class="py-stack-lg bg-surface-container-lowest">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-gutter">
+<div class="mb-12">
+<h2 class="font-section-label text-section-label uppercase tracking-[0.2em] text-paragon-gold mb-2">Command Center</h2>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">Control Reference</h3>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Movement -->
+<div class="space-y-stack-md">
+<h4 class="font-section-label text-section-label uppercase text-outline border-b border-outline-variant/30 pb-2">Movement</h4>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">W</div>
+<span class="font-body-md text-on-surface-variant">Move Up</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">A</div>
+<span class="font-body-md text-on-surface-variant">Move Left</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">S</div>
+<span class="font-body-md text-on-surface-variant">Move Down</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">D</div>
+<span class="font-body-md text-on-surface-variant">Move Right</span>
+</div>
+<div class="flex items-center space-x-3 col-span-2">
+<div class="w-24 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">SPACE</div>
+<span class="font-body-md text-on-surface-variant">Dash / Jump</span>
+</div>
+</div>
+</div>
+<!-- Combat -->
+<div class="space-y-stack-md">
+<h4 class="font-section-label text-section-label uppercase text-outline border-b border-outline-variant/30 pb-2">Combat</h4>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex items-center space-x-3">
+<div class="w-12 h-10 flex items-center justify-center bg-mana-glow/20 border border-mana-glow/40 rounded-md keycap-inner font-keycap-label text-keycap-label text-mana-glow">LMB</div>
+<span class="font-body-md text-on-surface-variant">Basic Attack</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-12 h-10 flex items-center justify-center bg-mana-glow/20 border border-mana-glow/40 rounded-md keycap-inner font-keycap-label text-keycap-label text-mana-glow">RMB</div>
+<span class="font-body-md text-on-surface-variant">Heavy/Special</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">Q</div>
+<span class="font-body-md text-on-surface-variant">Ability 1</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">E</div>
+<span class="font-body-md text-on-surface-variant">Ability 2</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">R</div>
+<span class="font-body-md text-on-surface-variant">Ultimate</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">F</div>
+<span class="font-body-md text-on-surface-variant">Interact</span>
+</div>
+</div>
+</div>
+<!-- System -->
+<div class="space-y-stack-md">
+<h4 class="font-section-label text-section-label uppercase text-outline border-b border-outline-variant/30 pb-2">System</h4>
+<div class="grid grid-cols-1 gap-4">
+<div class="flex items-center space-x-3">
+<div class="w-16 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">SHIFT</div>
+<span class="font-body-md text-on-surface-variant">Manastop (Combo Break)</span>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-16 h-10 flex items-center justify-center bg-obsidian-grey border border-outline/20 rounded-md keycap-inner font-keycap-label text-keycap-label text-on-surface">TAB</div>
+<span class="font-body-md text-on-surface-variant">Character Sheet</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-stack-lg bg-void-black border-t border-outline-variant/30">
+<div class="flex flex-col md:flex-row justify-between items-center px-margin-mobile md:px-gutter max-w-container-max mx-auto space-y-stack-md md:space-y-0">
+<div class="font-display-hero text-headline-lg text-paragon-gold">PARAGON</div>
+<div class="flex flex-wrap justify-center gap-6">
+<a class="font-body-md text-body-md text-outline hover:text-mana-glow transition-colors" href="#">Terms of Service</a>
+<a class="font-body-md text-body-md text-outline hover:text-mana-glow transition-colors" href="#">Privacy Policy</a>
+<a class="font-body-md text-body-md text-outline hover:text-mana-glow transition-colors" href="#">Community Guidelines</a>
+<a class="font-body-md text-body-md text-outline hover:text-mana-glow transition-colors" href="#">Support</a>
+</div>
+<div class="font-body-md text-body-md text-outline-variant text-center md:text-right uppercase tracking-widest text-[10px]">
+                © 2024 PARAGON. ALL RIGHTS RESERVED.
+            </div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for button glows
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousemove', (e) => {
+                const rect = btn.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                btn.style.setProperty('--mouse-x', `${x}px`);
+                btn.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+</body></html>

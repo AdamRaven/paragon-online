@@ -109,11 +109,7 @@ export const AIR_ATTACK_GRAVITY = 0.28;
 export const DROP_THROUGH_TIME = 0.25;
 
 // --- misc -----------------------------------------------------------------
-/** Fighters below this Y have fallen into the gap. */
-export const RESPAWN_DAMAGE = 50;
 export const RESPAWN_INVULN = 1.0;
-/** Paragon's fists reach 10% less far than Shedim's katana. */
-export const PARAGON_RANGE_PENALTY = 0.9;
 
 // --- movement feel ---------------------------------------------------------
 /** Horizontal acceleration per frame while grounded / airborne. */

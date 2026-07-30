@@ -18,6 +18,12 @@ const PLAYER_RESPAWN = 2.5;
 /** How close (world units) the player has to walk to auto-pick up a drop. */
 const PICKUP_RADIUS_X = 34;
 const PICKUP_RADIUS_Y = 50;
+/** Unclaimed loot despawns after this long, so an ignored drop doesn't sit
+ * in the simulation forever over a long farming session. */
+const LOOT_DESPAWN_TIME = 90;
+/** Hard safety cap regardless of age, in case something drops far faster
+ * than it's ever collected. */
+const MAX_LOOT_DROPS = 150;
 
 /** A dead mob's loot, physically sitting in the world until walked over. */
 export interface LootDrop {
@@ -207,6 +213,9 @@ export class AdventureEngine extends ArenaEngine {
       item,
       age: 0,
     });
+    if (this.lootDrops.length > MAX_LOOT_DROPS) {
+      this.lootDrops.splice(0, this.lootDrops.length - MAX_LOOT_DROPS);
+    }
   }
 
   /** Physics for dropped loot (gravity + settle), plus the walk-over pickup. */
@@ -216,6 +225,10 @@ export class AdventureEngine extends ArenaEngine {
     const remaining: LootDrop[] = [];
     for (const drop of this.lootDrops) {
       drop.age += DT;
+      // Plenty of time to walk back for anything you want, but a long
+      // session of farming without ever backtracking for junk shouldn't
+      // leave an ever-growing pile of drops to simulate and draw forever.
+      if (drop.age > LOOT_DESPAWN_TIME) continue;
       if (!drop.onGround) {
         drop.vy = Math.min(MAX_FALL_SPEED, drop.vy + GRAVITY);
         drop.x += drop.vx;
