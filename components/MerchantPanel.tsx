@@ -168,6 +168,15 @@ export function MerchantPanel({
                   Buy 1000 ({STONE_PRICE * 1000}g)
                 </button>
               )}
+              {save.gold >= STONE_PRICE * 10000 && (
+                <button
+                  className="btn"
+                  style={{ flex: 1, minWidth: 90 }}
+                  onClick={() => onBuyStones(10000)}
+                >
+                  Buy 10000 ({STONE_PRICE * 10000}g)
+                </button>
+              )}
             </div>
           </>
         )}
@@ -237,6 +246,15 @@ export function MerchantPanel({
                           onClick={() => onEnhanceMany(i, 100)}
                         >
                           x100
+                        </button>
+                      )}
+                      {!maxed && save.stones >= 1000 && (
+                        <button
+                          className="btn tiny btn-ghost"
+                          title="Attempts 1000 enhancements back to back, stopping early if it maxes out or you run out of stones."
+                          onClick={() => onEnhanceMany(i, 1000)}
+                        >
+                          x1000
                         </button>
                       )}
                     </span>
