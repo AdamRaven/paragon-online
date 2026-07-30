@@ -100,6 +100,19 @@ const PORTRAIT_SRC: Partial<Record<string, string>> = {
   paragon: "/art/paragon.webp",
   shedim: "/art/shaedim.webp",
 };
+/**
+ * Both portraits carry blank space below the feet (measured from each
+ * image's alpha channel) left over from their source canvas. Drawing the
+ * full image anchors that blank margin — not the actual feet — to the
+ * ground, so the character reads as floating above where the walk-cycle
+ * frames (cropped tight, no such margin) plant him. Cropping the source
+ * rect to end at the real content bottom fixes the mismatch without
+ * touching the top headroom, which is intentional.
+ */
+const PORTRAIT_CONTENT_BOTTOM: Partial<Record<string, number>> = {
+  paragon: 441,
+  shedim: 414,
+};
 const portraitCache = new Map<string, HTMLImageElement>();
 
 function getPortraitImage(classId: string): HTMLImageElement | null {
@@ -202,6 +215,18 @@ export function renderFighterPortraits(
     }
     const drawW = drawH * (sw / sh);
 
+    // The static portraits carry blank space below the feet (see
+    // PORTRAIT_CONTENT_BOTTOM), which the walk-cycle frames don't have —
+    // drawn at the same offset as the walk frames, that blank margin (not
+    // the actual feet) would land on the ground, making Paragon appear to
+    // stand higher when idle than when walking. Shifting the draw down by
+    // that margin's share of the frame puts the real feet at yFeet either way.
+    const marginBottomFrac = walkSpriteImg
+      ? 0
+      : (img.naturalHeight - (PORTRAIT_CONTENT_BOTTOM[f.classId] ?? img.naturalHeight)) /
+        img.naturalHeight;
+    const destTop = -drawH + marginBottomFrac * drawH;
+
     const knockdown = f.state === "knockdown";
     const flash = f.hitFlash > 0 && Math.floor(engine.time * 30) % 2 === 0;
 
@@ -211,11 +236,11 @@ export function renderFighterPortraits(
     if (f.facing === -1) fx.scale(-1, 1);
     fx.imageSmoothingEnabled = true;
     fx.imageSmoothingQuality = "high";
-    fx.drawImage(img, sx, sy, sw, sh, -drawW / 2, -drawH, drawW, drawH);
+    fx.drawImage(img, sx, sy, sw, sh, -drawW / 2, destTop, drawW, drawH);
     if (flash) {
       fx.globalCompositeOperation = "source-atop";
       fx.fillStyle = "#ffffff";
-      fx.fillRect(-drawW / 2, -drawH, drawW, drawH);
+      fx.fillRect(-drawW / 2, destTop, drawW, drawH);
       fx.globalCompositeOperation = "source-over";
     }
     fx.restore();
