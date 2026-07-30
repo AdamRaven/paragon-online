@@ -139,18 +139,6 @@ function getWalkSprite(): HTMLImageElement | null {
   return walkSprite.complete && walkSprite.naturalWidth > 0 ? walkSprite : null;
 }
 
-let villageBg: HTMLImageElement | null = null;
-
-/** Emberhold's hand-painted town backdrop, loaded once and cached. */
-function getVillageBackground(): HTMLImageElement | null {
-  if (!villageBg) {
-    if (typeof Image === "undefined") return null;
-    villageBg = new Image();
-    villageBg.src = "/art/village-background.jpeg";
-  }
-  return villageBg.complete && villageBg.naturalWidth > 0 ? villageBg : null;
-}
-
 /**
  * Draws the actual reference art for Paragon/Shedim fighters on a separate,
  * non-pixelated overlay canvas sized to real screen resolution. The main
@@ -280,6 +268,7 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   for (const bh of engine.blackHoles) {
     drawBlackHole(b, wx(bh.x), wy(bh.y), bh.radius / S, bh.life / bh.maxLife, engine.time);
   }
+  drawVillageProps(b, engine, wx, wy, engine.time);
   drawMerchant(b, engine, wx, wy, engine.time);
   drawVendor(b, engine, wx, wy, engine.time);
   drawBank(b, engine, wx, wy, engine.time);
@@ -315,7 +304,7 @@ const BIOMES: Record<string, {
   capLit: string;
 }> = {
   town: {
-    sky: ["#20304e", "#39506d", "#6b7285"], far: "#2b3d55", near: "#22303f",
+    sky: ["#2c2340", "#6b4560", "#d98a52"], far: "#4a3a56", near: "#2a2034",
     accent: "#f6b352", stars: false, cap: "#6b5336", capLit: "#8f7047",
   },
   outskirts: {
@@ -376,14 +365,6 @@ function drawSky(
   const vshift = (speed: number) => Math.round((CAM_REF_Y - camY) * speed);
   const B = BIOMES[biomeId] ?? BIOMES.keep;
 
-  if (biomeId === "town") {
-    const bg = getVillageBackground();
-    if (bg) {
-      drawVillageBackground(b, bg, vw, vh, camX, groundWy);
-      return; // the painted scene already carries sky, castle and tree line
-    }
-  }
-
   // Banded sky: hard colour steps rather than a smooth gradient.
   const skyShift = vshift(0.08);
   px(b, 0, 0, vw, vh, B.sky[0]);
@@ -392,6 +373,54 @@ function drawSky(
   pxDither(b, 0, vh * 0.38 + skyShift, vw, 6, B.sky[1]);
   pxDither(b, 0, vh * 0.58 + skyShift, vw, 6, B.sky[2]);
 
+  if (biomeId === "town") {
+    // Emberhold at dusk: a low warm sun sinking behind the rooftops, a
+    // handful of early stars up top, and a couple of birds drifting home.
+    const sunY = groundWy - Math.round(vh * 0.42);
+    const sunX = Math.round(vw * 0.72 - camX * 0.06);
+    pxGlow(b, sunX, sunY, 22, "#ffcf7a", 0.55);
+    pxCircle(b, sunX, sunY, 11, "#ffdd9c");
+    pxCircle(b, sunX, sunY, 8, "#fff2cf");
+    b.fillStyle = "#e9d9f0";
+    for (let i = 0; i < 18; i++) {
+      const sx = ((i * 131) % 400) - ((camX * 0.1) % 400);
+      const sy = ((i * 47) % Math.round(vh * 0.22)) + vshift(0.1);
+      const x = ((sx % vw) + vw) % vw;
+      b.globalAlpha = 0.5 + 0.4 * Math.sin(i * 2.3 + Date.now() * 0.0012);
+      b.fillRect(Math.round(x), Math.round(sy), 1, 1);
+    }
+    b.globalAlpha = 1;
+    // Distant hills, warmer and softer than the house skyline in front of them.
+    const hillGap = 180;
+    const hillShift = Math.round(camX * 0.12);
+    const hoff = -hillShift % hillGap;
+    for (let x = hoff - hillGap; x < vw + hillGap; x += hillGap) {
+      // Seeded from the hill's stable world index (see the `n` comment in
+      // skyline() below) so its height doesn't reroll every frame as the
+      // camera scrolls — that was reading as the hills bobbing up and down.
+      const hn = Math.round((x + hillShift) / hillGap);
+      const peak = Math.round(vh * 0.2) + vshift(0.12) - (Math.abs(hn * 37) % 30);
+      const base = vh + 60;
+      for (let t = 0; t <= 10; t++) {
+        const yy = peak + (t * (base - peak)) / 10;
+        const wdt = hillGap * 1.1 * (0.1 + t / 10);
+        px(b, x + hillGap / 2 - wdt / 2, yy, wdt, (base - peak) / 10 + 1, "#5a4560");
+      }
+    }
+    // Birds: simple drifting "v" shapes, high and slow.
+    b.strokeStyle = "#2a2034";
+    b.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const bx = ((i * 260 + Date.now() * 0.02 - camX * 0.15) % (vw + 200)) - 100;
+      const by = Math.round(vh * (0.14 + i * 0.05)) + vshift(0.15);
+      const flap = Math.sin(Date.now() * 0.006 + i) * 2;
+      b.beginPath();
+      b.moveTo(bx - 4, by + flap);
+      b.lineTo(bx, by - 2);
+      b.lineTo(bx + 4, by + flap);
+      b.stroke();
+    }
+  }
   if (B.stars) {
     b.fillStyle = "#5b6396";
     for (let i = 0; i < 70; i++) {
@@ -526,12 +555,20 @@ function drawSky(
       kind === "ruins" ? 50 :
       kind === "deadwood" ? 38 :
       kind === "columns" ? 60 : 74;
-    const off = -Math.round(camX * speed) % gap;
+    const shift = Math.round(camX * speed);
+    const off = -shift % gap;
     const top = baseTop + vshift(speed);
     // Layers are drawn to well past the bottom edge so a rising camera never
     // exposes their base.
     const bottom = vh + 200;
     for (let x = off - gap; x < vw + gap; x += gap) {
+      // A per-building index derived from world position rather than screen
+      // position: `x` drifts by a pixel every frame while walking, so any
+      // shape variation seeded from `x` directly would reroll continuously
+      // and make roofs/spires visibly jitter up and down as the camera
+      // scrolls. `n` only advances when a building actually leaves the
+      // screen, so the same building keeps the same silhouette forever.
+      const n = Math.round((x + shift) / gap);
       if (kind === "trees") {
         // Conifer silhouettes.
         px(b, x + 5, top + 8, 2, bottom - top, colour);
@@ -540,17 +577,38 @@ function drawSky(
           px(b, x + 6 - wdt / 2, top + t * 4, wdt, 4, colour);
         }
       } else if (kind === "houses") {
-        // Pitched roofs with lit windows, at staggered heights.
+        // Timber-framed cottages with pitched, tiled roofs and warm lit
+        // windows, staggered in height so the row reads as a real street.
         const wdt = 26;
-        const jitter = Math.abs(Math.round(x)) % 14;
+        const jitter = Math.abs(n * 37) % 14;
         const hy = top + jitter;
+        const roofTone = Math.abs(n) % 2 === 0 ? "#7a3b2e" : "#5c4530";
         px(b, x, hy, wdt, bottom - hy, colour);
+        // A short timber gable cross just under the roofline — a Tudor-
+        // cottage accent, kept small so it doesn't read as a lamp post.
+        px(b, x + wdt / 2 - 1, hy + 6, 2, 9, "#181420");
+        px(b, x + 4, hy + 10, wdt - 8, 2, "#181420");
+        // Pitched, tiled roof — a stepped triangle in a warm tone distinct
+        // from the wall so the skyline doesn't read as flat blocks.
         for (let r = 0; r < 7; r++) {
-          px(b, x + r, hy - 7 + r, wdt - r * 2, 1, colour);
+          px(b, x + r, hy - 7 + r, wdt - r * 2, 1, roofTone);
         }
+        px(b, x + 1, hy - 1, wdt - 2, 1, "#2a2034");
+        // Chimney with a thin curl of smoke, on alternating houses.
+        if (Math.abs(n) % 2 === 0) {
+          px(b, x + wdt - 6, hy - 13, 3, 7, "#3a2e26");
+          for (let s = 0; s < 3; s++) {
+            const sy = hy - 14 - s * 7 - Math.round(((Date.now() * 0.015 + n * 8) / 8) % 7);
+            b.globalAlpha = 0.35 - s * 0.08;
+            px(b, x + wdt - 5 + Math.round(Math.sin(s + n) * 2), sy, 2, 2, "#c9c2d4");
+            b.globalAlpha = 1;
+          }
+        }
+        // Warm lit windows, count varying slightly by house height.
         px(b, x + 5, hy + 6, 4, 4, BIOMES.town.accent);
         px(b, x + 16, hy + 6, 4, 4, BIOMES.town.accent);
         px(b, x + 5, hy + 15, 4, 4, BIOMES.town.accent);
+        if (jitter > 6) px(b, x + 16, hy + 15, 4, 4, BIOMES.town.accent);
       } else if (kind === "arches") {
         // Sewer arches.
         px(b, x, top, 10, bottom - top, colour);
@@ -559,8 +617,8 @@ function drawSky(
       } else if (kind === "spires") {
         // Jagged obsidian shards, jutting at a slight lean, each capped with
         // a faint glowing tip so the abyss reads as lit from within.
-        const lean = ((x / gap) % 2 === 0 ? 1 : -1) * 3;
-        const peak = top - 10 - (Math.abs(Math.round(x)) % 26);
+        const lean = (n % 2 === 0 ? 1 : -1) * 3;
+        const peak = top - 10 - (Math.abs(n * 37) % 26);
         for (let t = 0; t <= 6; t++) {
           const yy = peak + t * ((bottom - peak) / 6);
           const wdt = 3 + t * 2;
@@ -570,7 +628,7 @@ function drawSky(
       } else if (kind === "peaks") {
         // Snow-capped mountain silhouettes: a stepped triangle, white at the
         // tip and shading down into the biome colour toward the base.
-        const peak = top - 6 - (Math.abs(Math.round(x * 0.7)) % 30);
+        const peak = top - 6 - (Math.abs(n * 37) % 30);
         const steps = 8;
         const rowH = (bottom - peak) / steps;
         const halfGap = gap / 2;
@@ -582,19 +640,19 @@ function drawSky(
         // Furnace stacks: a dark tower with a molten slit glowing near the
         // top and a thin trail of rising smoke.
         const wdt = 18;
-        const jitter = Math.abs(Math.round(x * 1.3)) % 22;
+        const jitter = Math.abs(n * 37) % 22;
         const hy = top + jitter;
         px(b, x, hy, wdt, bottom - hy, colour);
         px(b, x + 3, hy + 6, wdt - 6, 3, B.accent);
         pxGlow(b, x + wdt / 2, hy + 7, 6, B.accent, 0.55);
         for (let s = 0; s < 3; s++) {
-          const sy = hy - 6 - s * 8 - Math.round(((Date.now() * 0.02 + x) / 6) % 8);
+          const sy = hy - 6 - s * 8 - Math.round(((Date.now() * 0.02 + n * 6) / 6) % 8);
           px(b, x + wdt / 2 - 1 + (s % 2), sy, 2, 2, "#2a1410");
         }
       } else if (kind === "ruins") {
         // Floating fortress rubble, drifting at different heights with a
         // jagged broken underside — reads as debris, not solid ground.
-        const floatY = top + Math.round(Math.sin(x * 0.05) * 14);
+        const floatY = top + Math.round(Math.sin(n) * 14);
         const chunkH = 26;
         px(b, x, floatY, 34, chunkH, colour);
         px(b, x + 4, floatY - 3, 26, 3, colour);
@@ -616,7 +674,7 @@ function drawSky(
       } else if (kind === "columns") {
         // Broken marble columns — some snapped mid-height, some still
         // standing with their capital intact.
-        const snapped = Math.abs(Math.round(x * 0.7)) % 3 === 0;
+        const snapped = Math.abs(n) % 3 === 0;
         const colH = Math.round(snapped ? (bottom - top) * 0.55 : bottom - top);
         const colTop = bottom - colH;
         px(b, x + 6, colTop, 14, colH, colour);
@@ -642,40 +700,37 @@ function drawSky(
     biomeId === "divine" ? "columns" : "towers";
   skyline(0.25, B.far, Math.round(vh * 0.36), kind);
   skyline(0.5, B.near, Math.round(vh * 0.52), kind);
-}
 
-/**
- * Tiles Emberhold's painted backdrop across the viewport with a light
- * horizontal parallax. The image is scaled to the buffer's full height like
- * the flat sky fill it replaces; the game's own ground/props are drawn over
- * its lower edge afterward exactly as they would over the flat colour.
- */
-/** Where the painted street sits within the source image, as a fraction of its height. */
-const VILLAGE_STREET_FRAC = 0.89;
-
-function drawVillageBackground(
-  b: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  vw: number,
-  vh: number,
-  camX: number,
-  groundWy: number
-) {
-  // Oversized a little and anchored on the actual ground line (rather than
-  // just filling 0..vh) so the painted street lines up with the game's own
-  // ground instead of drifting up the building fronts as the camera's
-  // vertical position shifts.
-  const imgH = Math.round(vh * 1.15);
-  const imgW = Math.round(imgH * (img.naturalWidth / img.naturalHeight));
-  const y = Math.round(groundWy - imgH * VILLAGE_STREET_FRAC);
-  const speed = 0.35;
-  const off = (-Math.round(camX * speed) % imgW + imgW) % imgW;
-  const smoothed = b.imageSmoothingEnabled;
-  b.imageSmoothingEnabled = true;
-  for (let x = off - imgW; x < vw; x += imgW) {
-    b.drawImage(img, x, y, imgW, imgH);
+  if (biomeId === "town") {
+    // Strings of lanterns swagged between the near houses, glowing warm
+    // against the dusk — the market-night touch a flat backdrop can't give.
+    const nearGap = 52;
+    const nearTop = Math.round(vh * 0.52) + vshift(0.5);
+    const off = -Math.round(camX * 0.5) % nearGap;
+    for (let x = off - nearGap; x < vw + nearGap; x += nearGap) {
+      const sagTop = nearTop - 2;
+      for (let s = 0; s <= 6; s++) {
+        const t = s / 6;
+        const lx = x + t * nearGap;
+        const ly = sagTop + Math.sin(t * Math.PI) * 6;
+        if (s > 0) b.strokeStyle = "#2a2034";
+        if (s > 0) {
+          const pt = (s - 1) / 6;
+          const px0 = x + pt * nearGap;
+          const py0 = sagTop + Math.sin(pt * Math.PI) * 6;
+          b.beginPath();
+          b.moveTo(px0, py0);
+          b.lineTo(lx, ly);
+          b.stroke();
+        }
+        if (s % 2 === 1) {
+          const flicker = 0.5 + 0.5 * Math.sin(Date.now() * 0.004 + s + x);
+          pxGlow(b, lx, ly + 2, 4, "#ffcf7a", 0.35 + flicker * 0.25);
+          px(b, lx - 1, ly + 1, 2, 2, "#ffdd9c");
+        }
+      }
+    }
   }
-  b.imageSmoothingEnabled = smoothed;
 }
 
 function drawTerrain(
@@ -783,15 +838,28 @@ function drawMerchant(
   px(b, x + 8, y - 10, 10, 1, "#8f6738");
   px(b, x + 10, y - 14, 6, 4, "#8f6738");
 
-  // The merchant: hooded robe, warm lantern glow.
+  // The merchant: layered hooded robe, warm lantern glow.
+  px(b, x - 6, y - 20 + bob, 12, 20, "#243347"); // cloak back-drape, for depth
   px(b, x - 5, y - 22 + bob, 10, 22, "#3f5b7a");
-  px(b, x - 5, y - 22 + bob, 10, 2, "#5a7ea6");
-  px(b, x - 5, y - 4, 10, 4, "#2b3f56");
+  px(b, x - 5, y - 22 + bob, 10, 3, "#5a7ea6"); // shoulder highlight
+  px(b, x - 5, y - 12 + bob, 10, 6, "#33506e"); // torso shade band
+  px(b, x - 5, y - 4, 10, 4, "#22334a");
+  px(b, x - 5, y - 5, 10, 1, "#c9a24a"); // gold hem trim
+  px(b, x - 4, y - 1, 3, 1, "#1a1f2a"); // feet
+  px(b, x + 1, y - 1, 3, 1, "#1a1f2a");
+  px(b, x + 4, y - 12 + bob, 4, 5, "#7a4a2e"); // satchel at the hip
+  px(b, x + 4, y - 12 + bob, 4, 1, "#a06a3e");
   px(b, x - 4, y - 30 + bob, 8, 8, "#e8c9a0");
   px(b, x - 5, y - 31 + bob, 10, 4, "#7a4a2e");
+  px(b, x - 5, y - 28 + bob, 2, 3, "#5a3a22"); // hood shadow
   px(b, x - 2, y - 26 + bob, 1, 1, PAL.ink);
   px(b, x + 1, y - 26 + bob, 1, 1, PAL.ink);
+  px(b, x - 1, y - 24 + bob, 2, 1, "#c9906a");
   px(b, x - 5, y - 20 + bob, 10, 1, "#c9a24a");
+  // A hand raised with a glinting coin.
+  px(b, x + 6, y - 20 + bob, 2, 5, "#e8c9a0");
+  px(b, x + 6, y - 21 + bob, 2, 2, "#f6d675");
+  pxGlow(b, x + 7, y - 21 + bob, 3, "#ffe9a8", 0.5);
   pxGlow(b, x + 12, y - 18, 7, "#f6b352", 0.6);
 
   const near = (engine as ArenaEngine & { nearMerchant?: boolean }).nearMerchant;
@@ -833,15 +901,22 @@ function drawVendor(
   px(b, x + 8, y - 34, 6, 1, "#565f73");
   px(b, x + 10, y - 31, 2, 2, "#c9b896");
 
-  // The vendor: banded mail vest over a tunic, thicker-set than the enhancer.
+  // The vendor: banded mail vest over a tunic, thicker-set than the merchant.
+  px(b, x - 7, y - 19 + bob, 14, 19, "#33383f"); // cape/bulk behind the mail
   px(b, x - 6, y - 21 + bob, 12, 19, "#5a5f6b");
-  px(b, x - 6, y - 21 + bob, 12, 2, "#7a8090");
+  px(b, x - 6, y - 21 + bob, 12, 3, "#7a8090"); // pauldron highlight
   px(b, x - 6, y - 8, 12, 6, "#3f4450");
   for (let i = 0; i < 12; i += 3) px(b, x - 6 + i, y - 15 + bob, 2, 8, "#454a55");
+  px(b, x - 5, y - 1, 4, 1, "#1a1f2a"); // boots
+  px(b, x + 1, y - 1, 4, 1, "#1a1f2a");
+  // A sheathed shortsword at the hip.
+  px(b, x + 5, y - 14 + bob, 2, 10, "#3a4050");
+  px(b, x + 4, y - 15 + bob, 4, 2, "#8b93a0");
   px(b, x - 4, y - 29 + bob, 8, 8, "#d9a878");
   px(b, x - 5, y - 30 + bob, 10, 3, "#3a2a1c");
   px(b, x - 2, y - 25 + bob, 1, 1, PAL.ink);
   px(b, x + 1, y - 25 + bob, 1, 1, PAL.ink);
+  px(b, x - 1, y - 23 + bob, 2, 1, "#b8875a"); // jaw shade
   px(b, x - 6, y - 5, 12, 1, "#c9a24a");
 
   const near = (engine as ArenaEngine & { nearVendor?: boolean }).nearVendor;
@@ -878,12 +953,19 @@ function drawBank(
   px(b, x + 15, y - 11, 2, 2, "#1c1f28");
   pxGlow(b, x + 16, y - 10, 5, "#7dd3fc", 0.5);
 
-  // The keeper: deep violet robe (distinct from the enhancer's blue), calm hood.
+  // The keeper: deep violet robe (distinct from the merchant's blue), calm hood.
+  px(b, x - 6, y - 21 + bob, 12, 21, "#2e2648"); // cloak back-drape
   px(b, x - 5, y - 23 + bob, 10, 23, "#463a6b");
-  px(b, x - 5, y - 23 + bob, 10, 2, "#6a5a96");
+  px(b, x - 5, y - 23 + bob, 10, 3, "#6a5a96"); // shoulder highlight
+  px(b, x - 5, y - 13 + bob, 10, 6, "#3a3060"); // torso shade band
   px(b, x - 5, y - 4, 10, 4, "#2e2648");
+  px(b, x - 4, y - 1, 3, 1, "#1a1f2a"); // feet
+  px(b, x + 1, y - 1, 3, 1, "#1a1f2a");
+  px(b, x + 4, y - 16 + bob, 4, 5, "#8f6738"); // ledger under one arm
+  px(b, x + 4, y - 16 + bob, 4, 1, "#c9a24a");
   px(b, x - 4, y - 31 + bob, 8, 8, "#e8c9a0");
   px(b, x - 5, y - 32 + bob, 10, 4, "#332a4a");
+  px(b, x - 5, y - 29 + bob, 2, 3, "#221c33"); // hood shadow
   px(b, x - 2, y - 27 + bob, 1, 1, PAL.ink);
   px(b, x + 1, y - 27 + bob, 1, 1, PAL.ink);
   px(b, x - 5, y - 21 + bob, 10, 1, "#c9a24a");
@@ -893,6 +975,73 @@ function drawBank(
   if (near) {
     const pulse = Math.sin(time * 6) > 0 ? "#ffffff" : "#f6b352";
     pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
+  }
+}
+
+/**
+ * Emberhold's street furniture: a signpost by the western gate, a wishing
+ * well at the square's heart, and lamp posts lighting the gaps between
+ * stalls — filler that makes the town read as a lived-in place rather than
+ * three vendors standing in a field.
+ */
+function drawVillageProps(
+  b: CanvasRenderingContext2D,
+  engine: ArenaEngine,
+  wx: (v: number) => number,
+  wy: (v: number) => number,
+  time: number
+) {
+  const stage = (engine as ArenaEngine & { stage?: { isTown?: boolean } }).stage;
+  if (!stage?.isTown) return;
+
+  const lampAt = (wxv: number) => {
+    const gy = engine.groundAtX(wxv);
+    if (gy === null) return;
+    const x = wx(wxv);
+    const y = wy(gy);
+    const flicker = 0.5 + 0.5 * Math.sin(time * 3 + wxv);
+    px(b, x - 1, y - 26, 2, 26, "#241c1a");
+    px(b, x - 4, y - 30, 8, 3, "#241c1a");
+    px(b, x - 3, y - 29, 6, 4, "#3a2e26");
+    pxGlow(b, x, y - 27, 8, "#ffcf7a", 0.4 + flicker * 0.25);
+    px(b, x - 1, y - 28, 2, 2, "#fff2cf");
+  };
+  lampAt(300);
+  lampAt(1250);
+  lampAt(1700);
+
+  // The village well, centred in the square between the merchant and vendor.
+  const wellX = 750;
+  const wgy = engine.groundAtX(wellX);
+  if (wgy !== null) {
+    const x = wx(wellX);
+    const y = wy(wgy);
+    const sway = Math.sin(time * 1.5) * 0.5;
+    // Stone ring.
+    px(b, x - 12, y - 10, 24, 10, "#5c6270");
+    px(b, x - 12, y - 10, 24, 2, "#7a8090");
+    px(b, x - 10, y - 8, 20, 6, "#3f4450");
+    pxGlow(b, x, y - 6, 6, "#7dd3fc", 0.35);
+    // Roof posts and a little shingled awning.
+    px(b, x - 11, y - 30, 2, 20, "#4a3626");
+    px(b, x + 9, y - 30, 2, 20, "#4a3626");
+    px(b, x - 13, y - 32, 28, 4, "#7a3b2e");
+    px(b, x - 13, y - 29, 28, 1, "#2a2034");
+    // A bucket on a rope, gently swinging.
+    px(b, x + Math.round(sway), y - 18, 1, 8, "#241c1a");
+    px(b, x - 2 + Math.round(sway), y - 10, 5, 4, "#5c4530");
+  }
+
+  // A welcome sign by the western gate.
+  const signX = 180;
+  const sgy = engine.groundAtX(signX);
+  if (sgy !== null) {
+    const x = wx(signX);
+    const y = wy(sgy);
+    px(b, x - 1, y - 20, 2, 20, "#4a3626");
+    px(b, x - 11, y - 24, 22, 10, "#6b4a2e");
+    px(b, x - 11, y - 24, 22, 1, "#8f6738");
+    pxText(b, "EMBERHOLD", x, y - 27, "#f6b352", 5);
   }
 }
 
