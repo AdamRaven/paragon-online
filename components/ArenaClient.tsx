@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
 import { ClassPortrait } from "@/components/ClassPortrait";
+import { ComboMenu } from "@/components/ComboMenu";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { ArenaAI, type Difficulty } from "@/lib/arena/ai";
 import { CLASSES, getClass } from "@/lib/arena/classes";
@@ -33,8 +34,12 @@ export function ArenaClient() {
   const [hud, setHud] = useState<ArenaHudData | null>(null);
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [winner, setWinner] = useState<{ name: string; you: boolean } | null>(null);
-  const [paused, setPaused] = useState(false);
-  const pausedRef = useRef(false);
+  // A single overlay slot rather than separate booleans, so the pause menu
+  // and the combo menu can never both be open and fighting over clicks —
+  // Escape always closes whatever's open (or opens the pause menu from
+  // nothing); Tab only ever toggles the combo menu.
+  const [panel, setPanel] = useState<"none" | "pause" | "combo">("none");
+  const panelRef = useRef<"none" | "pause" | "combo">("none");
 
   const pushLog = useCallback((text: string, tone: CombatLogEntry["tone"]) => {
     setLogs((prev) => [...prev, { id: logIdRef.current++, text, tone }].slice(-MAX_LOGS));
@@ -51,7 +56,8 @@ export function ArenaClient() {
   const begin = useCallback(() => {
     setLogs([]);
     setWinner(null);
-    setPaused(false);
+    panelRef.current = "none";
+    setPanel("none");
     setStarted(true);
   }, []);
 
@@ -59,16 +65,28 @@ export function ArenaClient() {
     if (winner) playSound(winner.you ? "victory" : "defeat");
   }, [winner]);
 
-  // Escape opens/closes the pause menu; it never fires once the fight ends,
+  // Escape always closes whatever's open, or opens the pause menu from
+  // nothing; Tab only ever toggles the combo menu, and leaves the pause menu
+  // alone if that's what's currently up. Neither fires once the fight ends,
   // since the victory/defeat card already owns the screen at that point.
   useEffect(() => {
     if (!started || winner) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Escape" || e.repeat) return;
-      setPaused((p) => {
-        pausedRef.current = !p;
-        return !p;
-      });
+      if (e.repeat) return;
+      if (e.code === "Escape") {
+        setPanel((p) => {
+          const next = p === "none" ? "pause" : "none";
+          panelRef.current = next;
+          return next;
+        });
+      } else if (e.code === "Tab") {
+        e.preventDefault();
+        setPanel((p) => {
+          const next = p === "combo" ? "none" : p === "none" ? "combo" : p;
+          panelRef.current = next;
+          return next;
+        });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -137,7 +155,7 @@ export function ArenaClient() {
       acc += Math.min(200, now - last);
       last = now;
 
-      if (pausedRef.current) {
+      if (panelRef.current !== "none") {
         acc = 0;
       } else {
         let guard = 0;
@@ -192,11 +210,21 @@ export function ArenaClient() {
       <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
       {hud && <ArenaHud hud={hud} logs={logs} />}
 
-      {paused && !winner && (
+      {panel === "pause" && !winner && (
         <EscapeMenu
           onResume={() => {
-            pausedRef.current = false;
-            setPaused(false);
+            panelRef.current = "none";
+            setPanel("none");
+          }}
+        />
+      )}
+
+      {panel === "combo" && !winner && hud && (
+        <ComboMenu
+          classId={hud.playerClass as ClassId}
+          onClose={() => {
+            panelRef.current = "none";
+            setPanel("none");
           }}
         />
       )}
@@ -371,6 +399,7 @@ function ClassSelect({
               <li><span>Skills</span><span><kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd></span></li>
               <li><span>Special</span><kbd>Shift</kbd></li>
               <li><span>Manastop (70 mana)</span><span>hold <kbd>LMB</kbd>+<kbd>RMB</kbd> 0.5s</span></li>
+              <li><span>Combo menu</span><kbd>Tab</kbd></li>
             </ul>
           </section>
         </div>

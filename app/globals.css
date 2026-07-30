@@ -763,6 +763,10 @@ kbd {
   padding: 20px;
   z-index: 20;
   animation: overlay-in 0.25s ease;
+  /* Modals always need clicks, even the ones mounted inside ArenaHud's own
+     pointer-events:none root (the combo menu) rather than as a sibling of
+     it like every other overlay panel. */
+  pointer-events: auto;
 }
 
 @keyframes overlay-in {
@@ -1704,6 +1708,87 @@ body {
 /* --------------------------------------------------------------------- map */
 
 .map-sheet { width: min(1040px, 96vw); }
+
+/* ------------------------------------------------------------------- combo */
+
+.combo-menu { width: min(760px, 96vw); }
+
+.combo-list {
+  display: grid;
+  gap: 8px;
+  max-height: 58dvh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.combo-card {
+  background: #0d1017;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-dim);
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.combo-card:hover {
+  border-color: var(--border);
+  border-left-color: var(--accent);
+  background: #101420;
+}
+
+.combo-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.combo-card-title {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.combo-card-badges {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.combo-badge-kd {
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--danger);
+}
+
+.combo-badge-stoic {
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--exp);
+}
+
+.combo-chip {
+  display: inline-block;
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--exp);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 2px 7px;
+  line-height: 1.5;
+}
+
+.combo-chip-wide {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.combo-card-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 
 .map-trail {
   display: flex;

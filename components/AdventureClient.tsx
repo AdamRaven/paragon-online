@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
 import { ClassPortrait } from "@/components/ClassPortrait";
+import { ComboMenu } from "@/components/ComboMenu";
 import { DevLevelTools } from "@/components/DevTools";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { InventoryPanel } from "@/components/InventoryPanel";
@@ -61,7 +62,7 @@ export function AdventureClient() {
   const [exp, setExp] = useState({ exp: 0, next: 1, level: 1, points: 0 });
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [panel, setPanel] = useState<
-    "none" | "sheet" | "map" | "inventory" | "merchant" | "vendor" | "storage" | "escape"
+    "none" | "sheet" | "map" | "inventory" | "merchant" | "vendor" | "storage" | "escape" | "combo"
   >("none");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   /** Bumped whenever the save mutates, to re-render the panels. */
@@ -69,7 +70,7 @@ export function AdventureClient() {
   const pausedRef = useRef(false);
 
   useEffect(() => {
-    pausedRef.current = panel === "escape";
+    pausedRef.current = panel === "escape" || panel === "combo";
   }, [panel]);
 
   const pushLog = useCallback((text: string, tone: CombatLogEntry["tone"]) => {
@@ -219,6 +220,9 @@ export function AdventureClient() {
         }
       } else if (e.code === "Escape") {
         setPanel((p) => (p === "none" ? "escape" : "none"));
+      } else if (e.code === "Tab") {
+        e.preventDefault();
+        setPanel((p) => (p === "combo" ? "none" : "combo"));
       }
     };
     window.addEventListener("keydown", onKey);
@@ -524,6 +528,13 @@ export function AdventureClient() {
       )}
 
       {panel === "escape" && <EscapeMenu onResume={() => setPanel("none")} />}
+
+      {panel === "combo" && (
+        <ComboMenu
+          classId={live.classId as ClassId}
+          onClose={() => setPanel("none")}
+        />
+      )}
     </div>
   );
 }

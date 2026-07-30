@@ -8,6 +8,9 @@ const BIOME_GLYPH: Record<Biome, string> = {
   abyss: "🌀",
   frost: "❄️",
   forge: "🌋",
+  storm: "⚡",
+  blight: "☠️",
+  divine: "✨",
 };
 
 const BIOME_TINT: Record<Biome, string> = {
@@ -18,6 +21,9 @@ const BIOME_TINT: Record<Biome, string> = {
   abyss: "#c4b5fd",
   frost: "#dff3ff",
   forge: "#fb923c",
+  storm: "#93c5fd",
+  blight: "#a3e635",
+  divine: "#fef3c7",
 };
 
 export function MapPanel({

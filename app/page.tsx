@@ -158,6 +158,10 @@ export default function Home() {
                 hold <kbd>LMB</kbd>+<kbd>RMB</kbd>
               </span>
             </li>
+            <li>
+              <span>Combo menu</span>
+              <kbd>Tab</kbd>
+            </li>
           </ul>
         </section>
       </div>

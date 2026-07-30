@@ -213,6 +213,111 @@ export const MOB_TYPES: Record<string, MobType> = {
     accent: "#9a3412",
     isBoss: true,
   },
+  stormcaller: {
+    id: "stormcaller",
+    name: "Stormcaller",
+    level: 42,
+    maxHp: 3350,
+    damage: 135,
+    speed: 3.0,
+    expValue: 3000,
+    range: 92,
+    windup: 0.22,
+    recover: 0.24,
+    aggro: 600,
+    w: 36,
+    h: 82,
+    color: "#93c5fd",
+    accent: "#1e3a5f",
+  },
+  tempestwarden: {
+    id: "tempestwarden",
+    name: "The Tempest Warden",
+    level: 46,
+    maxHp: 9500,
+    damage: 158,
+    speed: 2.5,
+    expValue: 12500,
+    range: 108,
+    windup: 0.3,
+    recover: 0.32,
+    aggro: 850,
+    w: 58,
+    h: 112,
+    color: "#dbeafe",
+    accent: "#3b4d66",
+    isBoss: true,
+  },
+  plaguebound: {
+    id: "plaguebound",
+    name: "Plaguebound Husk",
+    level: 46,
+    maxHp: 4050,
+    damage: 152,
+    speed: 2.6,
+    expValue: 4200,
+    range: 88,
+    windup: 0.24,
+    recover: 0.26,
+    aggro: 620,
+    w: 38,
+    h: 84,
+    color: "#84cc16",
+    accent: "#3f6212",
+  },
+  rotmother: {
+    id: "rotmother",
+    name: "The Rotmother",
+    level: 50,
+    maxHp: 11600,
+    damage: 186,
+    speed: 2.3,
+    expValue: 16500,
+    range: 110,
+    windup: 0.32,
+    recover: 0.34,
+    aggro: 880,
+    w: 62,
+    h: 112,
+    color: "#a3e635",
+    accent: "#4d7c0f",
+    isBoss: true,
+  },
+  seraphremnant: {
+    id: "seraphremnant",
+    name: "Seraph Remnant",
+    level: 50,
+    maxHp: 4750,
+    damage: 175,
+    speed: 2.8,
+    expValue: 5200,
+    range: 96,
+    windup: 0.22,
+    recover: 0.24,
+    aggro: 640,
+    w: 40,
+    h: 88,
+    color: "#fef3c7",
+    accent: "#b45309",
+  },
+  sunderedking: {
+    id: "sunderedking",
+    name: "The Sundered King",
+    level: 54,
+    maxHp: 14000,
+    damage: 220,
+    speed: 2.6,
+    expValue: 22000,
+    range: 116,
+    windup: 0.34,
+    recover: 0.36,
+    aggro: 900,
+    w: 64,
+    h: 118,
+    color: "#fffbeb",
+    accent: "#92400e",
+    isBoss: true,
+  },
 };
 
 /** The single melee swing every mob uses. */
@@ -256,7 +361,17 @@ export interface Stage {
   biome: Biome;
 }
 
-export type Biome = "town" | "outskirts" | "undercity" | "keep" | "abyss" | "frost" | "forge";
+export type Biome =
+  | "town"
+  | "outskirts"
+  | "undercity"
+  | "keep"
+  | "abyss"
+  | "frost"
+  | "forge"
+  | "storm"
+  | "blight"
+  | "divine";
 
 const GROUND_Y = 560;
 
@@ -475,6 +590,102 @@ export const STAGES: Stage[] = [
       { typeId: "frostking", x: 2450 },
       { typeId: "cinderwraith", x: 2960 },
       { typeId: "forgeheart", x: 3400 },
+    ],
+  },
+  {
+    id: "tempest",
+    biome: "storm",
+    name: "The Tempest Spire",
+    subtitle: "Beyond the Forge — a sky fortress adrift in an endless storm",
+    requiredLevel: 42,
+    map: makeMap(
+      3600,
+      [
+        [0, 780],
+        [1040, 660],
+        [1960, 700],
+        [2920, 680],
+      ],
+      [
+        [800, 380, 220],
+        [1720, 370, 220],
+        [2340, 390, 220],
+        [3060, 380, 220],
+      ]
+    ),
+    spawns: [
+      { typeId: "stormcaller", x: 500 },
+      { typeId: "stormcaller", x: 740 },
+      { typeId: "forgeheart", x: 1300 },
+      { typeId: "stormcaller", x: 1540 },
+      { typeId: "stormcaller", x: 2150 },
+      { typeId: "forgeheart", x: 2450 },
+      { typeId: "stormcaller", x: 2960 },
+      { typeId: "tempestwarden", x: 3400 },
+    ],
+  },
+  {
+    id: "blight",
+    biome: "blight",
+    name: "The Blighted Hollow",
+    subtitle: "Beyond the Spire — a poisoned grove where nothing living remains",
+    requiredLevel: 46,
+    map: makeMap(
+      3600,
+      [
+        [0, 780],
+        [1040, 660],
+        [1960, 700],
+        [2920, 680],
+      ],
+      [
+        [800, 380, 220],
+        [1720, 370, 220],
+        [2340, 390, 220],
+        [3060, 380, 220],
+      ]
+    ),
+    spawns: [
+      { typeId: "plaguebound", x: 500 },
+      { typeId: "plaguebound", x: 740 },
+      { typeId: "tempestwarden", x: 1300 },
+      { typeId: "plaguebound", x: 1540 },
+      { typeId: "plaguebound", x: 2150 },
+      { typeId: "tempestwarden", x: 2450 },
+      { typeId: "plaguebound", x: 2960 },
+      { typeId: "rotmother", x: 3400 },
+    ],
+  },
+  {
+    id: "throne",
+    biome: "divine",
+    name: "The Sundered Throne",
+    subtitle: "The last road — a shattered heaven where a fallen king still reigns",
+    requiredLevel: 50,
+    map: makeMap(
+      3600,
+      [
+        [0, 780],
+        [1040, 660],
+        [1960, 700],
+        [2920, 680],
+      ],
+      [
+        [800, 380, 220],
+        [1720, 370, 220],
+        [2340, 390, 220],
+        [3060, 380, 220],
+      ]
+    ),
+    spawns: [
+      { typeId: "seraphremnant", x: 500 },
+      { typeId: "seraphremnant", x: 740 },
+      { typeId: "rotmother", x: 1300 },
+      { typeId: "seraphremnant", x: 1540 },
+      { typeId: "seraphremnant", x: 2150 },
+      { typeId: "rotmother", x: 2450 },
+      { typeId: "seraphremnant", x: 2960 },
+      { typeId: "sunderedking", x: 3400 },
     ],
   },
 ];

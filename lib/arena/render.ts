@@ -342,6 +342,18 @@ const BIOMES: Record<string, {
     sky: ["#170a08", "#3a140c", "#5c1f0f"], far: "#2a0f0a", near: "#1a0a07",
     accent: "#fb923c", stars: false, cap: "#241210", capLit: "#5a2416",
   },
+  storm: {
+    sky: ["#131b2e", "#28405e", "#4f6d8f"], far: "#233b56", near: "#182a3d",
+    accent: "#dbeafe", stars: false, cap: "#3a4a5c", capLit: "#6b8299",
+  },
+  blight: {
+    sky: ["#0c1408", "#1c2e10", "#2e4a18"], far: "#1a2e12", near: "#10200a",
+    accent: "#a3e635", stars: false, cap: "#2a3d16", capLit: "#5a7a2a",
+  },
+  divine: {
+    sky: ["#3a2f52", "#8a6fb0", "#f4d9a0"], far: "#6a5a94", near: "#ecd9b8",
+    accent: "#fffbeb", stars: false, cap: "#c9a24a", capLit: "#fff2c9",
+  },
 };
 
 /**
@@ -438,9 +450,82 @@ function drawSky(
     }
     b.globalAlpha = 1;
   }
+  if (biomeId === "storm") {
+    // Intermittent lightning: a soft sky-wide flash plus a jagged bolt,
+    // on a wall-clock cycle so every player sees the same rhythm.
+    const t = Date.now() % 4000;
+    if (t < 120) {
+      const flashAlpha = t < 60 ? t / 60 : 1 - (t - 60) / 60;
+      b.globalAlpha = flashAlpha * 0.5;
+      b.fillStyle = "#eaf2ff";
+      b.fillRect(0, 0, vw, Math.round(vh * 0.6));
+      b.globalAlpha = 1;
+      let bx = Math.round(vw * 0.3 + Math.sin(t) * 40);
+      let by = 0;
+      const boltBottom = vh * 0.55;
+      for (let s = 0; s < 10 && by < boltBottom; s++) {
+        const nx = bx + (((s * 37) % 13) - 6);
+        const ny = by + vh * 0.06;
+        px(b, Math.min(bx, nx), ny - 1, Math.abs(nx - bx) + 2, 2, "#ffffff");
+        bx = nx;
+        by = ny;
+      }
+    }
+    // Faint driving rain.
+    b.fillStyle = "#c7d9f0";
+    b.globalAlpha = 0.25;
+    for (let i = 0; i < 40; i++) {
+      const ex = ((i * 83 - camX * 0.4 - Date.now() * 0.15) % vw + vw * 2) % vw;
+      const ey = (i * 53 + Date.now() * 0.3) % vh;
+      b.fillRect(Math.round(ex), Math.round(ey), 1, 3);
+    }
+    b.globalAlpha = 1;
+  }
+  if (biomeId === "blight") {
+    // Toxic spores drifting up with a lazy side-to-side wobble.
+    b.fillStyle = B.accent;
+    for (let i = 0; i < 28; i++) {
+      const wobble = Math.sin(i + Date.now() * 0.001) * 8;
+      const ex = ((i * 149 - camX * 0.3 + wobble) % vw + vw) % vw;
+      const ey = vh - ((i * 61 + Date.now() * 0.015) % vh) + vshift(0.25);
+      b.globalAlpha = 0.35 + 0.3 * Math.sin(i * 1.3 + Date.now() * 0.0015);
+      b.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+    }
+    b.globalAlpha = 1;
+  }
+  if (biomeId === "divine") {
+    // Soft golden light rays fanning down, plus drifting motes of light —
+    // the one deliberately bright, warm biome against an otherwise dark game.
+    b.globalAlpha = 0.1;
+    b.fillStyle = B.accent;
+    for (let i = 0; i < 6; i++) {
+      const period = vw + 300;
+      const rx = (((i * 220 - camX * 0.15) % period) + period) % period - 150;
+      for (let yy = 0; yy < vh; yy += 6) {
+        const wdt = 30 + yy * 0.15;
+        px(b, rx - wdt / 2 + Math.sin(yy * 0.02 + i) * 10, yy, wdt, 6, B.accent);
+      }
+    }
+    b.globalAlpha = 1;
+    b.fillStyle = "#fff8e1";
+    for (let i = 0; i < 30; i++) {
+      const ex = ((i * 97 - camX * 0.25) % vw + vw) % vw;
+      const ey = (i * 71 + Date.now() * 0.01) % vh;
+      b.globalAlpha = 0.4 + 0.3 * Math.sin(i * 1.7 + Date.now() * 0.001);
+      b.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+    }
+    b.globalAlpha = 1;
+  }
 
   const skyline = (speed: number, colour: string, baseTop: number, kind: string) => {
-    const gap = kind === "trees" ? 34 : kind === "houses" ? 52 : kind === "spires" ? 46 : kind === "peaks" ? 64 : 74;
+    const gap =
+      kind === "trees" ? 34 :
+      kind === "houses" ? 52 :
+      kind === "spires" ? 46 :
+      kind === "peaks" ? 64 :
+      kind === "ruins" ? 50 :
+      kind === "deadwood" ? 38 :
+      kind === "columns" ? 60 : 74;
     const off = -Math.round(camX * speed) % gap;
     const top = baseTop + vshift(speed);
     // Layers are drawn to well past the bottom edge so a rising camera never
@@ -506,6 +591,37 @@ function drawSky(
           const sy = hy - 6 - s * 8 - Math.round(((Date.now() * 0.02 + x) / 6) % 8);
           px(b, x + wdt / 2 - 1 + (s % 2), sy, 2, 2, "#2a1410");
         }
+      } else if (kind === "ruins") {
+        // Floating fortress rubble, drifting at different heights with a
+        // jagged broken underside — reads as debris, not solid ground.
+        const floatY = top + Math.round(Math.sin(x * 0.05) * 14);
+        const chunkH = 26;
+        px(b, x, floatY, 34, chunkH, colour);
+        px(b, x + 4, floatY - 3, 26, 3, colour);
+        for (let c = 0; c < 34; c += 6) {
+          const jag = 3 + (c % 12);
+          px(b, x + c, floatY + chunkH, 4, jag, colour);
+        }
+      } else if (kind === "deadwood") {
+        // Bare, twisted dead trees — a trunk and gnarled branches, no canopy.
+        px(b, x + 5, top + 10, 2, bottom - top - 10, colour);
+        for (let branch = 0; branch < 4; branch++) {
+          const by = top + 10 + branch * 8;
+          const dir = branch % 2 === 0 ? 1 : -1;
+          const len = 5 + (branch % 3) * 2;
+          const bx = dir === 1 ? x + 6 : x + 6 - len;
+          px(b, bx, by, len, 1, colour);
+          px(b, dir === 1 ? bx + len : bx, by - 3, 1, 4, colour);
+        }
+      } else if (kind === "columns") {
+        // Broken marble columns — some snapped mid-height, some still
+        // standing with their capital intact.
+        const snapped = Math.abs(Math.round(x * 0.7)) % 3 === 0;
+        const colH = Math.round(snapped ? (bottom - top) * 0.55 : bottom - top);
+        const colTop = bottom - colH;
+        px(b, x + 6, colTop, 14, colH, colour);
+        px(b, x + 4, colTop, 18, 4, colour);
+        if (!snapped) px(b, x + 4, colTop - 4, 18, 4, colour);
       } else {
         // Castle battlements.
         px(b, x, top, 30, bottom - top, colour);
@@ -520,7 +636,10 @@ function drawSky(
     biomeId === "undercity" ? "arches" :
     biomeId === "abyss" ? "spires" :
     biomeId === "frost" ? "peaks" :
-    biomeId === "forge" ? "chimneys" : "towers";
+    biomeId === "forge" ? "chimneys" :
+    biomeId === "storm" ? "ruins" :
+    biomeId === "blight" ? "deadwood" :
+    biomeId === "divine" ? "columns" : "towers";
   skyline(0.25, B.far, Math.round(vh * 0.36), kind);
   skyline(0.5, B.near, Math.round(vh * 0.52), kind);
 }
@@ -1365,6 +1484,80 @@ function drawMobFlourish(
       }
       px(b, x - half, topY + 3, w, 1, "#fde68a");
       px(b, x + dir * 2, topY + 4, 2, 1, "#fb923c");
+      break;
+    }
+    case "stormcaller": {
+      // A crackling storm-wraith: arcs of lightning branching off its limbs
+      // and a flickering white-blue afterimage instead of a solid cloak.
+      pxGlow(b, x, y - h * 0.45, h * 0.4, "#bfdbfe", 0.5);
+      for (let i = 0; i < 4; i++) {
+        const flick = Math.floor(Date.now() * 0.02 + i) % 3 === 0;
+        px(b, x - half + i * 3, torsoY + 1 + (i % 2) * 3, 2, 2, flick ? "#ffffff" : col(m.accent));
+      }
+      px(b, x + dir * (half + 3), topY + 2, 1, 6, "#eff6ff");
+      px(b, x + dir * (half + 4), topY, 1, 3, "#eff6ff");
+      break;
+    }
+    case "tempestwarden": {
+      // The spire's guardian: a wide lightning-white aura and a crackling
+      // halo of arcs, the storm given a crown.
+      pxGlow(b, x, y - h * 0.55, h * 0.95, "#eff6ff", 0.6);
+      px(b, x - half - 3, torsoY - 2, 5, 8, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 5, 8, col(m.accent));
+      const haloY = topY - 6;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + Date.now() * 0.002;
+        if (Math.floor(Date.now() * 0.015 + i) % 2 === 0) {
+          px(b, x + Math.round(Math.cos(a) * (half + 6)), haloY + Math.round(Math.sin(a) * 3), 2, 2, "#ffffff");
+        }
+      }
+      px(b, x - half, topY + 3, w, 1, "#dbeafe");
+      break;
+    }
+    case "plaguebound": {
+      // A rotting husk leaking sickly spores from cracked, weeping flesh.
+      pxGlow(b, x, y - h * 0.45, h * 0.35, "#a3e635", 0.4);
+      for (let i = 0; i < 4; i++) {
+        px(b, x - half + i * 3, torsoY + 2 + (i % 2) * 3, 2, 2, col(m.accent));
+      }
+      px(b, x + dir * 2, topY + 3, 1, 1, "#bef264");
+      px(b, x + dir * 4, topY + 4, 1, 1, "#bef264");
+      px(b, x - half, torsoY + torsoH, w, 1, col(m.accent));
+      break;
+    }
+    case "rotmother": {
+      // The hollow's matriarch: a bloated silhouette wreathed in a heavy
+      // toxic bloom, the thickest aura of any mob so far bar the finale.
+      pxGlow(b, x, y - h * 0.55, h * 0.9, "#bef264", 0.6);
+      px(b, x - half - 3, torsoY - 2, 5, 8, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 5, 8, col(m.accent));
+      for (let i = 0; i < 3; i++) {
+        px(b, x - half + 2 + i * 4, torsoY + 3 + i * 3, 2, 2, "#ecfccb");
+      }
+      px(b, x - half, topY + 3, w, 1, "#a3e635");
+      break;
+    }
+    case "seraphremnant": {
+      // A shattered angel: a faint golden halo and a trailing wisp of light
+      // in place of wings, the divine biome's regular guardian.
+      pxGlow(b, x, y - h * 0.45, h * 0.4, "#fef3c7", 0.45);
+      px(b, x + dir * 2, topY - 3, 4, 1, "#fffbeb");
+      for (let i = 0; i < 3; i++) {
+        px(b, x - half - dir * i, torsoY + i * 3, 1, 2, "#fde68a");
+      }
+      break;
+    }
+    case "sunderedking": {
+      // The last boss: a broken golden crown and the biggest, brightest
+      // aura in the game — every earlier boss's presence, doubled.
+      pxGlow(b, x, y - h * 0.6, h * 1.05, "#fffbeb", 0.7);
+      px(b, x - half - 3, torsoY - 2, 5, 9, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 5, 9, col(m.accent));
+      for (let i = 0; i < 7; i += 2) {
+        px(b, x - half + i * 2, topY - 6, 1, 5, "#fde68a");
+      }
+      px(b, x - half, topY + 2, w, 1, "#fffbeb");
+      px(b, x + dir * 2, topY + 4, 2, 1, "#fbbf24");
       break;
     }
   }
