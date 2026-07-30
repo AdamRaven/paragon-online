@@ -1,6 +1,7 @@
 import { getClass } from "./classes";
-import { DT, WALK_SPEED } from "./constants";
+import { DT, GRAVITY, MAX_FALL_SPEED, WALK_SPEED } from "./constants";
 import { ArenaEngine, emptyIntent, type ArenaCallbacks, type Intent } from "./engine";
+import { groundAt } from "./map";
 import { MOB_TYPES, getStage, mobAttackSpec, type MobType, type Stage } from "./mobs";
 import { itemName, rollDrops, type Item } from "./items";
 import {
@@ -15,6 +16,22 @@ import type { Fighter } from "./types";
 
 const MOB_RESPAWN = 7;
 const PLAYER_RESPAWN = 2.5;
+/** How close (world units) the player has to walk to auto-pick up a drop. */
+const PICKUP_RADIUS_X = 34;
+const PICKUP_RADIUS_Y = 50;
+
+/** A dead mob's loot, physically sitting in the world until walked over. */
+export interface LootDrop {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  onGround: boolean;
+  item: Item;
+  /** Seconds alive, used to phase the idle bob/glint animation. */
+  age: number;
+}
 
 export interface AdventureCallbacks extends ArenaCallbacks {
   onExp(amount: number, mobName: string, result: LevelUpResult): void;
@@ -31,9 +48,11 @@ export interface AdventureCallbacks extends ArenaCallbacks {
 export class AdventureEngine extends ArenaEngine {
   save: AdventureSave;
   stage: Stage;
+  lootDrops: LootDrop[] = [];
   private mobBrains = new Map<string, MobBrain>();
   private acb: AdventureCallbacks;
   private mobSeq = 0;
+  private lootSeq = 0;
 
   constructor(save: AdventureSave, cb: AdventureCallbacks) {
     super(save.classId as "paragon" | "shedim", "shedim", cb);
@@ -67,6 +86,10 @@ export class AdventureEngine extends ArenaEngine {
     p.attackPower = d.attackPower;
     p.speedMult = d.speedMult;
     p.attackSpeed = d.attackSpeed;
+    p.lifesteal = d.lifesteal;
+    p.negation = d.negation;
+    p.regenHp = d.regenHp;
+    p.regenMana = d.regenMana;
     p.level = this.save.level;
     p.name = cls.name;
     p.hp = Math.min(p.maxHp, p.hp + Math.max(0, d.maxHp - prevMax));
@@ -99,12 +122,13 @@ export class AdventureEngine extends ArenaEngine {
     if (this.stage.isTown) return;
     for (const spawn of this.stage.spawns) {
       const type = MOB_TYPES[spawn.typeId];
-      if (type) this.spawnMob(type, spawn.x);
+      if (type) this.spawnMob(type, spawn.x, spawn.y);
     }
   }
 
-  private spawnMob(type: MobType, x: number): Fighter {
+  private spawnMob(type: MobType, x: number, y?: number): Fighter {
     const base = this.fighters[0];
+    const feetY = y ?? this.map.spawnA.y;
     const mob: Fighter = {
       ...base,
       id: `m${this.mobSeq++}`,
@@ -116,9 +140,9 @@ export class AdventureEngine extends ArenaEngine {
       level: type.level,
       expValue: type.expValue,
       x,
-      y: this.map.spawnA.y,
+      y: feetY,
       spawnX: x,
-      spawnY: this.map.spawnA.y,
+      spawnY: feetY,
       vx: 0,
       vy: 0,
       w: type.w,
@@ -131,6 +155,12 @@ export class AdventureEngine extends ArenaEngine {
       attackRange: type.range,
       speedMult: type.speed / WALK_SPEED,
       attackSpeed: 1,
+      // Mobs never equip gear — without this they'd inherit whatever
+      // legendary affixes the player currently has on.
+      lifesteal: 0,
+      negation: 0,
+      regenHp: 0,
+      regenMana: 0,
       state: "idle",
       stateTime: 0,
       action: null,
@@ -156,6 +186,64 @@ export class AdventureEngine extends ArenaEngine {
     this.stepAll(playerIntent, (f) => this.mobBrains.get(f.id)?.cache ?? emptyIntent());
 
     this.handleDeaths();
+    this.updateLootDrops();
+  }
+
+  /** Spawns one item, popped up and out from a kill spot to fall to the floor. */
+  private spawnLootDrop(item: Item, x: number, y: number) {
+    this.lootDrops.push({
+      id: `l${this.lootSeq++}`,
+      x: x + (Math.random() - 0.5) * 30,
+      y: y - 10,
+      vx: (Math.random() - 0.5) * 3,
+      vy: -6 - Math.random() * 3,
+      onGround: false,
+      item,
+      age: 0,
+    });
+  }
+
+  /** Physics for dropped loot (gravity + settle), plus the walk-over pickup. */
+  private updateLootDrops() {
+    if (!this.lootDrops.length) return;
+    const player = this.player;
+    const remaining: LootDrop[] = [];
+    for (const drop of this.lootDrops) {
+      drop.age += DT;
+      if (!drop.onGround) {
+        drop.vy = Math.min(MAX_FALL_SPEED, drop.vy + GRAVITY);
+        drop.x += drop.vx;
+        drop.y += drop.vy;
+
+        const g = groundAt(this.map, drop.x);
+        let settledAt: number | null = null;
+        if (g !== null && drop.vy >= 0 && drop.y >= g) settledAt = g;
+        for (const p of this.map.platforms) {
+          if (drop.x < p.x || drop.x > p.x + p.w) continue;
+          if (drop.vy >= 0 && drop.y >= p.y && (settledAt === null || p.y < settledAt)) {
+            settledAt = p.y;
+          }
+        }
+        if (settledAt !== null) {
+          drop.y = settledAt;
+          drop.vx = 0;
+          drop.vy = 0;
+          drop.onGround = true;
+        }
+      }
+
+      const near =
+        Math.abs(player.x - drop.x) < PICKUP_RADIUS_X &&
+        Math.abs(player.y - drop.y) < PICKUP_RADIUS_Y;
+      if (near && player.state !== "dead") {
+        this.save.inventory.push(drop.item);
+        this.pushFloating(drop.x, drop.y - 30, itemName(drop.item), "#fcd34d", 14);
+        this.acb.onLoot([drop.item]);
+        continue; // picked up — don't keep it
+      }
+      remaining.push(drop);
+    }
+    this.lootDrops = remaining;
   }
 
   private handleDeaths() {
@@ -176,22 +264,10 @@ export class AdventureEngine extends ArenaEngine {
           this.spawnKillFx(f, gained);
           this.acb.onExp(gained, f.name, result);
 
-          // Drops go straight into the backpack.
+          // Drops pop out onto the floor — walk over them to pick them up.
           const type = MOB_TYPES[f.mobTypeId!];
           const drops = rollDrops(f.level, !!type?.isBoss);
-          if (drops.length) {
-            this.save.inventory.push(...drops);
-            for (let d = 0; d < drops.length; d++) {
-              this.pushFloating(
-                f.x + (d - (drops.length - 1) / 2) * 26,
-                f.y - f.h - 24 - d * 10,
-                itemName(drops[d]),
-                "#fcd34d",
-                14
-              );
-            }
-            this.acb.onLoot(drops);
-          }
+          for (const item of drops) this.spawnLootDrop(item, f.x, f.y);
 
           if (result.levelsGained > 0) {
             this.applyProgression();
@@ -276,6 +352,7 @@ export class AdventureEngine extends ArenaEngine {
     this.hitboxes = [];
     this.projectiles = [];
     this.blackHoles = [];
+    this.lootDrops = [];
 
     const p = this.fighters[0];
     p.x = this.map.spawnA.x;
@@ -344,10 +421,19 @@ class MobBrain {
       i.moveX = this.patrolDir * 0.55;
     }
 
-    // Never walk into a gap.
+    // Never walk off the edge of whatever they're standing on. The floor
+    // itself now spans the whole map, but a mob parked on an elevated
+    // platform still has a real ledge to fall off — and mobs never jump, so
+    // once they're down they're not coming back up.
     if (i.moveX !== 0 && self.onGround) {
-      const ahead = engine.groundAtX(self.x + Math.sign(i.moveX) * 55);
-      if (ahead === null) {
+      const ahead = self.x + Math.sign(i.moveX) * 55;
+      const platform = engine.map.platforms.find(
+        (p) => self.y <= p.y + 2 && self.y >= p.y - 2 && self.x >= p.x - 4 && self.x <= p.x + p.w + 4
+      );
+      const supported = platform
+        ? ahead >= platform.x && ahead <= platform.x + platform.w
+        : engine.groundAtX(ahead) !== null;
+      if (!supported) {
         i.moveX = 0;
         this.patrolDir = (-this.patrolDir) as 1 | -1;
       }

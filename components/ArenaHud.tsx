@@ -241,7 +241,7 @@ function FighterPanel({
       <div className="bar hpbar">
         <div className="bar-fill" style={{ width: `${hpPct * 100}%` }} />
         <div className="bar-text">
-          {hp} / {maxHp}
+          {Math.round(hp)} / {maxHp}
         </div>
       </div>
       {!hideMana && (
@@ -251,7 +251,7 @@ function FighterPanel({
             style={{ width: `${(mana / maxMana) * 100}%` }}
           />
           <div className="bar-text">
-            {manaLabel} {mana} / {maxMana}
+            {manaLabel} {Math.round(mana)} / {maxMana}
           </div>
         </div>
       )}

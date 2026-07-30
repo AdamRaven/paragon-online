@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ItemIcon } from "@/components/ItemIcon";
 import {
+  EFFECT_META,
   RARITY_META,
   base,
   itemName,
@@ -30,10 +31,20 @@ export function statLine(item: Item): string {
   return parts.join("   ") || "—";
 }
 
+/** A legendary's magical affix, e.g. "Heal for 14% of damage dealt". */
+export function effectLine(item: Item): string | null {
+  if (!item.effect) return null;
+  return EFFECT_META[item.effect.kind].describe(item.effect.value);
+}
+
 /** A single weighted number so items can be ranked, not just labelled. */
 function statScore(item: Item): number {
   const s = itemStats(item);
-  return (s.attack ?? 0) * 4 + (s.hp ?? 0) * 0.4 + (s.mana ?? 0) * 0.2 + (s.speed ?? 0) * 200;
+  // A legendary affix is worth chasing even over a plain stat upgrade.
+  const effectBonus = item.effect ? 250 : 0;
+  return (
+    (s.attack ?? 0) * 4 + (s.hp ?? 0) * 0.4 + (s.mana ?? 0) * 0.2 + (s.speed ?? 0) * 200 + effectBonus
+  );
 }
 
 /** Difference in attack/hp against whatever occupies the same slot. */
@@ -81,12 +92,18 @@ export function ItemRow({
   const b = base(item.baseId);
   const r = RARITY_META[item.rarity];
   const cmp = compare(item, compareTo);
+  const fx = effectLine(item);
   return (
     <div className="item-row" style={{ borderLeft: `4px solid ${r.color}` }}>
       <ItemIcon icon={b.icon} color={r.color} />
       <span className="item-main">
         <strong style={{ color: r.color }}>{itemName(item)}</strong>
         <small className="item-stats">{statLine(item)}</small>
+        {fx && (
+          <small className="item-effect" style={{ color: r.color }}>
+            {fx}
+          </small>
+        )}
         <small className="item-sub">
           {r.label} · {b.kind}
           {cmp ? (

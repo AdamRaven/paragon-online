@@ -1995,6 +1995,7 @@ body {
 .item-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .item-main strong { font-size: 12px; }
 .item-stats { color: var(--accent); font-size: 10px; letter-spacing: 0.04em; }
+.item-effect { font-size: 10px; font-style: italic; font-weight: 600; }
 .item-sub { color: var(--muted); font-size: 9px; }
 .cmp-up { color: var(--accent); font-style: normal; font-weight: 700; }
 .cmp-down { color: var(--danger); font-style: normal; }

@@ -1,5 +1,7 @@
+import type { LootDrop } from "./adventure";
 import { getClass } from "./classes";
 import type { ArenaEngine } from "./engine";
+import { RARITY_META } from "./items";
 import { MOB_TYPES } from "./mobs";
 import {
   WORLD_PER_PIXEL as S,
@@ -272,6 +274,7 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   drawMerchant(b, engine, wx, wy, engine.time);
   drawVendor(b, engine, wx, wy, engine.time);
   drawBank(b, engine, wx, wy, engine.time);
+  drawLootDrops(b, engine, wx, wy);
   for (const f of engine.fighters) drawFighter(b, f, wx, wy, engine.time);
   drawHitboxes(b, engine, wx, wy);
   for (const p of engine.projectiles) {
@@ -429,10 +432,9 @@ function drawSky(
       const x = ((sx % vw) + vw) % vw;
       b.fillRect(Math.round(x), Math.round(sy), 1, 1);
     }
-    // A moon, fixed in the sky.
-    const moonY = Math.round(vh * 0.16) + vshift(0.1);
-    pxCircle(b, Math.round(vw * 0.78), moonY, 7, "#c9d6f0");
-    pxCircle(b, Math.round(vw * 0.80), moonY - 1, 5, B.sky[0]);
+  }
+  if (biomeId !== "town" && biomeId !== "undercity") {
+    drawCelestialBody(b, vw, vh, vshift, biomeId, B.sky[0]);
   }
   if (biomeId === "keep") {
     // Embers drifting up from the lava below.
@@ -730,6 +732,82 @@ function drawSky(
         }
       }
     }
+  }
+}
+
+/**
+ * A biome-appropriate sun/moon, fixed high in the sky (only drifting with
+ * the camera's vertical parallax, like the plain moon this replaced). Town
+ * gets its own dusk sun inline above; the undercity has no open sky to put
+ * one in.
+ */
+function drawCelestialBody(
+  b: CanvasRenderingContext2D,
+  vw: number,
+  vh: number,
+  vshift: (speed: number) => number,
+  biomeId: string,
+  skyTop: string
+) {
+  const y = Math.round(vh * 0.16) + vshift(0.1);
+  const x = Math.round(vw * 0.78);
+  switch (biomeId) {
+    case "outskirts":
+      // A calm, classic night-sky moon.
+      pxGlow(b, x, y, 9, "#c9d6f0", 0.3);
+      pxCircle(b, x, y, 7, "#c9d6f0");
+      pxCircle(b, x + 2, y - 1, 5, skyTop);
+      break;
+    case "keep":
+      // A dying ember of a moon, smoldering red against the firelit sky.
+      pxGlow(b, x, y, 10, "#c2402a", 0.45);
+      pxCircle(b, x, y, 7, "#7a2418");
+      pxCircle(b, x, y, 5, "#c2402a");
+      pxCircle(b, x + 2, y - 1, 3, skyTop);
+      break;
+    case "abyss":
+      // A dark sun: an eclipse-black disc ringed in violet corona.
+      pxGlow(b, x, y, 13, "#8b5cf6", 0.4);
+      pxCircle(b, x, y, 8, "#c4b5fd");
+      pxCircle(b, x, y, 6, "#0a0616");
+      break;
+    case "frost":
+      // A pale, hard-edged winter moon with a faint icy halo ring.
+      b.globalAlpha = 0.25;
+      pxCircle(b, x, y, 12, "#ffffff");
+      pxCircle(b, x, y, 11, skyTop);
+      b.globalAlpha = 1;
+      pxGlow(b, x, y, 13, "#dff3ff", 0.3);
+      pxCircle(b, x, y, 7, "#eaf7ff");
+      pxCircle(b, x + 2, y - 1, 5, skyTop);
+      break;
+    case "forge":
+      // A furnace sun, hazed red-orange as if seen through rising smoke.
+      pxGlow(b, x, y, 16, "#fb923c", 0.35);
+      pxCircle(b, x, y, 9, "#fca85c");
+      pxCircle(b, x, y, 6, "#fff0d9");
+      break;
+    case "storm":
+      // A moon mostly swallowed by drifting storm cloud.
+      pxGlow(b, x, y, 10, "#dbeafe", 0.25);
+      pxCircle(b, x, y, 7, "#c7d9f0");
+      pxCircle(b, x + 3, y + 4, 8, "#28405e");
+      pxCircle(b, x - 4, y + 2, 6, "#28405e");
+      break;
+    case "blight":
+      // A sickly yellow-green moon, poisoned along with everything else here.
+      pxGlow(b, x, y, 11, "#a3e635", 0.3);
+      pxCircle(b, x, y, 7, "#c8e06a");
+      pxCircle(b, x + 2, y - 1, 5, skyTop);
+      break;
+    case "divine":
+      // A radiant golden sun — the single brightest thing in the game.
+      pxGlow(b, x, y, 20, "#fff2cf", 0.55);
+      pxCircle(b, x, y, 11, "#ffe9a8");
+      pxCircle(b, x, y, 7, "#fffbeb");
+      break;
+    default:
+      break;
   }
 }
 
@@ -1042,6 +1120,31 @@ function drawVillageProps(
     px(b, x - 11, y - 24, 22, 10, "#6b4a2e");
     px(b, x - 11, y - 24, 22, 1, "#8f6738");
     pxText(b, "EMBERHOLD", x, y - 27, "#f6b352", 5);
+  }
+}
+
+/** A dead mob's loot: a little drawstring pouch with a rarity-tinted gem,
+ * glinting on the ground until the player walks over it. */
+function drawLootDrops(
+  b: CanvasRenderingContext2D,
+  engine: ArenaEngine,
+  wx: (v: number) => number,
+  wy: (v: number) => number
+) {
+  const drops = (engine as ArenaEngine & { lootDrops?: LootDrop[] }).lootDrops;
+  if (!drops || !drops.length) return;
+  for (const d of drops) {
+    const x = wx(d.x);
+    const y = wy(d.y);
+    const rarity = RARITY_META[d.item.rarity];
+    const bob = d.onGround ? Math.round(Math.sin(d.age * 3) * 1) : 0;
+    const flicker = 0.5 + 0.5 * Math.sin(d.age * 4);
+    pxGlow(b, x, y - 6 + bob, 7, rarity.glow, 0.35 + flicker * 0.2);
+    px(b, x - 4, y - 8 + bob, 8, 7, "#4a3626");
+    px(b, x - 4, y - 8 + bob, 8, 1, "#6b4a2e");
+    px(b, x - 3, y - 9 + bob, 6, 2, "#7a5636");
+    px(b, x - 1, y - 6 + bob, 3, 3, rarity.color);
+    px(b, x, y - 7 + bob, 1, 1, "#ffffff");
   }
 }
 

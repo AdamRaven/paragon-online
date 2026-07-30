@@ -177,6 +177,11 @@ export interface Fighter {
   mana: number;
   maxMana: number;
   armor: number;
+  /** Legendary gear affixes; 0 unless something equipped rolled one. */
+  lifesteal: number;
+  negation: number;
+  regenHp: number;
+  regenMana: number;
 
   state: FighterState;
   stateTime: number;

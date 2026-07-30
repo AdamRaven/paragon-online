@@ -1,4 +1,4 @@
-import { equippedStats, type EquipSlot, type Item } from "./items";
+import { equippedEffects, equippedStats, type EquipSlot, type Item } from "./items";
 import { DEFAULT_STAGE } from "./mobs";
 import type { ClassDef } from "./types";
 
@@ -86,6 +86,11 @@ export interface DerivedArenaStats {
   /** Multiplier on how fast attack animations advance. */
   attackSpeed: number;
   power: number;
+  /** Legendary gear affixes, 0 unless something equipped rolled one. */
+  lifesteal: number;
+  negation: number;
+  regenHp: number;
+  regenMana: number;
 }
 
 /**
@@ -99,6 +104,7 @@ export function deriveArenaStats(
   equipped: Partial<Record<EquipSlot, Item>> = {}
 ): DerivedArenaStats {
   const gear = equippedStats(equipped);
+  const fx = equippedEffects(equipped);
   const str = stats.str - BASE_STAT;
   const agi = stats.agi - BASE_STAT;
   const vit = stats.vit - BASE_STAT;
@@ -113,7 +119,18 @@ export function deriveArenaStats(
   const power = Math.round(
     attackPower * 12 + maxHp * 0.8 + maxMana * 0.5 + level * 25
   );
-  return { maxHp, maxMana, attackPower, speedMult, attackSpeed, power };
+  return {
+    maxHp,
+    maxMana,
+    attackPower,
+    speedMult,
+    attackSpeed,
+    power,
+    lifesteal: fx.lifesteal,
+    negation: fx.negation,
+    regenHp: fx.regenHp,
+    regenMana: fx.regenMana,
+  };
 }
 
 export interface LevelUpResult {

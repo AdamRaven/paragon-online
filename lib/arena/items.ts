@@ -2,12 +2,13 @@
 
 export type ItemKind = "weapon" | "armor" | "trinket" | "trash";
 export type EquipSlot = "weapon" | "armor" | "trinket";
-export type Rarity = "common" | "uncommon" | "rare" | "epic";
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 /**
- * Four visible tiers: white (common), green (uncommon), blue (rare) and gold
- * (epic, the best gear). Colors are chosen to read clearly both on the dark
- * panel background and as a small icon border.
+ * Five visible tiers: white (common), green (uncommon), blue (rare), gold
+ * (epic) and orange (legendary, the rarest gear in the game — only the
+ * endgame's toughest bosses can drop one). Colors are chosen to read clearly
+ * both on the dark panel background and as a small icon border.
  */
 export const RARITY_META: Record<
   Rarity,
@@ -17,6 +18,28 @@ export const RARITY_META: Record<
   uncommon: { label: "Uncommon", color: "#3ddc70", glow: "#1f9e4d", statMult: 1.35, valueMult: 2 },
   rare: { label: "Rare", color: "#3fa1ff", glow: "#1f6fd6", statMult: 1.8, valueMult: 4 },
   epic: { label: "Epic", color: "#ffc93f", glow: "#e0961a", statMult: 2.5, valueMult: 8 },
+  legendary: { label: "Legendary", color: "#ff8a3d", glow: "#ff6a00", statMult: 3.4, valueMult: 18 },
+};
+
+/** The magical affixes only a legendary item can roll. */
+export type ItemEffect = "lifesteal" | "negation" | "regen";
+
+export const EFFECT_META: Record<
+  ItemEffect,
+  { label: string; describe: (value: number) => string }
+> = {
+  lifesteal: {
+    label: "Lifesteal",
+    describe: (v) => `Heal for ${Math.round(v * 100)}% of damage dealt`,
+  },
+  negation: {
+    label: "Damage Negation",
+    describe: (v) => `${Math.round(v * 100)}% chance to negate incoming damage`,
+  },
+  regen: {
+    label: "Vitality",
+    describe: (v) => `Regenerate ${v} HP and ${Math.round(v * 0.6)} mana per second`,
+  },
 };
 
 export interface ItemStats {
@@ -52,6 +75,8 @@ export interface Item {
   rarity: Rarity;
   /** Enhancement level, 0..MAX_PLUS. Weapons only. */
   plus: number;
+  /** Only legendaries roll one of these. */
+  effect?: { kind: ItemEffect; value: number };
 }
 
 export const MAX_PLUS = 10;
@@ -157,16 +182,37 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/**
+ * Rarity scales with the mob's own level, so the higher-level maps naturally
+ * skew toward better drops — and legendary is gated behind level 45+, which
+ * in practice means only the Tempest Spire's boss onward (Tempest Warden,
+ * Rotmother, the Sundered King) can drop one at all.
+ */
 function rollRarity(mobLevel: number, boss: boolean): Rarity {
-  const r = Math.random() + (boss ? 0.35 : 0) + mobLevel * 0.006;
-  if (r > 1.25) return "epic";
-  if (r > 1.0) return "rare";
-  if (r > 0.68) return "uncommon";
+  const r = Math.random() + (boss ? 0.35 : 0) + mobLevel * 0.008;
+  if (mobLevel >= 45 && r > 1.55) return "legendary";
+  if (r > 1.2) return "epic";
+  if (r > 0.95) return "rare";
+  if (r > 0.62) return "uncommon";
   return "common";
 }
 
+/** One randomly rolled legendary affix, magnitude included. */
+function rollEffect(): { kind: ItemEffect; value: number } {
+  const roll = Math.random();
+  if (roll < 0.34) {
+    return { kind: "lifesteal", value: Math.round((0.08 + Math.random() * 0.1) * 1000) / 1000 };
+  }
+  if (roll < 0.67) {
+    return { kind: "negation", value: Math.round((0.12 + Math.random() * 0.13) * 1000) / 1000 };
+  }
+  return { kind: "regen", value: Math.round(6 + Math.random() * 8) };
+}
+
 export function makeItem(baseId: string, rarity: Rarity): Item {
-  return { uid: uid(), baseId, rarity, plus: 0 };
+  const item: Item = { uid: uid(), baseId, rarity, plus: 0 };
+  if (rarity === "legendary") item.effect = rollEffect();
+  return item;
 }
 
 /**
@@ -239,6 +285,35 @@ export function equippedStats(
     total.speed += s.speed ?? 0;
   }
   return total;
+}
+
+export interface GearEffects {
+  lifesteal: number;
+  negation: number;
+  regenHp: number;
+  regenMana: number;
+}
+
+/** Sum of every equipped legendary's combat affix, softly capped so stacking
+ * three of the same one can't trivialise a fight. */
+export function equippedEffects(
+  equipped: Partial<Record<EquipSlot, Item>>
+): GearEffects {
+  let lifesteal = 0;
+  let negation = 0;
+  let regenHp = 0;
+  for (const item of Object.values(equipped)) {
+    if (!item?.effect) continue;
+    if (item.effect.kind === "lifesteal") lifesteal += item.effect.value;
+    else if (item.effect.kind === "negation") negation += item.effect.value;
+    else if (item.effect.kind === "regen") regenHp += item.effect.value;
+  }
+  return {
+    lifesteal: Math.min(0.5, lifesteal),
+    negation: Math.min(0.6, negation),
+    regenHp,
+    regenMana: Math.round(regenHp * 0.6),
+  };
 }
 
 // ------------------------------------------------------------- enhancement

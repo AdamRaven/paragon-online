@@ -206,6 +206,10 @@ export class ArenaEngine {
       mana: 0,
       maxMana: cls.maxMana,
       armor: cls.baseArmor,
+      lifesteal: 0,
+      negation: 0,
+      regenHp: 0,
+      regenMana: 0,
       state: "idle",
       stateTime: 0,
       action: null,
@@ -606,6 +610,11 @@ export class ArenaEngine {
 
     const cls = getClass(f.classId);
     f.armor = cls.baseArmor - (f.armorBreak > 0 ? ARMOR_BREAK_AMOUNT : 0);
+
+    // Legendary Vitality: passive regen while alive, gear-derived so mobs
+    // (which never carry equipment) are always at 0 and unaffected.
+    if (f.regenHp > 0 && f.hp > 0) f.hp = Math.min(f.maxHp, f.hp + f.regenHp * DT);
+    if (f.regenMana > 0) f.mana = Math.min(f.maxMana, f.mana + f.regenMana * DT);
 
     // Combo chains lapse if nothing lands inside the window.
     f.chainTimer = dec(f.chainTimer);
@@ -1039,6 +1048,13 @@ export class ArenaEngine {
     source: Fighter,
     label: string
   ) {
+    // Legendary Damage Negation: a flat chance to shrug the whole hit off,
+    // rolled before armour so it's a full negation rather than a discount.
+    if (target.negation > 0 && Math.random() < target.negation) {
+      this.spawnText(target.x, target.y - target.h - 4, "NEGATED", "#7dd3fc", 16);
+      return;
+    }
+
     // Armour is a straight percentage; ArmorBreak can drive it negative so the
     // victim takes extra damage.
     const mitigated = raw * (1 - target.armor / 100);
@@ -1051,7 +1067,15 @@ export class ArenaEngine {
       target.isPlayer ? "#f87171" : "#ffffff",
       17
     );
-    void source;
+
+    // Legendary Lifesteal: the attacker heals off whatever actually landed.
+    if (source.lifesteal > 0 && source.hp > 0) {
+      const healed = Math.min(source.maxHp - source.hp, Math.round(dmg * source.lifesteal));
+      if (healed > 0) {
+        source.hp += healed;
+        this.spawnText(source.x, source.y - source.h - 20, `+${healed}`, "#4ade80", 14);
+      }
+    }
     void label;
   }
 
