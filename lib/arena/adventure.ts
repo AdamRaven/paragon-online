@@ -386,6 +386,9 @@ class MobBrain {
   private patrolDir: 1 | -1 = 1;
   private attackCd = 0;
   private repathCd = 0;
+  // Bosses only: delay the first slam so a fight always opens with a few
+  // normal swings before the telegraphed one shows up.
+  private specialCd = 4 + Math.random() * 3;
 
   constructor(type: MobType) {
     this.type = type;
@@ -405,6 +408,7 @@ class MobBrain {
 
     this.attackCd -= DT;
     this.repathCd -= DT;
+    if (this.type.isBoss) this.specialCd -= DT;
 
     const dx = player.x - self.x;
     const dist = Math.abs(dx);
@@ -412,7 +416,13 @@ class MobBrain {
     const dir: 1 | -1 = dx > 0 ? 1 : -1;
 
     if (dist < this.type.aggro && sameHeight && player.hp > 0) {
-      if (dist > this.type.range * 0.8) {
+      const specialRange = this.type.range * 1.6;
+      if (this.type.isBoss && this.specialCd <= 0 && dist <= specialRange) {
+        i.special = true;
+        // Long telegraph, so the cooldown is long too — this is meant to be
+        // a rare "watch out" moment, not a constant threat.
+        this.specialCd = 9 + Math.random() * 5;
+      } else if (dist > this.type.range * 0.8) {
         i.moveX = dir;
       } else if (this.attackCd <= 0) {
         i.lmb = true;

@@ -71,6 +71,36 @@ export class ArenaAI {
     const dir = dx > 0 ? 1 : -1;
     const range = cls.attackRange;
 
+    // React to the foe's own attack instead of just running the usual
+    // distance/timer script: back off while they're still winding up (a
+    // real opponent doesn't stand still for a telegraphed swing), and
+    // guarantee a follow-up the instant their recovery leaves them open,
+    // rather than leaving a whiff unpunished until the next random
+    // aggression roll happens to land.
+    if (!self.action && foe.action && foe.state === "attack") {
+      const { activeAt, activeDuration } = foe.action.spec;
+      const threatRange = getClass(foe.classId).attackRange * foe.action.spec.rangeMult * 1.15;
+      if (foe.action.elapsed < activeAt) {
+        if (dist < threatRange && self.onGround && Math.random() < t.react) {
+          intent.moveX = -dir;
+          intent.sprint = true;
+          if (Math.random() < 0.35) {
+            intent.up = true;
+            intent.jump = true;
+            intent.jumpHeld = true;
+            this.jumpHoldTimer = 0.3;
+          }
+          return intent;
+        }
+      } else if (foe.action.elapsed >= activeAt + activeDuration) {
+        if (dist <= range * 1.05 && this.attackTimer <= 0) {
+          intent.lmb = true;
+          this.attackTimer = 0.22 + t.react * 0.3;
+          return intent;
+        }
+      }
+    }
+
     // Face and close on the target.
     if (dist > range * 0.85) {
       intent.moveX = dir;

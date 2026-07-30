@@ -337,6 +337,30 @@ export function mobAttackSpec(type: MobType): AttackSpec {
   };
 }
 
+/**
+ * The boss-only telegraphed slam: a long, visible windup (see the render-side
+ * red warning ring) that trades speed for range, damage and a knockdown —
+ * punishing for standing still, dodgeable for anyone actually paying
+ * attention. Bosses otherwise use the exact same swing as trash mobs, which
+ * made every boss fight just a bigger-numbers version of a regular pull;
+ * this is the one attack meant to demand a different response.
+ */
+export function mobBossSpecialSpec(type: MobType): AttackSpec {
+  return {
+    id: "boss-special",
+    label: `${type.name} Slam`,
+    kind: "lmb",
+    castTime: 1.5,
+    activeAt: 1.1,
+    activeDuration: 0.12,
+    damageMult: 2.4,
+    rangeMult: 1.8,
+    height: type.h * 0.8,
+    knockback: 9,
+    effect: "knockdown",
+  };
+}
+
 export interface MobSpawn {
   typeId: string;
   x: number;

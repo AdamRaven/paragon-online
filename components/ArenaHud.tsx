@@ -29,6 +29,8 @@ export interface ArenaHudData {
   hideEnemyMana?: boolean;
   cooldowns: Record<string, number>;
   comboStacks: number;
+  /** Hits landed in a row without being hit back — see Fighter.hitStreak. */
+  hitStreak: number;
   lmbChain: number;
   rmbChain: number;
   manaflowCharge: number;
@@ -102,6 +104,11 @@ export function ArenaHud({
           )}
           {hud.rmbChain > 0 && (
             <span className="arena-tag rmb">RMB ×{hud.rmbChain}</span>
+          )}
+          {hud.hitStreak >= 2 && (
+            <span className={`arena-tag combo${hud.hitStreak >= 5 ? " combo-hot" : ""}`}>
+              COMBO ×{hud.hitStreak}
+            </span>
           )}
           {hud.playerClass === "paragon" && hud.comboStacks > 0 && (
             <span className="arena-tag combo">

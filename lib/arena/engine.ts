@@ -63,7 +63,7 @@ import {
   WALK_SPEED,
 } from "./constants";
 import { ARENA, groundAt } from "./map";
-import { MOB_TYPES, mobAttackSpec } from "./mobs";
+import { MOB_TYPES, mobAttackSpec, mobBossSpecialSpec } from "./mobs";
 import type {
   ActiveAction,
   AttackSpec,
@@ -98,6 +98,8 @@ export interface Intent {
   r: boolean;
   f: boolean;
   shift: boolean;
+  /** Mob-only: use the boss telegraphed slam instead of the regular swing. */
+  special: boolean;
 }
 
 export function emptyIntent(): Intent {
@@ -119,6 +121,7 @@ export function emptyIntent(): Intent {
     r: false,
     f: false,
     shift: false,
+    special: false,
   };
 }
 
@@ -248,6 +251,8 @@ export class ArenaEngine {
       recentHitsTimer: 0,
       comboKillerStacks: 0,
       comboKillerTimer: 0,
+      hitStreak: 0,
+      bestHitStreak: 0,
       manaflowHold: 0,
       cooldowns: {},
       sprinting: false,
@@ -483,10 +488,11 @@ export class ArenaEngine {
 
     // --- basic attacks -----------------------------------------------------
     const cls = getClass(f.classId);
-    if (input.lmb && f.isMob) {
+    if ((input.lmb || input.special) && f.isMob) {
       const type = MOB_TYPES[f.mobTypeId!];
       if (type) {
-        this.startAttack(f, mobAttackSpec(type));
+        const useSpecial = input.special && type.isBoss;
+        this.startAttack(f, useSpecial ? mobBossSpecialSpec(type) : mobAttackSpec(type));
         this.advanceAction(f, opponent);
         this.physics(f);
         return;
@@ -938,6 +944,7 @@ export class ArenaEngine {
       this.launch(attacker, 0.6);
       target.state = "idle";
       target.reflectTimer = 0;
+      attacker.hitStreak = 0;
       this.shake = Math.max(this.shake, 12);
       this.burst(target.x, target.y - target.h * 0.6, "#fbbf24", 24);
       return;
@@ -950,6 +957,7 @@ export class ArenaEngine {
       if (fromFront) {
         this.spawnText(target.x, target.y - target.h - 6, "GUARD", "#93c5fd", 13);
         this.spawnImpactAt(target.x + target.facing * 12, target.y - target.h * 0.6, "#93c5fd");
+        attacker.hitStreak = 0;
         return;
       }
     }
@@ -977,6 +985,24 @@ export class ArenaEngine {
       attacker.comboKillerStacks + 1
     );
     attacker.comboKillerTimer = COMBOKILLER_WINDOW;
+
+    // Hit streak: landing a hit extends it, getting hit resets it — unlike
+    // comboKillerStacks this breaks the instant the exchange turns around,
+    // so it reads as "how good is this exchange" rather than "how recently
+    // was I attacking." Announce it once it's actually a combo (2+), not
+    // every single opening hit.
+    attacker.hitStreak += 1;
+    attacker.bestHitStreak = Math.max(attacker.bestHitStreak, attacker.hitStreak);
+    target.hitStreak = 0;
+    if (attacker.hitStreak >= 2) {
+      this.spawnText(
+        target.x,
+        target.y - target.h - 30,
+        `COMBO x${attacker.hitStreak}`,
+        "#ffd36b",
+        attacker.hitStreak >= 5 ? 20 : 16
+      );
+    }
 
     // Knockback.
     target.vx += hb.facing * hb.knockback;

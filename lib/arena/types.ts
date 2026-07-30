@@ -252,6 +252,14 @@ export interface Fighter {
   // --- shared -------------------------------------------------------------
   manaflowHold: number;
   cooldowns: Record<string, number>;
+  /**
+   * Hits landed in a row without the opponent landing one back — unlike
+   * comboKillerStacks (which only decays after a few seconds of no action),
+   * this resets the instant this fighter gets hit, so it tracks "how good is
+   * this exchange going" rather than "how recently active was I."
+   */
+  hitStreak: number;
+  bestHitStreak: number;
 
   // --- input-derived ------------------------------------------------------
   sprinting: boolean;

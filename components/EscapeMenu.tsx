@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { getVolume, isMuted, playSound, setMuted, setVolume } from "@/lib/arena/sound";
 
-export function EscapeMenu({ onResume }: { onResume: () => void }) {
+export function EscapeMenu({
+  onResume,
+  onShowTutorial,
+}: {
+  onResume: () => void;
+  onShowTutorial?: () => void;
+}) {
   const [volume, setVolumeState] = useState(getVolume());
   const [muted, setMutedState] = useState(isMuted());
 
@@ -18,6 +24,16 @@ export function EscapeMenu({ onResume }: { onResume: () => void }) {
         <button className="btn" style={{ width: "100%" }} onClick={onResume}>
           Resume
         </button>
+
+        {onShowTutorial && (
+          <button
+            className="btn btn-ghost"
+            style={{ width: "100%", marginTop: 8 }}
+            onClick={onShowTutorial}
+          >
+            How to Play
+          </button>
+        )}
 
         <div className="escape-settings">
           <h3 className="section-title">Settings</h3>

@@ -164,6 +164,37 @@ function getWalkSprite(): HTMLImageElement | null {
 }
 
 /**
+ * Paragon's sprint cycle (double-tap A/D and hold): 8 frames, rebuilt from
+ * the source sheet the same way as the RMB high kick — the source frames
+ * are photographed poses rather than a hand-aligned sprite sheet, and the
+ * forward-leaning sprint poses put the head noticeably further right,
+ * relative to their own tight crop, than the upright poses do. Every rect
+ * shares a fixed width anchored on a verified head-center x and a fixed
+ * bottom-anchored height, so the head reads as fixed and only the stride
+ * (and the natural foot-lift bob between planted frames) actually moves.
+ */
+const RUN_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 0, y: 0, w: 129, h: 140 },
+  { x: 129, y: 0, w: 129, h: 140 },
+  { x: 258, y: 0, w: 129, h: 140 },
+  { x: 387, y: 0, w: 129, h: 140 },
+  { x: 516, y: 0, w: 129, h: 140 },
+  { x: 645, y: 0, w: 129, h: 140 },
+  { x: 774, y: 0, w: 129, h: 140 },
+  { x: 903, y: 0, w: 129, h: 140 },
+];
+let runSprite: HTMLImageElement | null = null;
+
+function getRunSprite(): HTMLImageElement | null {
+  if (!runSprite) {
+    if (typeof Image === "undefined") return null;
+    runSprite = new Image();
+    runSprite.src = "/art/paragon/running.webp";
+  }
+  return runSprite.complete && runSprite.naturalWidth > 0 ? runSprite : null;
+}
+
+/**
  * Paragon's jump arc: 7 poses laid out on the sheet following the actual
  * trajectory shape (crouch, rising, apex, falling, landing crouch) rather
  * than a straight row, so each frame's rect was isolated as its own
@@ -413,14 +444,17 @@ export function renderFighterPortraits(
   for (const f of engine.fighters) {
     if (f.isMob || f.state === "dead") continue;
 
-    // Paragon has real animations for jumping, jabbing and Detonate, plus a
-    // walk cycle; everyone else (and Paragon doing none of the above) falls
-    // back to the static reference portrait.
+    // Paragon has real animations for jumping, jabbing and Detonate, plus
+    // separate walk and sprint cycles; everyone else (and Paragon doing none
+    // of the above) falls back to the static reference portrait.
     const actionSprite = paragonActionSprite(f);
-    const moving = f.state === "walk" || f.state === "sprint";
+    const sprinting = f.state === "sprint";
+    const walking = f.state === "walk";
     const walkSpriteImg =
-      !actionSprite && f.classId === "paragon" && moving ? getWalkSprite() : null;
-    const img = actionSprite?.img ?? walkSpriteImg ?? getPortraitImage(f.classId);
+      !actionSprite && f.classId === "paragon" && walking ? getWalkSprite() : null;
+    const runSpriteImg =
+      !actionSprite && f.classId === "paragon" && sprinting ? getRunSprite() : null;
+    const img = actionSprite?.img ?? walkSpriteImg ?? runSpriteImg ?? getPortraitImage(f.classId);
     if (!img) continue;
 
     const x = px2(f.x);
@@ -449,9 +483,16 @@ export function renderFighterPortraits(
       sh = actionSprite.frame.h;
       drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
     } else if (walkSpriteImg) {
-      const cadence = f.state === "sprint" ? 14 : 9;
-      const step = Math.floor(engine.time * cadence) % WALK_FRAMES.length;
+      const step = Math.floor(engine.time * 9) % WALK_FRAMES.length;
       const frame = WALK_FRAMES[step];
+      sx = frame.x;
+      sy = frame.y;
+      sw = frame.w;
+      sh = frame.h;
+      drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
+    } else if (runSpriteImg) {
+      const step = Math.floor(engine.time * 14) % RUN_FRAMES.length;
+      const frame = RUN_FRAMES[step];
       sx = frame.x;
       sy = frame.y;
       sw = frame.w;
@@ -468,7 +509,7 @@ export function renderFighterPortraits(
     // stand higher when idle than when walking. Shifting the draw down by
     // that margin's share of the frame puts the real feet at yFeet either way.
     const marginBottomFrac =
-      actionSprite || walkSpriteImg
+      actionSprite || walkSpriteImg || runSpriteImg
         ? 0
         : (img.naturalHeight - (PORTRAIT_CONTENT_BOTTOM[f.classId] ?? img.naturalHeight)) /
           img.naturalHeight;
@@ -1565,6 +1606,16 @@ function drawFighter(
   if (f.state === "reflect") {
     const r = Math.round(h * 0.6 + Math.sin(time * 12) * 1.5);
     ringOutline(b, x, y - h * 0.55, r, "#fbbf24");
+  }
+  // Boss telegraph: a growing red warning ring through the whole windup, so
+  // the slam reads as "get out" well before the hitbox actually appears —
+  // regular mob swings are fast enough not to need this, but a boss special
+  // is deliberately slow and punishing, and should look it.
+  if (f.isMob && f.action?.spec.id === "boss-special" && MOB_TYPES[f.mobTypeId!]?.isBoss) {
+    const t = Math.min(1, f.action.elapsed / f.action.spec.activeAt);
+    const r = Math.round(h * (0.5 + t * 0.9));
+    pxGlow(b, x, y - h * 0.55, h * (0.6 + t * 0.6), "#ff3b30", 0.35 + t * 0.4);
+    ringOutline(b, x, y - h * 0.55, r, "#ff3b30");
   }
 
   const flash = f.hitFlash > 0 && Math.floor(time * 30) % 2 === 0;

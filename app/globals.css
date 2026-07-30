@@ -1025,6 +1025,49 @@ kbd {
   width: min(380px, 100%);
 }
 
+.tutorial-sheet {
+  width: min(480px, 100%);
+}
+
+.tutorial-step {
+  min-height: 130px;
+}
+
+.tutorial-body {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.tutorial-body p + p {
+  margin-top: 10px;
+}
+
+.tutorial-body .keycap-inner {
+  vertical-align: middle;
+  margin: 0 1px;
+}
+
+.tutorial-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.tutorial-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.tutorial-dot.active {
+  background: var(--accent);
+  transform: scale(1.3);
+}
+
 .escape-settings {
   margin-top: 20px;
   padding-top: 16px;
@@ -1340,6 +1383,17 @@ kbd {
 .arena-tag.lmb { color: #7dd3fc; }
 .arena-tag.rmb { color: #f472b6; }
 .arena-tag.combo { color: var(--exp); border-color: rgba(251,191,36,0.5); }
+.arena-tag.combo-hot {
+  color: #fff7ed;
+  background: rgba(251, 146, 60, 0.25);
+  border-color: rgba(251, 146, 60, 0.8);
+  animation: tag-in 0.22s var(--ease-premium), combo-hot-pulse 0.6s ease-in-out infinite;
+}
+
+@keyframes combo-hot-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(251, 146, 60, 0); }
+  50% { box-shadow: 0 0 12px rgba(251, 146, 60, 0.55); }
+}
 
 .arena-bottom {
   display: flex;

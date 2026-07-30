@@ -13,6 +13,7 @@ import { MapPanel } from "@/components/MapPanel";
 import { MerchantPanel } from "@/components/MerchantPanel";
 import { VendorPanel } from "@/components/VendorPanel";
 import { StoragePanel } from "@/components/StoragePanel";
+import { hasSeenTutorial, markTutorialSeen, TutorialOverlay } from "@/components/TutorialOverlay";
 import {
   MAX_PLUS,
   STONE_PRICE,
@@ -64,7 +65,16 @@ export function AdventureClient() {
   const [exp, setExp] = useState({ exp: 0, next: 1, level: 1, points: 0 });
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [panel, setPanel] = useState<
-    "none" | "sheet" | "map" | "inventory" | "merchant" | "vendor" | "storage" | "escape" | "combo"
+    | "none"
+    | "sheet"
+    | "map"
+    | "inventory"
+    | "merchant"
+    | "vendor"
+    | "storage"
+    | "escape"
+    | "combo"
+    | "tutorial"
   >("none");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   /** Bumped whenever the save mutates, to re-render the panels. */
@@ -72,7 +82,7 @@ export function AdventureClient() {
   const pausedRef = useRef(false);
 
   useEffect(() => {
-    pausedRef.current = panel === "escape" || panel === "combo";
+    pausedRef.current = panel === "escape" || panel === "combo" || panel === "tutorial";
   }, [panel]);
 
   const pushLog = useCallback((text: string, tone: CombatLogEntry["tone"]) => {
@@ -221,7 +231,10 @@ export function AdventureClient() {
           setPanel((p) => (p === "storage" ? "none" : "storage"));
         }
       } else if (e.code === "Escape") {
-        setPanel((p) => (p === "none" ? "escape" : "none"));
+        setPanel((p) => {
+          if (p === "tutorial") markTutorialSeen();
+          return p === "none" ? "escape" : "none";
+        });
       } else if (e.code === "Tab") {
         e.preventDefault();
         setPanel((p) => (p === "combo" ? "none" : "combo"));
@@ -419,6 +432,7 @@ export function AdventureClient() {
           saveAdventure(s);
           setSave(s);
           setStarted(true);
+          if (!hasSeenTutorial()) setPanel("tutorial");
         }}
         onWipe={() => {
           clearAdventure();
@@ -561,7 +575,12 @@ export function AdventureClient() {
         />
       )}
 
-      {panel === "escape" && <EscapeMenu onResume={() => setPanel("none")} />}
+      {panel === "escape" && (
+        <EscapeMenu
+          onResume={() => setPanel("none")}
+          onShowTutorial={() => setPanel("tutorial")}
+        />
+      )}
 
       {panel === "combo" && (
         <ComboMenu
@@ -569,6 +588,8 @@ export function AdventureClient() {
           onClose={() => setPanel("none")}
         />
       )}
+
+      {panel === "tutorial" && <TutorialOverlay onClose={() => setPanel("none")} />}
     </div>
   );
 }
@@ -653,6 +674,7 @@ function buildHud(engine: AdventureEngine, input: ArenaInput): ArenaHudData {
     hideEnemyMana: true,
     cooldowns: { ...p.cooldowns },
     comboStacks: p.comboKillerStacks,
+    hitStreak: p.hitStreak,
     lmbChain: p.lmbChain,
     rmbChain: p.rmbChain,
     manaflowCharge: input.bothButtonsHeld / MANASTOP_HOLD,

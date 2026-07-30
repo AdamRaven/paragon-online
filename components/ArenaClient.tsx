@@ -8,9 +8,11 @@ import { ClassPortrait } from "@/components/ClassPortrait";
 import { ComboMenu } from "@/components/ComboMenu";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { Keycap, KeyList } from "@/components/KeyList";
+import { hasSeenTutorial, markTutorialSeen, TutorialOverlay } from "@/components/TutorialOverlay";
 import { ArenaAI, type Difficulty } from "@/lib/arena/ai";
 import { CLASSES, getClass } from "@/lib/arena/classes";
 import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
+import { loadDuelStats, rankForStreak, recordDuelResult, type DuelStats } from "@/lib/arena/duelStats";
 import { ArenaEngine, emptyIntent, type Intent } from "@/lib/arena/engine";
 import { ArenaInput } from "@/lib/arena/input";
 import { PIXEL_SCALE, artSize, worldViewSize } from "@/lib/arena/pixel";
@@ -35,13 +37,16 @@ export function ArenaClient() {
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [hud, setHud] = useState<ArenaHudData | null>(null);
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
-  const [winner, setWinner] = useState<{ name: string; you: boolean } | null>(null);
+  const [winner, setWinner] = useState<{ name: string; you: boolean; bestCombo: number } | null>(
+    null
+  );
+  const [duelStats, setDuelStats] = useState<DuelStats | null>(null);
   // A single overlay slot rather than separate booleans, so the pause menu
   // and the combo menu can never both be open and fighting over clicks —
   // Escape always closes whatever's open (or opens the pause menu from
   // nothing); Tab only ever toggles the combo menu.
-  const [panel, setPanel] = useState<"none" | "pause" | "combo">("none");
-  const panelRef = useRef<"none" | "pause" | "combo">("none");
+  const [panel, setPanel] = useState<"none" | "pause" | "combo" | "tutorial">("none");
+  const panelRef = useRef<"none" | "pause" | "combo" | "tutorial">("none");
 
   const pushLog = useCallback((text: string, tone: CombatLogEntry["tone"]) => {
     setLogs((prev) => [...prev, { id: logIdRef.current++, text, tone }].slice(-MAX_LOGS));
@@ -58,14 +63,19 @@ export function ArenaClient() {
   const begin = useCallback(() => {
     setLogs([]);
     setWinner(null);
-    panelRef.current = "none";
-    setPanel("none");
+    const first = !hasSeenTutorial();
+    panelRef.current = first ? "tutorial" : "none";
+    setPanel(first ? "tutorial" : "none");
     setStarted(true);
   }, []);
 
   useEffect(() => {
     if (winner) playSound(winner.you ? "victory" : "defeat");
   }, [winner]);
+
+  useEffect(() => {
+    setDuelStats(loadDuelStats());
+  }, []);
 
   // Escape always closes whatever's open, or opens the pause menu from
   // nothing; Tab only ever toggles the combo menu, and leaves the pause menu
@@ -77,6 +87,7 @@ export function ArenaClient() {
       if (e.repeat) return;
       if (e.code === "Escape") {
         setPanel((p) => {
+          if (p === "tutorial") markTutorialSeen();
           const next = p === "none" ? "pause" : "none";
           panelRef.current = next;
           return next;
@@ -112,7 +123,11 @@ export function ArenaClient() {
 
     const engine = new ArenaEngine(playerClass, enemyClass, {
       onLog: pushLog,
-      onEnd: (name, you) => setWinner({ name, you }),
+      onEnd: (name, you) => {
+        const bestCombo = Math.max(engine.player.bestHitStreak, engine.enemy.bestHitStreak);
+        setWinner({ name, you, bestCombo });
+        setDuelStats(recordDuelResult(you));
+      },
     });
     engineRef.current = engine;
 
@@ -202,6 +217,7 @@ export function ArenaClient() {
         setEnemyClass={setEnemyClass}
         setDifficulty={setDifficulty}
         onStart={begin}
+        duelStats={duelStats}
       />
     );
   }
@@ -218,12 +234,25 @@ export function ArenaClient() {
             panelRef.current = "none";
             setPanel("none");
           }}
+          onShowTutorial={() => {
+            panelRef.current = "tutorial";
+            setPanel("tutorial");
+          }}
         />
       )}
 
       {panel === "combo" && !winner && hud && (
         <ComboMenu
           classId={hud.playerClass as ClassId}
+          onClose={() => {
+            panelRef.current = "none";
+            setPanel("none");
+          }}
+        />
+      )}
+
+      {panel === "tutorial" && !winner && (
+        <TutorialOverlay
           onClose={() => {
             panelRef.current = "none";
             setPanel("none");
@@ -245,6 +274,18 @@ export function ArenaClient() {
                 {winner.you ? "VICTORY" : "DEFEAT"}
               </h2>
               <p className="hint">{winner.name} wins the duel.</p>
+              {winner.bestCombo >= 2 && (
+                <p className="hint" style={{ color: "var(--exp)" }}>
+                  Best combo this match: ×{winner.bestCombo}
+                </p>
+              )}
+              {duelStats && (
+                <p className="hint">
+                  {winner.you
+                    ? `Win streak ×${duelStats.winStreak} (best ×${duelStats.bestStreak}) — ${rankForStreak(duelStats.bestStreak)}`
+                    : `Streak broken. Record: ${duelStats.wins}W–${duelStats.losses}L`}
+                </p>
+              )}
               <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "center" }}>
                 <button className="btn" onClick={() => { setStarted(false); setWinner(null); }}>
                   Fight again
@@ -311,6 +352,7 @@ function buildHud(engine: ArenaEngine, input: ArenaInput): ArenaHudData {
     enemyMaxMana: e.maxMana,
     cooldowns: { ...p.cooldowns },
     comboStacks: p.comboKillerStacks,
+    hitStreak: p.hitStreak,
     lmbChain: p.lmbChain,
     rmbChain: p.rmbChain,
     manaflowCharge: input.bothButtonsHeld / MANASTOP_HOLD,
@@ -328,6 +370,7 @@ function ClassSelect({
   setEnemyClass,
   setDifficulty,
   onStart,
+  duelStats,
 }: {
   playerClass: ClassId;
   enemyClass: ClassId;
@@ -336,6 +379,7 @@ function ClassSelect({
   setEnemyClass: (c: ClassId) => void;
   setDifficulty: (d: Difficulty) => void;
   onStart: () => void;
+  duelStats: DuelStats | null;
 }) {
   const ids = Object.keys(CLASSES) as ClassId[];
   const cls = getClass(playerClass);
@@ -345,8 +389,20 @@ function ClassSelect({
       <div className="max-w-container-max mx-auto space-y-stack-lg">
         <div className="flex items-center justify-between">
           <BackToHome />
-          <div className="font-display-hero text-headline-lg text-paragon-gold tracking-tighter">
-            PARAGON
+          <div className="flex items-center gap-gutter">
+            {duelStats && (duelStats.wins > 0 || duelStats.losses > 0) && (
+              <div className="text-right text-xs text-on-surface-variant">
+                <div className="text-paragon-gold font-section-label tracking-widest">
+                  {rankForStreak(duelStats.bestStreak).toUpperCase()}
+                </div>
+                <div>
+                  {duelStats.wins}W–{duelStats.losses}L · best streak ×{duelStats.bestStreak}
+                </div>
+              </div>
+            )}
+            <div className="font-display-hero text-headline-lg text-paragon-gold tracking-tighter">
+              PARAGON
+            </div>
           </div>
         </div>
 
