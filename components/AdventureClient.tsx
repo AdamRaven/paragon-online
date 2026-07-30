@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
+import { BackToHome } from "@/components/BackToHome";
 import { ClassPortrait } from "@/components/ClassPortrait";
 import { ComboMenu } from "@/components/ComboMenu";
 import { DevLevelTools } from "@/components/DevTools";
@@ -408,7 +409,7 @@ export function AdventureClient() {
     }
   };
 
-  if (!booted) return <main className="landing" />;
+  if (!booted) return <main className="landing-page bg-void-black min-h-screen" />;
 
   if (!started) {
     return (
@@ -677,46 +678,67 @@ function CharacterGate({
     const cls = getClass(save.classId);
     const d = deriveArenaStats(cls, save.level, save.stats);
     return (
-      <main className="landing">
-        <div className="landing-inner">
-          <header>
-            <h1 className="title">CAMPAIGN</h1>
-            <p className="tagline">
-              The same 2D arena, the same skills and movement — now with mobs,
-              experience and levels.
+      <main className="landing-page font-body-md text-body-md min-h-screen bg-void-black text-on-surface px-margin-mobile py-12 md:py-16">
+        <div className="max-w-2xl mx-auto space-y-stack-lg">
+          <div className="flex items-center justify-between">
+            <BackToHome />
+            <div className="font-display-hero text-headline-lg text-paragon-gold tracking-tighter">
+              PARAGON
+            </div>
+          </div>
+
+          <header className="text-center space-y-stack-sm">
+            <h1 className="font-display-hero text-headline-lg-mobile md:text-display-hero text-paragon-gold gold-glow-text uppercase tracking-tighter leading-none">
+              CAMPAIGN
+            </h1>
+            <p className="text-on-surface-variant leading-relaxed">
+              The same 2D arena, the same skills and movement — now with mobs, experience and
+              levels.
             </p>
           </header>
-          <section className="card">
-            <h2 className="section-title">Your fighter</h2>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <strong style={{ fontSize: 20 }}>{cls.name}</strong>
-              <span style={{ color: "var(--accent)" }}>Level {save.level}</span>
+
+          <section className="glass-panel border border-primary/20 p-8">
+            <h2 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-4">
+              Your Fighter
+            </h2>
+            <div className="flex justify-between items-baseline">
+              <strong className="text-xl text-on-surface">{cls.name}</strong>
+              <span className="text-paragon-gold font-section-label text-section-label">
+                Level {save.level}
+              </span>
             </div>
-            <div className="derived" style={{ marginTop: 14 }}>
-              <div>
-                <span>Power</span>
-                <strong>{d.power.toLocaleString()}</strong>
+            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-outline-variant/20">
+              <div className="space-y-1">
+                <span className="block font-section-label text-[10px] uppercase text-on-surface-variant">
+                  Power
+                </span>
+                <strong className="text-on-surface">{d.power.toLocaleString()}</strong>
               </div>
-              <div>
-                <span>Kills</span>
-                <strong>{save.kills}</strong>
+              <div className="space-y-1">
+                <span className="block font-section-label text-[10px] uppercase text-on-surface-variant">
+                  Kills
+                </span>
+                <strong className="text-on-surface">{save.kills}</strong>
               </div>
-              <div>
-                <span>Deaths</span>
-                <strong>{save.deaths}</strong>
+              <div className="space-y-1">
+                <span className="block font-section-label text-[10px] uppercase text-on-surface-variant">
+                  Deaths
+                </span>
+                <strong className="text-on-surface">{save.deaths}</strong>
               </div>
             </div>
             {save.statPoints > 0 && (
-              <p className="hint" style={{ marginTop: 12, color: "var(--exp)" }}>
-                {save.statPoints} unspent stat points.
-              </p>
+              <p className="text-secondary text-sm mt-4">{save.statPoints} unspent stat points.</p>
             )}
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button className="btn" style={{ flex: 1 }} onClick={() => onStart(save)}>
+            <div className="flex gap-3 mt-6">
+              <button
+                className="flex-1 bg-paragon-gold text-void-black py-3 font-section-label text-section-label uppercase tracking-widest font-bold glow-border-gold transition-all hover:scale-105"
+                onClick={() => onStart(save)}
+              >
                 Continue
               </button>
               <button
-                className="btn btn-danger"
+                className="px-6 py-3 border border-error/50 text-error font-section-label text-section-label uppercase tracking-widest transition-colors hover:bg-error/10"
                 onClick={() => {
                   if (window.confirm("Delete this campaign character?")) onWipe();
                 }}
@@ -725,7 +747,11 @@ function CharacterGate({
               </button>
             </div>
           </section>
-          <Link className="btn btn-ghost" href="/arena" style={{ textAlign: "center" }}>
+
+          <Link
+            href="/arena"
+            className="block text-center border-2 border-mana-glow text-mana-glow py-3 font-section-label text-section-label uppercase tracking-widest font-bold transition-all hover:bg-mana-glow/10 hover:scale-[1.02]"
+          >
             Duel mode instead
           </Link>
         </div>
@@ -734,45 +760,67 @@ function CharacterGate({
   }
 
   return (
-    <main className="landing">
-      <div className="landing-inner">
-        <header>
-          <h1 className="title">CAMPAIGN</h1>
-          <p className="tagline">
-            Pick a class and fight through three stages of mobs. Identical
-            movement, combos and skills to the duel — plus experience and levels.
+    <main className="landing-page font-body-md text-body-md min-h-screen bg-void-black text-on-surface px-margin-mobile py-12 md:py-16">
+      <div className="max-w-2xl mx-auto space-y-stack-lg">
+        <div className="flex items-center justify-between">
+          <BackToHome />
+          <div className="font-display-hero text-headline-lg text-paragon-gold tracking-tighter">
+            PARAGON
+          </div>
+        </div>
+
+        <header className="text-center space-y-stack-sm">
+          <h1 className="font-display-hero text-headline-lg-mobile md:text-display-hero text-paragon-gold gold-glow-text uppercase tracking-tighter leading-none">
+            CAMPAIGN
+          </h1>
+          <p className="text-on-surface-variant leading-relaxed">
+            Pick a class and fight through three stages of mobs. Identical movement, combos
+            and skills to the duel — plus experience and levels.
           </p>
         </header>
-        <section className="card">
-          <h2 className="section-title">Choose your class</h2>
-          <div className="zone-list">
+
+        <section className="glass-panel border border-primary/20 p-8">
+          <h2 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-4">
+            Choose Your Class
+          </h2>
+          <div className="space-y-3">
             {ids.map((id) => {
               const c = getClass(id);
+              const isPicked = picked === id;
               return (
                 <button
                   key={id}
-                  className={`zone-option class-option${picked === id ? " current" : ""}`}
+                  className={`w-full flex items-center gap-4 p-3 border transition-colors text-left ${
+                    isPicked
+                      ? "border-paragon-gold bg-paragon-gold/10"
+                      : "border-outline-variant/30 hover:border-primary/40"
+                  }`}
                   style={{ "--aura": c.colors.aura } as React.CSSProperties}
                   onClick={() => setPicked(id)}
                 >
                   <ClassPortrait classId={id} aura={c.colors.aura} size={52} />
-                  <span>
-                    <strong>{c.name}</strong>
-                    <small>
+                  <span className="flex-1 min-w-0">
+                    <strong className="block text-on-surface">{c.name}</strong>
+                    <small className="text-on-surface-variant text-xs">
                       {c.maxHp} HP · {c.maxMana} {c.manaLabel} · {c.weapon}
                     </small>
                   </span>
-                  <span className="badge">{picked === id ? "PICKED" : "PICK"}</span>
+                  <span
+                    className={`font-section-label text-[10px] uppercase tracking-widest px-2 py-1 ${
+                      isPicked ? "bg-paragon-gold text-void-black" : "text-outline"
+                    }`}
+                  >
+                    {isPicked ? "PICKED" : "PICK"}
+                  </span>
                 </button>
               );
             })}
           </div>
           <button
-            className="btn"
-            style={{ width: "100%", marginTop: 16 }}
+            className="w-full mt-6 bg-paragon-gold text-void-black py-4 font-section-label text-section-label uppercase tracking-widest font-bold glow-border-gold transition-all hover:scale-105"
             onClick={() => onStart(createAdventureSave(picked))}
           >
-            Begin the campaign
+            Begin the Campaign
           </button>
         </section>
       </div>

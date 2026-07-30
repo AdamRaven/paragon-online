@@ -283,8 +283,6 @@ button {
 .class-portrait {
   position: relative;
   flex: none;
-  display: grid;
-  place-items: center;
   border-radius: 50%;
   background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--aura) 20%, #0a0c14), #05070c 72%);
   box-shadow:
@@ -295,6 +293,14 @@ button {
 }
 
 .class-portrait-img {
+  /* A grid/flex item's auto-sized track measures content before stretch can
+     apply, and that pass treats a percentage height as indefinite — it falls
+     back to the image's own intrinsic aspect ratio instead. Invisible for
+     the near-square paragon/shedim art, but it blew Kacper's tall portrait
+     miles past the frame. Absolute positioning against the (definite, non-
+     grid) parent box sidesteps that entirely. */
+  position: absolute;
+  inset: 4%;
   width: 92%;
   height: 92%;
   object-fit: contain;

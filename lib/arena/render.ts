@@ -94,15 +94,16 @@ function trackStateSounds(engine: ArenaEngine) {
 // -------------------------------------------------------------- portraits
 
 /**
- * Paragon and Shedim have hand-painted reference portraits; Kacper and all
+ * Paragon, Shedim and Kacper all have hand-painted reference portraits now;
  * mobs don't, so they stay on the procedural pixel-art renderer below.
  */
 const PORTRAIT_SRC: Partial<Record<string, string>> = {
   paragon: "/art/paragon.webp",
   shedim: "/art/shaedim.webp",
+  kacper: "/art/kacper.webp",
 };
 /**
- * Both portraits carry blank space below the feet (measured from each
+ * Every portrait carries blank space below the feet (measured from each
  * image's alpha channel) left over from their source canvas. Drawing the
  * full image anchors that blank margin — not the actual feet — to the
  * ground, so the character reads as floating above where the walk-cycle
@@ -113,6 +114,13 @@ const PORTRAIT_SRC: Partial<Record<string, string>> = {
 const PORTRAIT_CONTENT_BOTTOM: Partial<Record<string, number>> = {
   paragon: 441,
   shedim: 414,
+  kacper: 912,
+};
+/** Kacper reads as the heavy-armour tank of the roster, so he's drawn a
+ *  notch taller than everyone else. Feet stay planted at yFeet regardless
+ *  (see destTop below) — this only grows him upward. */
+const PORTRAIT_SCALE: Partial<Record<string, number>> = {
+  kacper: 1.16,
 };
 const portraitCache = new Map<string, HTMLImageElement>();
 
@@ -200,6 +208,25 @@ function getPunchSprite(): HTMLImageElement | null {
   return punchSprite.complete && punchSprite.naturalWidth > 0 ? punchSprite : null;
 }
 
+/** Paragon's heavy attack: wind-up, rising charge, overhead peak, release, recover. */
+const HEAVY_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 19, y: 219, w: 96, h: 102 },
+  { x: 120, y: 197, w: 89, h: 126 },
+  { x: 212, y: 166, w: 87, h: 157 },
+  { x: 298, y: 204, w: 93, h: 120 },
+  { x: 395, y: 194, w: 89, h: 130 },
+];
+let heavySprite: HTMLImageElement | null = null;
+
+function getHeavySprite(): HTMLImageElement | null {
+  if (!heavySprite) {
+    if (typeof Image === "undefined") return null;
+    heavySprite = new Image();
+    heavySprite.src = "/art/paragon-heavy-strike.webp";
+  }
+  return heavySprite.complete && heavySprite.naturalWidth > 0 ? heavySprite : null;
+}
+
 /** Paragon's Detonate: crouching charge-up into an outward ki blast. */
 const DETONATE_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
   { x: 10, y: 197, w: 81, h: 125 },
@@ -227,9 +254,10 @@ interface ActionSprite {
 
 /**
  * Picks whichever special pose sheet applies to Paragon right now, in
- * priority order — Detonate and the jab both fully take over the body, so
- * they win over just being airborne. Everyone else (and Paragon doing
- * nothing special) falls through to the walk cycle or static portrait.
+ * priority order — Detonate, the jab and the heavy strike all fully take
+ * over the body, so they win over just being airborne. Everyone else (and
+ * Paragon doing nothing special) falls through to the walk cycle or static
+ * portrait.
  */
 function paragonActionSprite(f: Fighter): ActionSprite | null {
   if (f.classId !== "paragon") return null;
@@ -246,6 +274,12 @@ function paragonActionSprite(f: Fighter): ActionSprite | null {
     if (img) {
       const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
       return { img, frame: PUNCH_FRAMES[Math.floor(t * PUNCH_FRAMES.length)] };
+    }
+  } else if (f.state === "attack" && action?.spec.kind === "rmb") {
+    const img = getHeavySprite();
+    if (img) {
+      const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
+      return { img, frame: HEAVY_FRAMES[Math.floor(t * HEAVY_FRAMES.length)] };
     }
   } else if (f.state === "air") {
     const img = getJumpSprite();
@@ -326,6 +360,7 @@ export function renderFighterPortraits(
       sh = frame.h;
       drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
     }
+    drawH *= PORTRAIT_SCALE[f.classId] ?? 1;
     const drawW = drawH * (sw / sh);
 
     // The static portraits carry blank space below the feet (see
@@ -1412,6 +1447,7 @@ function drawFighter(
   // Paragon wears the kit from the reference art rather than a plain gi.
   const hero = !f.isMob && f.classId === "paragon";
   const knight = !f.isMob && f.classId === "shedim";
+  const paladin = !f.isMob && f.classId === "kacper";
 
   // Ground shadow.
   const sw = Math.round(w * 0.9);
@@ -1436,10 +1472,12 @@ function drawFighter(
   const flash = f.hitFlash > 0 && Math.floor(time * 30) % 2 === 0;
   const col = (c: string) => (flash ? "#ffffff" : c);
 
-  // Paragon/Shedim's body is drawn by the crisp portrait overlay canvas
-  // instead (see renderFighterPortraits) — this pass only contributes the
-  // shadow/rings already drawn above and the nameplate below.
-  const usesPortrait = (hero || knight) && !!getPortraitImage(f.classId);
+  // Paragon/Shedim/Kacper's body is drawn by the crisp portrait overlay
+  // canvas instead (see renderFighterPortraits) — this pass only
+  // contributes the shadow/rings already drawn above and the nameplate
+  // below. Falls back to the procedural body while the image is still
+  // loading (or if it ever fails to load).
+  const usesPortrait = (hero || knight || paladin) && !!getPortraitImage(f.classId);
 
   if (f.state === "knockdown") {
     if (!usesPortrait) drawDowned(b, x, y, w, h, p, col);

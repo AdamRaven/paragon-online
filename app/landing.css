@@ -1,0 +1,97 @@
+/**
+ * Tailwind for the landing page and the Arena/Campaign pre-game screens,
+ * ported from the design mockup (langing.html) so all three share one look.
+ * Preflight is intentionally skipped — this file is only imported by pages
+ * that opt in (app/page.tsx, app/arena/page.tsx, app/adventure/page.tsx);
+ * live gameplay (the canvas + HUD) never does, and keeps its own hand-tuned
+ * base styles (see globals.css) that a global CSS reset would fight with.
+ *
+ * Layer order is declared explicitly so our own reset/helper classes sit
+ * *below* Tailwind's utilities in the cascade — otherwise, since Tailwind's
+ * layers always lose to any unlayered CSS, our plain `button { background:
+ * none }` reset would clobber utility classes like `bg-primary`.
+ */
+@layer base, theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@config "../tailwind.config.js";
+
+@layer base {
+  .landing-page {
+    background-color: #0a0a0c;
+    color: #e5e1e4;
+    overflow-x: hidden;
+  }
+  /* Preflight is skipped app-wide (see the note above), so this page
+   * supplies its own minimal reset for the couple of raw elements the
+   * mockup assumes come pre-normalized. */
+  .landing-page a {
+    text-decoration: none;
+    color: inherit;
+  }
+  .landing-page button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  .landing-page h1,
+  .landing-page h2,
+  .landing-page h3,
+  .landing-page h4,
+  .landing-page p {
+    margin: 0;
+  }
+  .landing-page ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .landing-page .glass-panel {
+    background: rgba(19, 19, 21, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .landing-page .glow-border-primary {
+    border: 1px solid #00d2ff;
+    box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
+  }
+  .landing-page .glow-border-gold {
+    border: 1px solid #ffcc00;
+    box-shadow: 0 0 15px rgba(255, 204, 0, 0.3);
+  }
+  .landing-page .gold-glow-text {
+    text-shadow: 0 0 20px rgba(255, 204, 0, 0.5);
+  }
+  .landing-page .mana-glow-text {
+    text-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
+  }
+  .landing-page .keycap-inner {
+    box-shadow:
+      inset 0 -2px 0 rgba(255, 255, 255, 0.1),
+      inset 0 2px 0 rgba(0, 0, 0, 0.5);
+  }
+  .landing-page .stat-bar-container {
+    background: rgba(255, 255, 255, 0.05);
+    height: 4px;
+    width: 100%;
+  }
+  .landing-page .stat-bar-hp {
+    background: #ff4d4d;
+  }
+  .landing-page .stat-bar-mana {
+    background: #00d2ff;
+  }
+  .landing-page .stat-bar-ap {
+    background: #ffcc00;
+  }
+  .landing-page .portal-frame {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 210, 255, 0.3);
+    overflow: hidden;
+  }
+}

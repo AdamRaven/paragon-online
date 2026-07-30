@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@/app/landing.css";
 import { ArenaClient } from "@/components/ArenaClient";
 
 export const metadata: Metadata = {

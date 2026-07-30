@@ -22,6 +22,7 @@ export class ArenaAI {
   private attackTimer = 0;
   private manaflowTimer = 0;
   private jumpTimer = 0;
+  private jumpHoldTimer = 0;
   private wantSprint = false;
   private difficulty: Difficulty;
 
@@ -38,6 +39,11 @@ export class ArenaAI {
     this.decisionTimer -= DT;
     this.attackTimer -= DT;
     this.jumpTimer -= DT;
+    this.jumpHoldTimer -= DT;
+    // Once a jump is thrown, keep "holding" it through the rise — engine.ts
+    // short-hops any jump not marked jumpHeld, which real key-holding
+    // players don't hit but a single-tick intent otherwise always would.
+    if (this.jumpHoldTimer > 0) intent.jumpHeld = true;
 
     // No input while it has lost control.
     if (
@@ -87,6 +93,8 @@ export class ArenaAI {
           intent.sprint = true;
           intent.up = true;
           intent.jump = true;
+          intent.jumpHeld = true;
+          this.jumpHoldTimer = 0.5;
         } else {
           intent.moveX = 0;
           intent.sprint = false;
@@ -99,7 +107,9 @@ export class ArenaAI {
     if (above > 60 && this.jumpTimer <= 0 && self.onGround) {
       intent.up = true;
       intent.jump = true;
+      intent.jumpHeld = true;
       this.jumpTimer = 1.2;
+      this.jumpHoldTimer = 0.5;
     }
     // Drop back down if the target is well below.
     if (above < -90 && self.onGround && Math.random() < 0.02) {

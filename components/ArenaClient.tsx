@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
+import { BackToHome } from "@/components/BackToHome";
 import { ClassPortrait } from "@/components/ClassPortrait";
 import { ComboMenu } from "@/components/ComboMenu";
 import { EscapeMenu } from "@/components/EscapeMenu";
+import { Keycap, KeyList } from "@/components/KeyList";
 import { ArenaAI, type Difficulty } from "@/lib/arena/ai";
 import { CLASSES, getClass } from "@/lib/arena/classes";
 import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
@@ -339,27 +341,42 @@ function ClassSelect({
   const cls = getClass(playerClass);
 
   return (
-    <main className="landing">
-      <div className="landing-inner">
-        <header>
-          <h1 className="title">ARENA</h1>
-          <p className="tagline">
-            A 2D platformer duel. Chain basic attacks into knockdowns, break
-            combos with Manastop, and use the gap and the platform above it to
-            control the fight.
+    <main className="landing-page font-body-md text-body-md min-h-screen bg-void-black text-on-surface px-margin-mobile py-12 md:py-16">
+      <div className="max-w-container-max mx-auto space-y-stack-lg">
+        <div className="flex items-center justify-between">
+          <BackToHome />
+          <div className="font-display-hero text-headline-lg text-paragon-gold tracking-tighter">
+            PARAGON
+          </div>
+        </div>
+
+        <header className="text-center space-y-stack-sm max-w-2xl mx-auto">
+          <h1 className="font-display-hero text-headline-lg-mobile md:text-display-hero text-paragon-gold gold-glow-text uppercase tracking-tighter leading-none">
+            ARENA
+          </h1>
+          <p className="text-on-surface-variant leading-relaxed">
+            A 2D platformer duel. Chain basic attacks into knockdowns, break combos with
+            Manastop, and use the gap and the platform above it to control the fight.
           </p>
         </header>
 
-        <div className="grid-2">
-          <section className="card">
-            <h2 className="section-title">Your class</h2>
-            <div className="zone-list">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+          <section className="glass-panel border border-primary/20 p-8">
+            <h2 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-4">
+              Your Class
+            </h2>
+            <div className="space-y-3">
               {ids.map((id) => {
                 const c = getClass(id);
+                const picked = playerClass === id;
                 return (
                   <button
                     key={id}
-                    className={`zone-option class-option${playerClass === id ? " current" : ""}`}
+                    className={`w-full flex items-center gap-4 p-3 border transition-colors text-left ${
+                      picked
+                        ? "border-paragon-gold bg-paragon-gold/10"
+                        : "border-outline-variant/30 hover:border-primary/40"
+                    }`}
                     style={{ "--aura": c.colors.aura } as React.CSSProperties}
                     onClick={() => {
                       playSound("uiClick");
@@ -369,84 +386,135 @@ function ClassSelect({
                     }}
                   >
                     <ClassPortrait classId={id} aura={c.colors.aura} size={52} />
-                    <span>
-                      <strong>{c.name}</strong>
-                      <small>
+                    <span className="flex-1 min-w-0">
+                      <strong className="block text-on-surface">{c.name}</strong>
+                      <small className="text-on-surface-variant text-xs">
                         {c.maxHp} HP · {c.maxMana} {c.manaLabel} · {c.attackPower} AP ·{" "}
                         {c.weapon}
                       </small>
                     </span>
-                    <span className="badge">{playerClass === id ? "PICKED" : "PICK"}</span>
+                    <span
+                      className={`font-section-label text-[10px] uppercase tracking-widest px-2 py-1 ${
+                        picked ? "bg-paragon-gold text-void-black" : "text-outline"
+                      }`}
+                    >
+                      {picked ? "PICKED" : "PICK"}
+                    </span>
                   </button>
                 );
               })}
             </div>
-            <p className="hint" style={{ marginTop: 12 }}>
-              {cls.blurb}
-            </p>
+            <p className="text-on-surface-variant text-sm mt-4">{cls.blurb}</p>
           </section>
 
-          <section className="card">
-            <h2 className="section-title">Controls</h2>
-            <ul className="key-list">
-              <li><span>Move</span><span><kbd>A</kbd> <kbd>D</kbd></span></li>
-              <li><span>Up / down</span><span><kbd>W</kbd> <kbd>S</kbd></span></li>
-              <li><span>Jump</span><span><kbd>Space</kbd> + <kbd>W</kbd></span></li>
-              <li><span>Drop through platform</span><span><kbd>Space</kbd> + <kbd>S</kbd></span></li>
-              <li><span>Dash (×2 speed)</span><span>tap <kbd>D</kbd><kbd>D</kbd> and hold</span></li>
-              <li><span>Normal attack</span><kbd>LMB</kbd></li>
-              <li><span>Heavy attack</span><kbd>RMB</kbd></li>
-              <li><span>Skills</span><span><kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd></span></li>
-              <li><span>Special</span><kbd>Shift</kbd></li>
-              <li><span>Manastop (70 mana)</span><span>hold <kbd>LMB</kbd>+<kbd>RMB</kbd> 0.5s</span></li>
-              <li><span>Combo menu</span><kbd>Tab</kbd></li>
-            </ul>
+          <section className="glass-panel border border-primary/20 p-8">
+            <h2 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-4">
+              Controls
+            </h2>
+            <KeyList
+              rows={[
+                { label: "Move", content: <><Keycap>A</Keycap> <Keycap>D</Keycap></> },
+                { label: "Up / down", content: <><Keycap>W</Keycap> <Keycap>S</Keycap></> },
+                { label: "Jump", content: <><Keycap>Space</Keycap> + <Keycap>W</Keycap></> },
+                {
+                  label: "Drop through platform",
+                  content: <><Keycap>Space</Keycap> + <Keycap>S</Keycap></>,
+                },
+                {
+                  label: "Dash (×2 speed)",
+                  content: <>tap <Keycap>D</Keycap><Keycap>D</Keycap> and hold</>,
+                },
+                { label: "Normal attack", content: <Keycap wide>LMB</Keycap> },
+                { label: "Heavy attack", content: <Keycap wide>RMB</Keycap> },
+                {
+                  label: "Skills",
+                  content: (
+                    <>
+                      <Keycap>Q</Keycap> <Keycap>E</Keycap> <Keycap>R</Keycap> <Keycap>F</Keycap>
+                    </>
+                  ),
+                },
+                { label: "Special", content: <Keycap>Shift</Keycap> },
+                {
+                  label: "Manastop (70 mana)",
+                  content: <>hold <Keycap wide>LMB</Keycap>+<Keycap wide>RMB</Keycap> 0.5s</>,
+                },
+                { label: "Combo menu", content: <Keycap>Tab</Keycap> },
+              ]}
+            />
           </section>
         </div>
 
-        <div className="grid-2">
-          <section className="card">
-            <h2 className="section-title">{cls.name} skills</h2>
-            <ul className="key-list">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+          <section className="glass-panel border border-primary/20 p-8">
+            <h2 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-4">
+              {cls.name} Skills
+            </h2>
+            <ul className="space-y-2">
               {cls.skills.map((s) => (
-                <li key={s.id}>
-                  <span style={{ color: "var(--text)" }}>
-                    <kbd>{s.slot}</kbd> {s.label}
-                    {s.invented && <em style={{ opacity: 0.6 }}> *</em>}
+                <li
+                  key={s.id}
+                  className="flex justify-between items-center border-b border-outline-variant/20 pb-2 text-sm"
+                >
+                  <span className="text-on-surface">
+                    <Keycap>{s.slot}</Keycap> <span className="ml-2">{s.label}</span>
+                    {s.invented && <em className="opacity-60 not-italic"> *</em>}
                   </span>
-                  <span>{s.manaCost ? `${s.manaCost} mana` : "—"}</span>
+                  <span className="text-on-surface-variant">
+                    {s.manaCost ? `${s.manaCost} mana` : "—"}
+                  </span>
                 </li>
               ))}
             </ul>
-            <p className="hint" style={{ marginTop: 10, fontSize: 11 }}>
-              * Q and E were not defined in the design doc; these are my own
-              additions to fill the 5-skill requirement.
+            <p className="text-on-surface-variant text-xs mt-3">
+              * Q and E were not defined in the design doc; these are my own additions to
+              fill the 5-skill requirement.
             </p>
           </section>
 
-          <section className="card">
-            <h2 className="section-title">Opponent</h2>
-            <p className="hint" style={{ marginBottom: 12 }}>
-              You face a <strong>{getClass(enemyClass).name}</strong>.
+          <section className="glass-panel border border-primary/20 p-8">
+            <h2 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-4">
+              Opponent
+            </h2>
+            <p className="text-on-surface-variant text-sm mb-4">
+              You face a <strong className="text-on-surface">{getClass(enemyClass).name}</strong>.
             </p>
-            <div className="zone-list">
-              {(["calm", "normal", "brutal"] as Difficulty[]).map((d) => (
-                <button
-                  key={d}
-                  className={`zone-option${difficulty === d ? " current" : ""}`}
-                  onClick={() => { playSound("uiClick"); setDifficulty(d); }}
-                >
-                  <span><strong style={{ textTransform: "capitalize" }}>{d}</strong></span>
-                  <span className="badge">{difficulty === d ? "ON" : "SET"}</span>
-                </button>
-              ))}
+            <div className="space-y-3">
+              {(["calm", "normal", "brutal"] as Difficulty[]).map((d) => {
+                const on = difficulty === d;
+                return (
+                  <button
+                    key={d}
+                    className={`w-full flex items-center justify-between p-3 border transition-colors ${
+                      on
+                        ? "border-mana-glow bg-mana-glow/10"
+                        : "border-outline-variant/30 hover:border-primary/40"
+                    }`}
+                    onClick={() => {
+                      playSound("uiClick");
+                      setDifficulty(d);
+                    }}
+                  >
+                    <strong className="capitalize text-on-surface">{d}</strong>
+                    <span
+                      className={`font-section-label text-[10px] uppercase tracking-widest px-2 py-1 ${
+                        on ? "bg-mana-glow text-on-primary" : "text-outline"
+                      }`}
+                    >
+                      {on ? "ON" : "SET"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <button
-              className="btn"
-              style={{ width: "100%", marginTop: 16 }}
-              onClick={() => { playSound("uiClick"); onStart(); }}
+              className="w-full mt-6 bg-paragon-gold text-void-black py-4 font-section-label text-section-label uppercase tracking-widest font-bold glow-border-gold transition-all hover:scale-105"
+              onClick={() => {
+                playSound("uiClick");
+                onStart();
+              }}
             >
-              Enter the arena
+              Enter the Arena
             </button>
           </section>
         </div>

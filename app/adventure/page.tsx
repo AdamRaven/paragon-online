@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@/app/landing.css";
 import { AdventureClient } from "@/components/AdventureClient";
 
 export const metadata: Metadata = {
