@@ -288,7 +288,7 @@ export const STAGES: Stage[] = [
     vendorX: 1000,
     bankX: 1500,
     biome: "town",
-    map: makeMap(2000, [[0, 2000]], [[420, 410, 200], [900, 400, 200], [1380, 410, 200]]),
+    map: makeMap(2000, [[0, 2000]], []),
     spawns: [],
   },
   {

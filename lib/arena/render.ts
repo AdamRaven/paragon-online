@@ -114,6 +114,44 @@ function getPortraitImage(classId: string): HTMLImageElement | null {
 }
 
 /**
+ * Paragon's walk cycle: 6 frames cut from a single sheet (background removed
+ * offline — the source had a baked-in checkerboard, not real alpha). Rects
+ * were measured from that cleaned sheet; each frame keeps its own natural
+ * width so the stride still narrows/widens like a real walk cycle instead of
+ * being stretched into a uniform box.
+ */
+const WALK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 22, y: 380, w: 171, h: 268 },
+  { x: 193, y: 380, w: 170, h: 268 },
+  { x: 378, y: 380, w: 132, h: 268 },
+  { x: 518, y: 380, w: 163, h: 268 },
+  { x: 681, y: 380, w: 163, h: 268 },
+  { x: 844, y: 380, w: 161, h: 268 },
+];
+let walkSprite: HTMLImageElement | null = null;
+
+function getWalkSprite(): HTMLImageElement | null {
+  if (!walkSprite) {
+    if (typeof Image === "undefined") return null;
+    walkSprite = new Image();
+    walkSprite.src = "/art/paragon-walk-sprite.png";
+  }
+  return walkSprite.complete && walkSprite.naturalWidth > 0 ? walkSprite : null;
+}
+
+let villageBg: HTMLImageElement | null = null;
+
+/** Emberhold's hand-painted town backdrop, loaded once and cached. */
+function getVillageBackground(): HTMLImageElement | null {
+  if (!villageBg) {
+    if (typeof Image === "undefined") return null;
+    villageBg = new Image();
+    villageBg.src = "/art/village-background.jpeg";
+  }
+  return villageBg.complete && villageBg.naturalWidth > 0 ? villageBg : null;
+}
+
+/**
  * Draws the actual reference art for Paragon/Shedim fighters on a separate,
  * non-pixelated overlay canvas sized to real screen resolution. The main
  * game buffer is deliberately tiny (a fighter is ~31 art pixels tall) so its
@@ -135,18 +173,44 @@ export function renderFighterPortraits(
 
   for (const f of engine.fighters) {
     if (f.isMob || f.state === "dead") continue;
-    const img = getPortraitImage(f.classId);
+
+    // Paragon has a real walk cycle; everyone else (and Paragon when not
+    // moving) falls back to the static reference portrait.
+    const moving = f.state === "walk" || f.state === "sprint";
+    const walkSpriteImg = f.classId === "paragon" && moving ? getWalkSprite() : null;
+    const img = walkSpriteImg ?? getPortraitImage(f.classId);
     if (!img) continue;
 
     const x = px2(f.x);
     const yFeet = py2(f.y);
     const hArt = Math.max(12, f.h / S);
+
+    let sx = 0;
+    let sy = 0;
+    let sw = img.naturalWidth;
+    let sh = img.naturalHeight;
     // The reference art carries headroom/legroom the crude hitbox doesn't,
     // so it's drawn a little taller than the box it stands in rather than
     // exactly filling it — matching height 1:1 made both portraits read as
-    // squashed.
-    const drawH = hArt * physicalPerArtPixel * 1.28;
-    const drawW = drawH * (img.naturalWidth / img.naturalHeight);
+    // squashed. The walk-cycle frames are already cropped tight to the
+    // figure (no headroom baked in — the character fills essentially 100%
+    // of the frame, versus ~74% of the static portrait's canvas), so the
+    // same multiplier would render the character visibly taller/longer-
+    // limbed the instant he starts moving. Scaled down by that measured
+    // 74% fill ratio so both assets put the same actual character height
+    // on screen.
+    let drawH = hArt * physicalPerArtPixel * 1.28;
+    if (walkSpriteImg) {
+      const cadence = f.state === "sprint" ? 14 : 9;
+      const step = Math.floor(engine.time * cadence) % WALK_FRAMES.length;
+      const frame = WALK_FRAMES[step];
+      sx = frame.x;
+      sy = frame.y;
+      sw = frame.w;
+      sh = frame.h;
+      drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
+    }
+    const drawW = drawH * (sw / sh);
 
     const knockdown = f.state === "knockdown";
     const flash = f.hitFlash > 0 && Math.floor(engine.time * 30) % 2 === 0;
@@ -157,7 +221,7 @@ export function renderFighterPortraits(
     if (f.facing === -1) fx.scale(-1, 1);
     fx.imageSmoothingEnabled = true;
     fx.imageSmoothingQuality = "high";
-    fx.drawImage(img, -drawW / 2, -drawH, drawW, drawH);
+    fx.drawImage(img, sx, sy, sw, sh, -drawW / 2, -drawH, drawW, drawH);
     if (flash) {
       fx.globalCompositeOperation = "source-atop";
       fx.fillStyle = "#ffffff";
@@ -209,7 +273,8 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   trackStateSounds(engine);
 
   const biome = (engine as ArenaEngine & { stage?: { biome?: string } }).stage?.biome ?? "keep";
-  drawSky(b, vw, vh, camX, camY, biome);
+  const groundWy = wy(engine.map.ground[0]?.y ?? 560);
+  drawSky(b, vw, vh, camX, camY, biome, groundWy);
   drawTerrain(b, engine, wx, wy, vw, vh, biome);
 
   for (const bh of engine.blackHoles) {
@@ -292,11 +357,21 @@ function drawSky(
   vh: number,
   camX: number,
   camY: number,
-  biomeId: string
+  biomeId: string,
+  groundWy: number
 ) {
   /** Screen offset for a layer moving at `speed` relative to the world. */
   const vshift = (speed: number) => Math.round((CAM_REF_Y - camY) * speed);
   const B = BIOMES[biomeId] ?? BIOMES.keep;
+
+  if (biomeId === "town") {
+    const bg = getVillageBackground();
+    if (bg) {
+      drawVillageBackground(b, bg, vw, vh, camX, groundWy);
+      return; // the painted scene already carries sky, castle and tree line
+    }
+  }
+
   // Banded sky: hard colour steps rather than a smooth gradient.
   const skyShift = vshift(0.08);
   px(b, 0, 0, vw, vh, B.sky[0]);
@@ -448,6 +523,40 @@ function drawSky(
     biomeId === "forge" ? "chimneys" : "towers";
   skyline(0.25, B.far, Math.round(vh * 0.36), kind);
   skyline(0.5, B.near, Math.round(vh * 0.52), kind);
+}
+
+/**
+ * Tiles Emberhold's painted backdrop across the viewport with a light
+ * horizontal parallax. The image is scaled to the buffer's full height like
+ * the flat sky fill it replaces; the game's own ground/props are drawn over
+ * its lower edge afterward exactly as they would over the flat colour.
+ */
+/** Where the painted street sits within the source image, as a fraction of its height. */
+const VILLAGE_STREET_FRAC = 0.89;
+
+function drawVillageBackground(
+  b: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  vw: number,
+  vh: number,
+  camX: number,
+  groundWy: number
+) {
+  // Oversized a little and anchored on the actual ground line (rather than
+  // just filling 0..vh) so the painted street lines up with the game's own
+  // ground instead of drifting up the building fronts as the camera's
+  // vertical position shifts.
+  const imgH = Math.round(vh * 1.15);
+  const imgW = Math.round(imgH * (img.naturalWidth / img.naturalHeight));
+  const y = Math.round(groundWy - imgH * VILLAGE_STREET_FRAC);
+  const speed = 0.35;
+  const off = (-Math.round(camX * speed) % imgW + imgW) % imgW;
+  const smoothed = b.imageSmoothingEnabled;
+  b.imageSmoothingEnabled = true;
+  for (let x = off - imgW; x < vw; x += imgW) {
+    b.drawImage(img, x, y, imgW, imgH);
+  }
+  b.imageSmoothingEnabled = smoothed;
 }
 
 function drawTerrain(
