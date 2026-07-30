@@ -2,9 +2,9 @@ import Image from "next/image";
 import type { ClassId } from "@/lib/arena/types";
 
 const ART: Record<ClassId, string> = {
-  paragon: "/art/paragon.webp",
-  shedim: "/art/shaedim.webp",
-  kacper: "/art/kacper.webp",
+  paragon: "/art/paragon/portrait.webp",
+  shedim: "/art/shedim/portrait.webp",
+  kacper: "/art/kacper/portrait.webp",
 };
 
 export function ClassPortrait({

@@ -1,6 +1,6 @@
 import type { LootDrop } from "./adventure";
 import { getClass } from "./classes";
-import { JUMP_VELOCITY, MAX_FALL_SPEED } from "./constants";
+import { JUMP_VELOCITY, MAX_FALL_SPEED, REFLECT_DURATION } from "./constants";
 import type { ArenaEngine } from "./engine";
 import { RARITY_META } from "./items";
 import { MOB_TYPES } from "./mobs";
@@ -98,9 +98,9 @@ function trackStateSounds(engine: ArenaEngine) {
  * mobs don't, so they stay on the procedural pixel-art renderer below.
  */
 const PORTRAIT_SRC: Partial<Record<string, string>> = {
-  paragon: "/art/paragon.webp",
-  shedim: "/art/shaedim.webp",
-  kacper: "/art/kacper.webp",
+  paragon: "/art/paragon/portrait.webp",
+  shedim: "/art/shedim/portrait.webp",
+  kacper: "/art/kacper/portrait.webp",
 };
 /**
  * Every portrait carries blank space below the feet (measured from each
@@ -158,7 +158,7 @@ function getWalkSprite(): HTMLImageElement | null {
   if (!walkSprite) {
     if (typeof Image === "undefined") return null;
     walkSprite = new Image();
-    walkSprite.src = "/art/paragon-walking.webp";
+    walkSprite.src = "/art/paragon/walking.webp";
   }
   return walkSprite.complete && walkSprite.naturalWidth > 0 ? walkSprite : null;
 }
@@ -184,7 +184,7 @@ function getJumpSprite(): HTMLImageElement | null {
   if (!jumpSprite) {
     if (typeof Image === "undefined") return null;
     jumpSprite = new Image();
-    jumpSprite.src = "/art/paragon-jump.webp";
+    jumpSprite.src = "/art/paragon/jump.webp";
   }
   return jumpSprite.complete && jumpSprite.naturalWidth > 0 ? jumpSprite : null;
 }
@@ -203,28 +203,104 @@ function getPunchSprite(): HTMLImageElement | null {
   if (!punchSprite) {
     if (typeof Image === "undefined") return null;
     punchSprite = new Image();
-    punchSprite.src = "/art/paragon-punch.webp";
+    punchSprite.src = "/art/paragon/punch.webp";
   }
   return punchSprite.complete && punchSprite.naturalWidth > 0 ? punchSprite : null;
 }
 
-/** Paragon's heavy attack: wind-up, rising charge, overhead peak, release, recover. */
-const HEAVY_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+/** Paragon's Titan Slam: wind-up, rising charge, overhead peak, release, recover. */
+const TITAN_SLAM_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
   { x: 19, y: 219, w: 96, h: 102 },
   { x: 120, y: 197, w: 89, h: 126 },
   { x: 212, y: 166, w: 87, h: 157 },
   { x: 298, y: 204, w: 93, h: 120 },
   { x: 395, y: 194, w: 89, h: 130 },
 ];
-let heavySprite: HTMLImageElement | null = null;
+let titanSlamSprite: HTMLImageElement | null = null;
 
-function getHeavySprite(): HTMLImageElement | null {
-  if (!heavySprite) {
+function getTitanSlamSprite(): HTMLImageElement | null {
+  if (!titanSlamSprite) {
     if (typeof Image === "undefined") return null;
-    heavySprite = new Image();
-    heavySprite.src = "/art/paragon-heavy-strike.webp";
+    titanSlamSprite = new Image();
+    titanSlamSprite.src = "/art/paragon/heavy-strike.webp";
   }
-  return heavySprite.complete && heavySprite.naturalWidth > 0 ? heavySprite : null;
+  return titanSlamSprite.complete && titanSlamSprite.naturalWidth > 0 ? titanSlamSprite : null;
+}
+
+/** Paragon's ArmorBreak: chamber, knee-raise, extended kick, recover. */
+const ARMORBREAK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 17, y: 229, w: 82, h: 96 },
+  { x: 99, y: 216, w: 69, h: 115 },
+  { x: 176, y: 225, w: 125, h: 106 },
+  { x: 422, y: 235, w: 66, h: 96 },
+];
+let armorbreakSprite: HTMLImageElement | null = null;
+
+function getArmorbreakSprite(): HTMLImageElement | null {
+  if (!armorbreakSprite) {
+    if (typeof Image === "undefined") return null;
+    armorbreakSprite = new Image();
+    armorbreakSprite.src = "/art/paragon/kick.webp";
+  }
+  return armorbreakSprite.complete && armorbreakSprite.naturalWidth > 0 ? armorbreakSprite : null;
+}
+
+/**
+ * Paragon's heavy attack (RMB): idle, crouch, chamber, high kick, recover.
+ *
+ * This sheet needed more than a frame-rect table. The source art had three
+ * problems layered on top of each other: (1) two of its "extended kick"
+ * shots are mirror-image angles of the same pose rather than sequential
+ * motion, so only one is used; (2) the kick pose's leg is pixel-connected to
+ * a separate small "enemy getting hit" sprite right where the boot lands,
+ * with no gap between them at all, so any simple crop either amputates the
+ * boot or drags in a chunk of someone else's body; (3) the source frames sit
+ * close enough together on the sheet that a wide-enough crop to fully catch
+ * the boot pulls in stray pixels from the neighbouring dropped frame too.
+ * None of that is fixable with plain x/y/w/h rects into the original sheet,
+ * so this is instead a rebuilt sheet (see scratch script, not checked in):
+ * connected-component analysis on the source art separated Paragon's own
+ * pixels from both the dropped mirrored frame and the fused enemy sprite,
+ * an eyeballed head-center x (verified with a grid overlay) anchors every
+ * frame at an identical offset, and each frame was re-rasterised onto a
+ * clean transparent canvas of the same size. The result: the head stays
+ * visually fixed and only the leg swings, with nothing missing and nothing
+ * borrowed from a neighbour.
+ */
+const HIGH_KICK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 0, y: 0, w: 106, h: 118 },
+  { x: 106, y: 0, w: 106, h: 97 },
+  { x: 212, y: 0, w: 106, h: 111 },
+  { x: 318, y: 0, w: 106, h: 105 },
+  { x: 424, y: 0, w: 106, h: 106 },
+];
+let highKickSprite: HTMLImageElement | null = null;
+
+function getHighKickSprite(): HTMLImageElement | null {
+  if (!highKickSprite) {
+    if (typeof Image === "undefined") return null;
+    highKickSprite = new Image();
+    highKickSprite.src = "/art/paragon/high-kick.webp";
+  }
+  return highKickSprite.complete && highKickSprite.naturalWidth > 0 ? highKickSprite : null;
+}
+
+/** Paragon's Reflect: raising the kinetic-shield stance. */
+const BLOCK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 10, y: 164, w: 118, h: 177 },
+  { x: 137, y: 164, w: 101, h: 177 },
+  { x: 251, y: 166, w: 110, h: 175 },
+  { x: 367, y: 164, w: 119, h: 177 },
+];
+let blockSprite: HTMLImageElement | null = null;
+
+function getBlockSprite(): HTMLImageElement | null {
+  if (!blockSprite) {
+    if (typeof Image === "undefined") return null;
+    blockSprite = new Image();
+    blockSprite.src = "/art/paragon/block.webp";
+  }
+  return blockSprite.complete && blockSprite.naturalWidth > 0 ? blockSprite : null;
 }
 
 /** Paragon's Detonate: crouching charge-up into an outward ki blast. */
@@ -242,7 +318,7 @@ function getDetonateSprite(): HTMLImageElement | null {
   if (!detonateSprite) {
     if (typeof Image === "undefined") return null;
     detonateSprite = new Image();
-    detonateSprite.src = "/art/paragon-detonation.webp";
+    detonateSprite.src = "/art/paragon/detonation.webp";
   }
   return detonateSprite.complete && detonateSprite.naturalWidth > 0 ? detonateSprite : null;
 }
@@ -254,10 +330,10 @@ interface ActionSprite {
 
 /**
  * Picks whichever special pose sheet applies to Paragon right now, in
- * priority order — Detonate, the jab and the heavy strike all fully take
- * over the body, so they win over just being airborne. Everyone else (and
- * Paragon doing nothing special) falls through to the walk cycle or static
- * portrait.
+ * priority order — Detonate, Titan Slam, ArmorBreak, Reflect, the jab and
+ * the RMB high kick all fully take over the body, so they win over just
+ * being airborne. Everyone else (and Paragon doing nothing special) falls
+ * through to the walk cycle or static portrait.
  */
 function paragonActionSprite(f: Fighter): ActionSprite | null {
   if (f.classId !== "paragon") return null;
@@ -269,6 +345,28 @@ function paragonActionSprite(f: Fighter): ActionSprite | null {
       const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
       return { img, frame: DETONATE_FRAMES[Math.floor(t * DETONATE_FRAMES.length)] };
     }
+  } else if (action?.spec.id === "titan-slam") {
+    const img = getTitanSlamSprite();
+    if (img) {
+      const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
+      return { img, frame: TITAN_SLAM_FRAMES[Math.floor(t * TITAN_SLAM_FRAMES.length)] };
+    }
+  } else if (action?.spec.id === "armorbreak") {
+    const img = getArmorbreakSprite();
+    if (img) {
+      const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
+      return { img, frame: ARMORBREAK_FRAMES[Math.floor(t * ARMORBREAK_FRAMES.length)] };
+    }
+  } else if (f.state === "reflect") {
+    // Reflect doesn't run through the action/cast-time system the other
+    // skills use — it just flips state and counts reflectTimer down from
+    // REFLECT_DURATION — so stateTime (reset to 0 on trigger) stands in for
+    // "elapsed" here.
+    const img = getBlockSprite();
+    if (img) {
+      const t = Math.min(0.999, Math.max(0, f.stateTime / REFLECT_DURATION));
+      return { img, frame: BLOCK_FRAMES[Math.floor(t * BLOCK_FRAMES.length)] };
+    }
   } else if (f.state === "attack" && action?.spec.kind === "lmb") {
     const img = getPunchSprite();
     if (img) {
@@ -276,10 +374,10 @@ function paragonActionSprite(f: Fighter): ActionSprite | null {
       return { img, frame: PUNCH_FRAMES[Math.floor(t * PUNCH_FRAMES.length)] };
     }
   } else if (f.state === "attack" && action?.spec.kind === "rmb") {
-    const img = getHeavySprite();
+    const img = getHighKickSprite();
     if (img) {
       const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
-      return { img, frame: HEAVY_FRAMES[Math.floor(t * HEAVY_FRAMES.length)] };
+      return { img, frame: HIGH_KICK_FRAMES[Math.floor(t * HIGH_KICK_FRAMES.length)] };
     }
   } else if (f.state === "air") {
     const img = getJumpSprite();
