@@ -1,0 +1,4 @@
+character animations. movement + attacks
+
+monster assets + animations.
+

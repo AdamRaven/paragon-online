@@ -116,19 +116,19 @@ function getPortraitImage(classId: string): HTMLImageElement | null {
 }
 
 /**
- * Paragon's walk cycle: 6 frames cut from a single sheet (background removed
- * offline — the source had a baked-in checkerboard, not real alpha). Rects
- * were measured from that cleaned sheet; each frame keeps its own natural
- * width so the stride still narrows/widens like a real walk cycle instead of
- * being stretched into a uniform box.
+ * Paragon's walk cycle: 6 frames cut from a single sheet, already supplied
+ * with real transparency (no checkerboard cleanup needed this time). Rects
+ * were measured directly from the sheet's alpha channel — each frame keeps
+ * its own natural width so the stride still narrows/widens like a real walk
+ * cycle instead of being stretched into a uniform box.
  */
 const WALK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 22, y: 380, w: 171, h: 268 },
-  { x: 193, y: 380, w: 170, h: 268 },
-  { x: 378, y: 380, w: 132, h: 268 },
-  { x: 518, y: 380, w: 163, h: 268 },
-  { x: 681, y: 380, w: 163, h: 268 },
-  { x: 844, y: 380, w: 161, h: 268 },
+  { x: 18, y: 338, w: 168, h: 249 },
+  { x: 186, y: 338, w: 142, h: 249 },
+  { x: 328, y: 338, w: 130, h: 249 },
+  { x: 458, y: 338, w: 139, h: 249 },
+  { x: 597, y: 338, w: 144, h: 249 },
+  { x: 741, y: 338, w: 162, h: 249 },
 ];
 let walkSprite: HTMLImageElement | null = null;
 
@@ -136,7 +136,7 @@ function getWalkSprite(): HTMLImageElement | null {
   if (!walkSprite) {
     if (typeof Image === "undefined") return null;
     walkSprite = new Image();
-    walkSprite.src = "/art/paragon-walk-sprite.png";
+    walkSprite.src = "/art/paragon-walking.webp";
   }
   return walkSprite.complete && walkSprite.naturalWidth > 0 ? walkSprite : null;
 }
