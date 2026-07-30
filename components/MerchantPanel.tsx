@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ItemIcon } from "@/components/ItemIcon";
-import { ItemRow, statLine } from "@/components/InventoryPanel";
+import { ItemRow, effectLine, statLine } from "@/components/InventoryPanel";
 import {
   DOWNGRADE_FLOOR,
   MAX_PLUS,
@@ -25,6 +25,7 @@ export function MerchantPanel({
   onSellOne,
   onBuyStones,
   onEnhance,
+  onEnhanceMany,
   lastResult,
   onClose,
 }: {
@@ -34,6 +35,7 @@ export function MerchantPanel({
   onSellOne: (item: Item) => void;
   onBuyStones: (n: number) => void;
   onEnhance: (item: Item) => void;
+  onEnhanceMany: (item: Item, times: number) => void;
   lastResult: string | null;
   onClose: () => void;
 }) {
@@ -145,18 +147,27 @@ export function MerchantPanel({
                 <small>{STONE_PRICE} gold each</small>
               </span>
             </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              {[1, 5, 10].map((n) => (
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {[1, 5, 10, 100].map((n) => (
                 <button
                   key={n}
                   className="btn"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minWidth: 90 }}
                   disabled={save.gold < STONE_PRICE * n}
                   onClick={() => onBuyStones(n)}
                 >
                   Buy {n} ({STONE_PRICE * n}g)
                 </button>
               ))}
+              {save.gold >= STONE_PRICE * 1000 && (
+                <button
+                  className="btn"
+                  style={{ flex: 1, minWidth: 90 }}
+                  onClick={() => onBuyStones(1000)}
+                >
+                  Buy 1000 ({STONE_PRICE * 1000}g)
+                </button>
+              )}
             </div>
           </>
         )}
@@ -190,6 +201,11 @@ export function MerchantPanel({
                         {statLine(i)}
                         {b.weight ? ` · weight ${b.weight.toFixed(2)}` : ""}
                       </small>
+                      {effectLine(i) && (
+                        <small className="item-effect" style={{ color: RARITY_META[i.rarity].color }}>
+                          {effectLine(i)}
+                        </small>
+                      )}
                     </span>
                     <span
                       className="item-value"
@@ -198,13 +214,32 @@ export function MerchantPanel({
                       {maxed ? "MAX" : `${chance}%`}
                       {risky && !maxed && <em className="risk"> risk</em>}
                     </span>
-                    <button
-                      className="btn tiny"
-                      disabled={maxed || save.stones <= 0}
-                      onClick={() => onEnhance(i)}
-                    >
-                      +1
-                    </button>
+                    <span style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn tiny"
+                        disabled={maxed || save.stones <= 0}
+                        onClick={() => onEnhance(i)}
+                      >
+                        +1
+                      </button>
+                      <button
+                        className="btn tiny btn-ghost"
+                        disabled={maxed || save.stones <= 0}
+                        title="Attempts 10 enhancements back to back, stopping early if it maxes out or you run out of stones."
+                        onClick={() => onEnhanceMany(i, 10)}
+                      >
+                        x10
+                      </button>
+                      {!maxed && save.stones >= 100 && (
+                        <button
+                          className="btn tiny btn-ghost"
+                          title="Attempts 100 enhancements back to back, stopping early if it maxes out or you run out of stones."
+                          onClick={() => onEnhanceMany(i, 100)}
+                        >
+                          x100
+                        </button>
+                      )}
+                    </span>
                   </div>
                 );
               })}

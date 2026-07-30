@@ -13,6 +13,7 @@ import { MerchantPanel } from "@/components/MerchantPanel";
 import { VendorPanel } from "@/components/VendorPanel";
 import { StoragePanel } from "@/components/StoragePanel";
 import {
+  MAX_PLUS,
   STONE_PRICE,
   attemptEnhance,
   base,
@@ -363,6 +364,37 @@ export function AdventureClient() {
       }
     });
 
+  /** Fires up to `times` attempts back to back, stopping early if it maxes
+   * out or runs out of stones, and reports one rolled-up summary instead of
+   * spamming a log line per swing. */
+  const enhanceMany = (item: Item, times: number) =>
+    mutate((e) => {
+      let attempts = 0;
+      let successes = 0;
+      let downgrades = 0;
+      while (attempts < times && e.save.stones > 0 && item.plus < MAX_PLUS) {
+        e.save.stones -= 1;
+        attempts += 1;
+        const r = attemptEnhance(item);
+        if (r.ok) successes += 1;
+        else if (r.downgraded) downgrades += 1;
+      }
+      if (attempts === 0) {
+        setShopMsg(
+          item.plus >= MAX_PLUS
+            ? `${base(item.baseId).name} is already maxed.`
+            : "You have no enhancement stones."
+        );
+        return;
+      }
+      const summary = `${successes}/${attempts} succeeded — ${base(item.baseId).name} is now +${item.plus}${
+        downgrades ? ` (${downgrades} downgrade${downgrades > 1 ? "s" : ""})` : ""
+      }.`;
+      setShopMsg(summary);
+      pushLog(summary, successes > 0 ? "big" : "bad");
+      playSound(successes > 0 ? "enhanceSuccess" : "enhanceFail");
+    });
+
   const travel = (index: number) => {
     const e = engineRef.current;
     if (!e) return;
@@ -494,6 +526,7 @@ export function AdventureClient() {
           onSellOne={sellOne}
           onBuyStones={buyStones}
           onEnhance={enhance}
+          onEnhanceMany={enhanceMany}
           lastResult={shopMsg}
           onClose={() => setPanel("none")}
         />

@@ -187,6 +187,11 @@ export function InventoryPanel({
                         <>
                           <strong style={{ color: r!.color }}>{itemName(item)}</strong>
                           <small className="item-stats">{statLine(item)}</small>
+                          {effectLine(item) && (
+                            <small className="item-effect" style={{ color: r!.color }}>
+                              {effectLine(item)}
+                            </small>
+                          )}
                         </>
                       ) : (
                         <small className="slot-hint">Empty · {meta.hint}</small>

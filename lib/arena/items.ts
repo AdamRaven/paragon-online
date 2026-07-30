@@ -270,6 +270,43 @@ export const ITEM_BASES: Record<string, ItemBase> = {
     id: "warden-sigil", name: "Warden Sigil", kind: "trash",
     tier: 10, stats: {}, value: 120, icon: "warden-sigil",
   },
+  // Trash topped out at tier 10 the same way gear used to — a level-50 boss
+  // was rolling the exact same handful of coins and scraps as a level-10
+  // mob, so the gold you actually got for "junk" barely moved past the
+  // early game no matter how high you climbed. These carry it the rest of
+  // the way up, each stage roughly doubling the last.
+  "revenant-coin": {
+    id: "revenant-coin", name: "Revenant Coin", kind: "trash",
+    tier: 15, stats: {}, value: 260, icon: "tarnished-coin",
+  },
+  "sovereign-relic": {
+    id: "sovereign-relic", name: "Sovereign Relic", kind: "trash",
+    tier: 20, stats: {}, value: 480, icon: "warden-sigil",
+  },
+  "frostbound-shard": {
+    id: "frostbound-shard", name: "Frostbound Shard", kind: "trash",
+    tier: 27, stats: {}, value: 850, icon: "ashen-dust",
+  },
+  "cinder-ingot": {
+    id: "cinder-ingot", name: "Cinder Ingot", kind: "trash",
+    tier: 32, stats: {}, value: 1450, icon: "rusted-scrap",
+  },
+  "storm-crystal": {
+    id: "storm-crystal", name: "Storm Crystal", kind: "trash",
+    tier: 38, stats: {}, value: 2500, icon: "cracked-fang",
+  },
+  "plague-ichor": {
+    id: "plague-ichor", name: "Plague Ichor", kind: "trash",
+    tier: 44, stats: {}, value: 4200, icon: "ashen-dust",
+  },
+  "seraph-feather": {
+    id: "seraph-feather", name: "Seraph Feather", kind: "trash",
+    tier: 50, stats: {}, value: 7000, icon: "tarnished-coin",
+  },
+  "sundered-regalia": {
+    id: "sundered-regalia", name: "Sundered Regalia", kind: "trash",
+    tier: 54, stats: {}, value: 11000, icon: "warden-sigil",
+  },
 };
 
 export function base(id: string): ItemBase {
@@ -361,6 +398,23 @@ function eligibleGear(mobLevel: number): ItemBase[] {
 }
 
 /**
+ * Same windowing as gear, applied to trash. Trash used to top out at tier
+ * 10 with no lower bound on the filter, so a level-50 boss dropped the same
+ * handful of low-value scraps as a level-10 mob — "junk" gold barely grew
+ * at all past the early game no matter how far you climbed.
+ */
+function eligibleTrash(mobLevel: number): ItemBase[] {
+  const inWindow = Object.values(ITEM_BASES).filter(
+    (b) => b.kind === "trash" && b.tier <= mobLevel + 2 && b.tier >= mobLevel - 12
+  );
+  if (inWindow.length) return inWindow;
+  return Object.values(ITEM_BASES)
+    .filter((b) => b.kind === "trash" && b.tier <= mobLevel + 2)
+    .sort((a, b) => b.tier - a.tier)
+    .slice(0, 3);
+}
+
+/**
  * Rolls a mob's drops. Trash is common and exists to be sold; gear is rarer
  * and drops at or near the mob's own level.
  */
@@ -377,9 +431,7 @@ export function rollDrops(mobLevel: number, boss: boolean): Item[] {
         out.push(makeItem(pick(eligible).id, rollRarity(mobLevel, boss)));
       }
     } else if (r < gearChance + 0.62) {
-      const trash = Object.values(ITEM_BASES).filter(
-        (b) => b.kind === "trash" && b.tier <= mobLevel + 2
-      );
+      const trash = eligibleTrash(mobLevel);
       if (trash.length) out.push(makeItem(pick(trash).id, "common"));
     }
   }
