@@ -115,7 +115,7 @@ export function deriveArenaStats(
   const attackPower = cls.attackPower + str * 2.2 + (level - 1) * 1.6 + gear.attack;
   const speedMult =
     1 + Math.min(0.4, Math.max(0, agi) * 0.013) + gear.speed;
-  const attackSpeed = 1 + Math.min(0.35, Math.max(0, agi) * 0.009);
+  const attackSpeed = 1 + Math.min(0.35, Math.max(0, agi) * 0.009) + gear.atkSpeed;
   const power = Math.round(
     attackPower * 12 + maxHp * 0.8 + maxMana * 0.5 + level * 25
   );

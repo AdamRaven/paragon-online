@@ -1,7 +1,6 @@
 import { getClass } from "./classes";
 import { DT, GRAVITY, MAX_FALL_SPEED, WALK_SPEED } from "./constants";
 import { ArenaEngine, emptyIntent, type ArenaCallbacks, type Intent } from "./engine";
-import { groundAt } from "./map";
 import { MOB_TYPES, getStage, mobAttackSpec, type MobType, type Stage } from "./mobs";
 import { itemName, rollDrops, type Item } from "./items";
 import {
@@ -28,6 +27,8 @@ export interface LootDrop {
   vx: number;
   vy: number;
   onGround: boolean;
+  /** The exact surface (ground or platform) the drop settles on. */
+  floorY: number;
   item: Item;
   /** Seconds alive, used to phase the idle bob/glint animation. */
   age: number;
@@ -198,6 +199,11 @@ export class AdventureEngine extends ArenaEngine {
       vx: (Math.random() - 0.5) * 3,
       vy: -6 - Math.random() * 3,
       onGround: false,
+      // The mob's own feet position IS the exact surface it died standing
+      // on — ground or a platform, whichever it was — so the drop always
+      // settles back onto that same terrain instead of whatever else
+      // happens to overlap its x (e.g. a platform floating above it).
+      floorY: y,
       item,
       age: 0,
     });
@@ -214,18 +220,8 @@ export class AdventureEngine extends ArenaEngine {
         drop.vy = Math.min(MAX_FALL_SPEED, drop.vy + GRAVITY);
         drop.x += drop.vx;
         drop.y += drop.vy;
-
-        const g = groundAt(this.map, drop.x);
-        let settledAt: number | null = null;
-        if (g !== null && drop.vy >= 0 && drop.y >= g) settledAt = g;
-        for (const p of this.map.platforms) {
-          if (drop.x < p.x || drop.x > p.x + p.w) continue;
-          if (drop.vy >= 0 && drop.y >= p.y && (settledAt === null || p.y < settledAt)) {
-            settledAt = p.y;
-          }
-        }
-        if (settledAt !== null) {
-          drop.y = settledAt;
+        if (drop.vy >= 0 && drop.y >= drop.floorY) {
+          drop.y = drop.floorY;
           drop.vx = 0;
           drop.vy = 0;
           drop.onGround = true;

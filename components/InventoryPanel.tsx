@@ -28,6 +28,7 @@ export function statLine(item: Item): string {
   if (s.hp) parts.push(`+${s.hp} HP`);
   if (s.mana) parts.push(`+${s.mana} MP`);
   if (s.speed) parts.push(`+${Math.round(s.speed * 100)}% SPD`);
+  if (s.atkSpeed) parts.push(`+${Math.round(s.atkSpeed * 100)}% AS`);
   return parts.join("   ") || "—";
 }
 
@@ -40,10 +41,16 @@ export function effectLine(item: Item): string | null {
 /** A single weighted number so items can be ranked, not just labelled. */
 function statScore(item: Item): number {
   const s = itemStats(item);
-  // A legendary affix is worth chasing even over a plain stat upgrade.
-  const effectBonus = item.effect ? 250 : 0;
+  // A legendary affix is worth chasing even over a plain stat upgrade; an
+  // epic's weaker "junior" version of one is still worth a solid nudge.
+  const effectBonus = item.effect ? (item.rarity === "legendary" ? 250 : 130) : 0;
   return (
-    (s.attack ?? 0) * 4 + (s.hp ?? 0) * 0.4 + (s.mana ?? 0) * 0.2 + (s.speed ?? 0) * 200 + effectBonus
+    (s.attack ?? 0) * 4 +
+    (s.hp ?? 0) * 0.4 +
+    (s.mana ?? 0) * 0.2 +
+    (s.speed ?? 0) * 200 +
+    (s.atkSpeed ?? 0) * 200 +
+    effectBonus
   );
 }
 

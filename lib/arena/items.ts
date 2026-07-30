@@ -46,7 +46,10 @@ export interface ItemStats {
   attack?: number;
   hp?: number;
   mana?: number;
+  /** Movement speed, a fraction added to speedMult (0.05 = +5%). */
   speed?: number;
+  /** Attack speed, a fraction added to attackSpeed (0.05 = +5%). */
+  atkSpeed?: number;
 }
 
 export interface ItemBase {
@@ -75,7 +78,7 @@ export interface Item {
   rarity: Rarity;
   /** Enhancement level, 0..MAX_PLUS. Weapons only. */
   plus: number;
-  /** Only legendaries roll one of these. */
+  /** Legendaries always roll one; epics have a chance at a weaker version. */
   effect?: { kind: ItemEffect; value: number };
 }
 
@@ -93,11 +96,11 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   // --- weapons (light -> heavy) -------------------------------------------
   "worn-knuckles": {
     id: "worn-knuckles", name: "Worn Knuckles", kind: "weapon", slot: "weapon",
-    tier: 1, stats: { attack: 3 }, value: 40, weight: 1, icon: "worn-knuckles",
+    tier: 1, stats: { attack: 3, atkSpeed: 0.03 }, value: 40, weight: 1, icon: "worn-knuckles",
   },
   "iron-claws": {
     id: "iron-claws", name: "Iron Claws", kind: "weapon", slot: "weapon",
-    tier: 3, stats: { attack: 6, speed: 0.02 }, value: 90, weight: 1.15, icon: "iron-claws",
+    tier: 3, stats: { attack: 6, speed: 0.02, atkSpeed: 0.03 }, value: 90, weight: 1.15, icon: "iron-claws",
   },
   "ember-gauntlet": {
     id: "ember-gauntlet", name: "Ember Gauntlet", kind: "weapon", slot: "weapon",
@@ -115,11 +118,49 @@ export const ITEM_BASES: Record<string, ItemBase> = {
     id: "warden-maul", name: "Warden's Maul", kind: "weapon", slot: "weapon",
     tier: 12, stats: { attack: 24 }, value: 620, weight: 2.6, icon: "warden-maul",
   },
+  // The original six weapons top out at tier 12, but mobs go all the way to
+  // level 54 — without gear to match, a level-50 boss had just as much
+  // chance of dropping a tier-1 knuckle-duster as anything else, so a gold
+  // item could easily come out weaker than a blue one. These carry the same
+  // curve up to the endgame (icons reused across tiers, same as any weapon
+  // family reskinned at higher level).
+  "revenants-edge": {
+    id: "revenants-edge", name: "Revenant's Edge", kind: "weapon", slot: "weapon",
+    tier: 15, stats: { attack: 30, atkSpeed: 0.04 }, value: 850, weight: 2.7, icon: "iron-claws",
+  },
+  "sovereigns-blade": {
+    id: "sovereigns-blade", name: "Sovereign's Blade", kind: "weapon", slot: "weapon",
+    tier: 20, stats: { attack: 40, mana: 16 }, value: 1200, weight: 2.85, icon: "hooked-scythe",
+  },
+  "frostbite-fang": {
+    id: "frostbite-fang", name: "Frostbite Fang", kind: "weapon", slot: "weapon",
+    tier: 27, stats: { attack: 52, speed: 0.03 }, value: 1700, weight: 3.0, icon: "ember-gauntlet",
+  },
+  "cinderforged-gauntlet": {
+    id: "cinderforged-gauntlet", name: "Cinderforged Gauntlet", kind: "weapon", slot: "weapon",
+    tier: 32, stats: { attack: 62 }, value: 2200, weight: 3.15, icon: "void-reaper",
+  },
+  "stormcallers-grasp": {
+    id: "stormcallers-grasp", name: "Stormcaller's Grasp", kind: "weapon", slot: "weapon",
+    tier: 38, stats: { attack: 74, mana: 24 }, value: 2900, weight: 3.3, icon: "warden-maul",
+  },
+  "plagueroot-cleaver": {
+    id: "plagueroot-cleaver", name: "Plagueroot Cleaver", kind: "weapon", slot: "weapon",
+    tier: 44, stats: { attack: 86, atkSpeed: 0.05 }, value: 3700, weight: 3.45, icon: "iron-claws",
+  },
+  "rotmothers-kiss": {
+    id: "rotmothers-kiss", name: "Rotmother's Kiss", kind: "weapon", slot: "weapon",
+    tier: 50, stats: { attack: 98, mana: 30 }, value: 4700, weight: 3.6, icon: "void-reaper",
+  },
+  "sundered-greatblade": {
+    id: "sundered-greatblade", name: "Sundered Greatblade", kind: "weapon", slot: "weapon",
+    tier: 54, stats: { attack: 110 }, value: 5600, weight: 3.8, icon: "warden-maul",
+  },
 
   // --- armour ---------------------------------------------------------------
   "tattered-wrap": {
     id: "tattered-wrap", name: "Tattered Wrap", kind: "armor", slot: "armor",
-    tier: 1, stats: { hp: 25 }, value: 35, icon: "tattered-wrap",
+    tier: 1, stats: { hp: 25, speed: 0.01 }, value: 35, icon: "tattered-wrap",
   },
   "scaled-vest": {
     id: "scaled-vest", name: "Scaled Vest", kind: "armor", slot: "armor",
@@ -129,6 +170,38 @@ export const ITEM_BASES: Record<string, ItemBase> = {
     id: "onyx-plate", name: "Onyx Plate", kind: "armor", slot: "armor",
     tier: 9, stats: { hp: 130 }, value: 300, icon: "onyx-plate",
   },
+  "revenant-mail": {
+    id: "revenant-mail", name: "Revenant Mail", kind: "armor", slot: "armor",
+    tier: 15, stats: { hp: 230, speed: 0.01 }, value: 900, icon: "scaled-vest",
+  },
+  "sovereign-plate": {
+    id: "sovereign-plate", name: "Sovereign Plate", kind: "armor", slot: "armor",
+    tier: 20, stats: { hp: 300, speed: 0.02 }, value: 1250, icon: "onyx-plate",
+  },
+  "frostguard-harness": {
+    id: "frostguard-harness", name: "Frostguard Harness", kind: "armor", slot: "armor",
+    tier: 27, stats: { hp: 400, speed: 0.02 }, value: 1750, icon: "tattered-wrap",
+  },
+  "cinderplate-armor": {
+    id: "cinderplate-armor", name: "Cinderplate Armor", kind: "armor", slot: "armor",
+    tier: 32, stats: { hp: 470 }, value: 2250, icon: "scaled-vest",
+  },
+  "stormward-vest": {
+    id: "stormward-vest", name: "Stormward Vest", kind: "armor", slot: "armor",
+    tier: 38, stats: { hp: 560, speed: 0.02 }, value: 2950, icon: "onyx-plate",
+  },
+  "plaguebound-hide": {
+    id: "plaguebound-hide", name: "Plaguebound Husk-Hide", kind: "armor", slot: "armor",
+    tier: 44, stats: { hp: 650, speed: 0.02 }, value: 3750, icon: "tattered-wrap",
+  },
+  "rotmothers-carapace": {
+    id: "rotmothers-carapace", name: "Rotmother's Carapace", kind: "armor", slot: "armor",
+    tier: 50, stats: { hp: 740 }, value: 4700, icon: "scaled-vest",
+  },
+  "sundered-aegis": {
+    id: "sundered-aegis", name: "Sundered Aegis", kind: "armor", slot: "armor",
+    tier: 54, stats: { hp: 820 }, value: 5500, icon: "onyx-plate",
+  },
 
   // --- trinkets -------------------------------------------------------------
   "cracked-charm": {
@@ -137,11 +210,43 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "swift-band": {
     id: "swift-band", name: "Swift Band", kind: "trinket", slot: "trinket",
-    tier: 5, stats: { speed: 0.06, mana: 20 }, value: 140, icon: "swift-band",
+    tier: 5, stats: { speed: 0.06, mana: 20, atkSpeed: 0.05 }, value: 140, icon: "swift-band",
   },
   "heart-of-ash": {
     id: "heart-of-ash", name: "Heart of Ash", kind: "trinket", slot: "trinket",
-    tier: 10, stats: { hp: 70, attack: 6 }, value: 380, icon: "heart-of-ash",
+    tier: 10, stats: { hp: 70, attack: 6, atkSpeed: 0.02 }, value: 380, icon: "heart-of-ash",
+  },
+  "revenant-locket": {
+    id: "revenant-locket", name: "Revenant Locket", kind: "trinket", slot: "trinket",
+    tier: 15, stats: { mana: 45, hp: 30, speed: 0.02 }, value: 920, icon: "cracked-charm",
+  },
+  "sovereign-signet": {
+    id: "sovereign-signet", name: "Sovereign Signet", kind: "trinket", slot: "trinket",
+    tier: 20, stats: { mana: 65, speed: 0.03, atkSpeed: 0.04 }, value: 1300, icon: "swift-band",
+  },
+  "frostheart-gem": {
+    id: "frostheart-gem", name: "Frostheart Gem", kind: "trinket", slot: "trinket",
+    tier: 27, stats: { hp: 90, attack: 8, atkSpeed: 0.03 }, value: 1800, icon: "heart-of-ash",
+  },
+  "cinder-talisman": {
+    id: "cinder-talisman", name: "Cinder Talisman", kind: "trinket", slot: "trinket",
+    tier: 32, stats: { mana: 95, speed: 0.04, atkSpeed: 0.05 }, value: 2300, icon: "cracked-charm",
+  },
+  "stormcallers-sigil": {
+    id: "stormcallers-sigil", name: "Stormcaller's Sigil", kind: "trinket", slot: "trinket",
+    tier: 38, stats: { hp: 140, mana: 60, atkSpeed: 0.04 }, value: 3000, icon: "swift-band",
+  },
+  "plaguebound-vial": {
+    id: "plaguebound-vial", name: "Plaguebound Vial", kind: "trinket", slot: "trinket",
+    tier: 44, stats: { attack: 14, speed: 0.05, atkSpeed: 0.06 }, value: 3800, icon: "heart-of-ash",
+  },
+  "rotmothers-heart": {
+    id: "rotmothers-heart", name: "Rotmother's Heart", kind: "trinket", slot: "trinket",
+    tier: 50, stats: { hp: 200, mana: 110, speed: 0.03 }, value: 4750, icon: "cracked-charm",
+  },
+  "sundered-crown-shard": {
+    id: "sundered-crown-shard", name: "Sundered Crown Shard", kind: "trinket", slot: "trinket",
+    tier: 54, stats: { attack: 20, hp: 150, mana: 80, speed: 0.04, atkSpeed: 0.06 }, value: 5600, icon: "heart-of-ash",
   },
 
   // --- trash: no stats, sold for gold --------------------------------------
@@ -197,27 +302,67 @@ function rollRarity(mobLevel: number, boss: boolean): Rarity {
   return "common";
 }
 
-/** One randomly rolled legendary affix, magnitude included. */
-function rollEffect(): { kind: ItemEffect; value: number } {
+/**
+ * One randomly rolled affix, magnitude included. `scale` softens it for
+ * epics rolling a "junior" version of a legendary's effect — roughly half
+ * strength, so it's a nice surprise on a gold item without making legendary
+ * feel pointless.
+ */
+function rollEffect(scale: number): { kind: ItemEffect; value: number } {
   const roll = Math.random();
   if (roll < 0.34) {
-    return { kind: "lifesteal", value: Math.round((0.08 + Math.random() * 0.1) * 1000) / 1000 };
+    return {
+      kind: "lifesteal",
+      value: Math.round((0.08 + Math.random() * 0.1) * scale * 1000) / 1000,
+    };
   }
   if (roll < 0.67) {
-    return { kind: "negation", value: Math.round((0.12 + Math.random() * 0.13) * 1000) / 1000 };
+    return {
+      kind: "negation",
+      value: Math.round((0.12 + Math.random() * 0.13) * scale * 1000) / 1000,
+    };
   }
-  return { kind: "regen", value: Math.round(6 + Math.random() * 8) };
+  return { kind: "regen", value: Math.max(1, Math.round((6 + Math.random() * 8) * scale)) };
 }
+
+/** Epics roll a weaker affix this often — a taste of what legendary gets guaranteed. */
+const EPIC_EFFECT_CHANCE = 0.35;
+const EPIC_EFFECT_SCALE = 0.5;
 
 export function makeItem(baseId: string, rarity: Rarity): Item {
   const item: Item = { uid: uid(), baseId, rarity, plus: 0 };
-  if (rarity === "legendary") item.effect = rollEffect();
+  if (rarity === "legendary") item.effect = rollEffect(1);
+  else if (rarity === "epic" && Math.random() < EPIC_EFFECT_CHANCE) {
+    item.effect = rollEffect(EPIC_EFFECT_SCALE);
+  }
   return item;
 }
 
 /**
+ * Gear within roughly one stage's reach of the mob's own level — a window,
+ * not just "anything at or below". Item tiers only went up to 12 while mobs
+ * climb to 54, so an unbounded "at or below" filter meant a level-50 boss
+ * was just as likely to hand over a tier-1 knuckle-duster as anything
+ * actually suited to it, and a lucky gold roll on that knuckle-duster could
+ * easily lose to a plain blue endgame weapon. Keeping tier tracking level
+ * means rarity finally layers cleanly on top of a sensible base.
+ */
+function eligibleGear(mobLevel: number): ItemBase[] {
+  const inWindow = Object.values(ITEM_BASES).filter(
+    (b) => b.kind !== "trash" && b.tier <= mobLevel + 2 && b.tier >= mobLevel - 12
+  );
+  if (inWindow.length) return inWindow;
+  // Very low levels (or gaps in the tier ladder) fall back to whatever's
+  // closest at or below the mob, rather than dropping nothing.
+  return Object.values(ITEM_BASES)
+    .filter((b) => b.kind !== "trash" && b.tier <= mobLevel + 2)
+    .sort((a, b) => b.tier - a.tier)
+    .slice(0, 3);
+}
+
+/**
  * Rolls a mob's drops. Trash is common and exists to be sold; gear is rarer
- * and drops at or below the mob's level.
+ * and drops at or near the mob's own level.
  */
 export function rollDrops(mobLevel: number, boss: boolean): Item[] {
   const out: Item[] = [];
@@ -227,9 +372,7 @@ export function rollDrops(mobLevel: number, boss: boolean): Item[] {
     const r = Math.random();
     const gearChance = boss ? 0.75 : 0.18;
     if (r < gearChance) {
-      const eligible = Object.values(ITEM_BASES).filter(
-        (b) => b.kind !== "trash" && b.tier <= mobLevel + 2
-      );
+      const eligible = eligibleGear(mobLevel);
       if (eligible.length) {
         out.push(makeItem(pick(eligible).id, rollRarity(mobLevel, boss)));
       }
@@ -256,6 +399,7 @@ export function itemStats(item: Item): ItemStats {
   if (b.stats.hp) out.hp = Math.round(b.stats.hp * mult);
   if (b.stats.mana) out.mana = Math.round(b.stats.mana * mult);
   if (b.stats.speed) out.speed = round3(b.stats.speed * mult);
+  if (b.stats.atkSpeed) out.atkSpeed = round3(b.stats.atkSpeed * mult);
   return out;
 }
 
@@ -275,7 +419,7 @@ export function itemName(item: Item): string {
 export function equippedStats(
   equipped: Partial<Record<EquipSlot, Item>>
 ): Required<ItemStats> {
-  const total = { attack: 0, hp: 0, mana: 0, speed: 0 };
+  const total = { attack: 0, hp: 0, mana: 0, speed: 0, atkSpeed: 0 };
   for (const item of Object.values(equipped)) {
     if (!item) continue;
     const s = itemStats(item);
@@ -283,6 +427,7 @@ export function equippedStats(
     total.hp += s.hp ?? 0;
     total.mana += s.mana ?? 0;
     total.speed += s.speed ?? 0;
+    total.atkSpeed += s.atkSpeed ?? 0;
   }
   return total;
 }
