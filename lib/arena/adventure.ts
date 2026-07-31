@@ -969,6 +969,13 @@ export class AdventureEngine extends ArenaEngine {
       this.player.fishing = false;
     }
 
+    // Auto-Grind has nothing to fight in town — turn it off on arrival.
+    if (stage.isTown && this.save.autoGrind) {
+      this.save.autoGrind = false;
+      this.autoGrindBrain = null;
+      this.acb.onLog("Auto-Grind stopped — back in town.", "info");
+    }
+
     this.save.stage = index;
     this.stage = stage;
     this.map = stage.map;

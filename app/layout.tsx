@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cinzel, Epilogue, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const display = Cinzel({
@@ -55,7 +56,10 @@ export default function RootLayout({
       lang="en"
       className={`${display.variable} ${epilogue.variable} ${jetbrainsMono.variable} ${hankenGrotesk.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
