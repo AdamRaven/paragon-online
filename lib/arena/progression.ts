@@ -120,12 +120,6 @@ export interface AdventureSave {
    *  is the lifetime mobKills count for `typeId` at roll time, since kills
    *  themselves are only ever tracked cumulatively. */
   dailyBounty?: { date: string; typeId: string; goal: number; baseline: number; claimed: boolean };
-  /** Wall-clock timestamp (Date.now()-based) the hired mercenary expires at
-   *  — real time, not play time, so it keeps ticking even between sessions,
-   *  the same way an actual "rental" would. */
-  mercenaryExpiresAt?: number;
-  /** Which class was hired, so a page reload mid-rental respawns the same one. */
-  mercenaryClassId?: ClassId;
   /** Base ids of every unique ever looted, kept even if later sold — powers
    *  the "own every unique" completion check. */
   uniquesFound?: string[];
@@ -317,8 +311,6 @@ export function createAdventureSave(
     storageCap: STORAGE_BASE_CAP,
     mobKills: {},
     dailyBounty: undefined,
-    mercenaryExpiresAt: undefined,
-    mercenaryClassId: undefined,
     uniquesFound: [],
     seenRunComplete: false,
     fishing: false,

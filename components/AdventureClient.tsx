@@ -49,7 +49,6 @@ import {
 import {
   AdventureEngine,
   CRUCIBLE_AFFIX_META,
-  MERC_HIRE_COST,
   type CrucibleAffix,
 } from "@/lib/arena/adventure";
 import {
@@ -434,17 +433,6 @@ export function AdventureClient() {
   const toggleFishing = () => mutate((e) => e.toggleFishing());
   const toggleAutoGrind = () => mutate((e) => e.toggleAutoGrind());
   const claimWeekly = (index: number) => mutate((e) => claimWeeklyMilestone(e.save, index));
-
-  const hireMercenary = (classId: ClassId) =>
-    mutate((e) => {
-      if (e.save.gold < MERC_HIRE_COST) {
-        setShopMsg("Not enough gold to hire a mercenary.");
-        return;
-      }
-      e.save.gold -= MERC_HIRE_COST;
-      e.hireMercenary(classId);
-      playSound("uiClick");
-    });
 
   const importSaveFile = (file: File) => {
     const reader = new FileReader();
@@ -936,7 +924,6 @@ export function AdventureClient() {
           onEnhance={enhance}
           onEnhanceMany={enhanceMany}
           onRespec={respec}
-          onHireMercenary={hireMercenary}
           lastResult={shopMsg}
           onClose={() => setPanel("none")}
         />

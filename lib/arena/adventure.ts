@@ -104,18 +104,6 @@ const DIFFICULTY_MULT: Record<Difficulty, { hp: number; damage: number; loot: nu
   nightmare: { hp: 2.4, damage: 1.7, loot: 0.35 },
 };
 
-/** A hired mercenary's AI never presses anything but lmb, so there's no
- *  mana/cooldown decision-making to get wrong. Seconds to respawn after
- *  dying, same shape as a mob; leash keeps it from wandering off alone. */
-const ALLY_RESPAWN = 6;
-const ALLY_LEASH = 460;
-const ALLY_ATTACK_CD = 0.55;
-
-/** A hired mercenary is full-strength and lasts this long in real time,
- *  gold-gated at the blacksmith — see hireMercenary. */
-export const MERC_DURATION_MS = 20 * 60 * 1000;
-export const MERC_HIRE_COST = 3000;
-
 /** "Welcome back" idle trickle: capped low and short so it's a nice
  *  return-bonus, never a reason to leave the game running unattended
  *  instead of actually playing it. Only counts time between page loads
@@ -241,8 +229,7 @@ export class AdventureEngine extends ArenaEngine {
   private bossRushCooldown = 0;
   /** Crucible stage only — not private, so MobBrain can read it directly. */
   crucibleAffixes: CrucibleAffix[] = [];
-  private mercBrain: AllyBrain | null = null;
-  private autoGrindBrain: AutoGrindBrain | null = null;
+  private autoGrindBrain: CombatBrain | null = null;
   /** World Rifts — id of the currently-open Rift Warden, if any. */
   private riftMobId: string | null = null;
   private riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
@@ -271,14 +258,7 @@ export class AdventureEngine extends ArenaEngine {
     this.spawnStageMobs();
     if (this.stage.crucible) this.rollCrucibleAffixes();
     if (this.stage.survival) this.startNextWave();
-    if (
-      this.save.mercenaryClassId &&
-      this.save.mercenaryExpiresAt &&
-      this.save.mercenaryExpiresAt > Date.now()
-    ) {
-      this.spawnMercenary(this.save.mercenaryClassId);
-    }
-    if (this.save.autoGrind) this.autoGrindBrain = new AutoGrindBrain();
+    if (this.save.autoGrind) this.autoGrindBrain = new CombatBrain();
     ensureDailyBounty(this.save);
     ensureWeeklyTrack(this.save);
     this.grantIdleBonus();
@@ -352,51 +332,6 @@ export class AdventureEngine extends ArenaEngine {
     this.acb.onLog(`Bounty claimed: +${reward.gold}g, +${reward.stones} stones.`, "good");
   }
 
-  /** Rents a mercenary of the chosen class for MERC_DURATION_MS of real
-   *  time, full-strength, gold-gated. */
-  hireMercenary(classId: ClassId) {
-    this.save.mercenaryClassId = classId;
-    this.save.mercenaryExpiresAt = Date.now() + MERC_DURATION_MS;
-    if (!this.fighters.some((f) => f.id === "merc")) this.spawnMercenary(classId);
-    this.acb.onLog(`Hired a ${getClass(classId).name} mercenary.`, "good");
-  }
-
-  private spawnMercenary(classId: ClassId) {
-    const cls = getClass(classId);
-    const merc = this.makeFighter(
-      "merc",
-      classId,
-      `${cls.name} (Hired)`,
-      false,
-      { x: this.player.x + 80, y: this.player.y },
-      -1 as Facing
-    );
-    merc.team = 0;
-    const d = deriveArenaStats(cls, this.save.level, { str: 5, agi: 5, vit: 5, foc: 5 });
-    merc.maxHp = d.maxHp;
-    merc.hp = merc.maxHp;
-    merc.attackPower = d.attackPower;
-    merc.speedMult = d.speedMult;
-    merc.attackSpeed = d.attackSpeed;
-    this.fighters.push(merc);
-    this.mercBrain = new AllyBrain();
-  }
-
-  /** Checked every tick — the rental is real-world time, so it can lapse
-   *  even while the tab is closed, same as any actual "hire until X o'clock." */
-  private expireMercenary() {
-    if (!this.save.mercenaryExpiresAt || Date.now() < this.save.mercenaryExpiresAt) return;
-    const existing = this.fighters.find((f) => f.id === "merc");
-    if (existing) {
-      this.fighters = this.fighters.filter((f) => f.id !== "merc");
-      this.mobBrains.delete("merc");
-      this.mercBrain = null;
-      this.acb.onLog("Your mercenary's contract has ended.", "info");
-    }
-    this.save.mercenaryExpiresAt = undefined;
-    this.save.mercenaryClassId = undefined;
-  }
-
   /** Re-applies level and stat bonuses to the player's live fighter. */
   applyProgression() {
     const cls = getClass(this.save.classId);
@@ -456,14 +391,14 @@ export class AdventureEngine extends ArenaEngine {
 
   /**
    * Flips Auto-Grind on/off. While on, the player's own manual input is
-   * ignored entirely and an AI brain drives them instead — walk to the
-   * nearest mob, swing, repeat, and wander toward unclaimed loot when
-   * there's nothing left to fight. Deliberately dumb (no skills, no
-   * jumping) rather than a smart combat AI — see AutoGrindBrain.
+   * ignored entirely and CombatBrain drives them instead — walk to the
+   * nearest reachable mob, fight it with lmb and E/R/F, collect loot, sweep
+   * the map when there's nothing to do. No jumping, no Q/Shift. See
+   * CombatBrain.
    */
   toggleAutoGrind() {
     this.save.autoGrind = !this.save.autoGrind;
-    this.autoGrindBrain = this.save.autoGrind ? new AutoGrindBrain() : null;
+    this.autoGrindBrain = this.save.autoGrind ? new CombatBrain() : null;
     this.acb.onLog(this.save.autoGrind ? "Auto-Grind engaged." : "Auto-Grind stopped.", "info");
   }
 
@@ -632,8 +567,8 @@ export class AdventureEngine extends ArenaEngine {
   }
 
   /** Drives P1 from input (or, with Auto-Grind on, from its own brain
-   *  instead), the mercenary (if hired) from its own brain, and every mob
-   *  from its own brain. Mob brains only ever target this.player. */
+   *  instead) and every mob from its own brain. Mob brains only ever
+   *  target this.player. */
   stepAdventure(playerIntent: Intent) {
     if (this.over) return;
 
@@ -648,17 +583,13 @@ export class AdventureEngine extends ArenaEngine {
       if (brain) brain.cache = brain.think(mob, this.player, this);
     }
 
-    this.stepAll(effectivePlayerIntent, (f) => {
-      if (f.id === "merc") return this.mercBrain?.think(f, this) ?? emptyIntent();
-      return this.mobBrains.get(f.id)?.cache ?? emptyIntent();
-    });
+    this.stepAll(effectivePlayerIntent, (f) => this.mobBrains.get(f.id)?.cache ?? emptyIntent());
 
     this.handleDeaths();
     this.updateLootDrops();
     if (this.stage.survival) this.updateSurvival();
     if (this.stage.bossRush) this.updateBossRush();
     this.updateRifts();
-    this.expireMercenary();
     this.collectFishing();
   }
 
@@ -851,19 +782,6 @@ export class AdventureEngine extends ArenaEngine {
   private handleDeaths() {
     const toRemove: Fighter[] = [];
     for (const f of this.fighters) {
-      // A downed mercenary just gets back up — no death penalty, doesn't
-      // count as a player death or end a Survival/Boss Rush run — handled
-      // before the isMob/player branches below since it's neither.
-      if (f.id === "merc") {
-        if (f.hp <= 0 && f.state !== "dead") {
-          f.state = "dead";
-          f.deadTimer = ALLY_RESPAWN;
-        } else if (f.state === "dead") {
-          f.deadTimer -= DT;
-          if (f.deadTimer <= 0) this.reviveAlly(f);
-        }
-        continue;
-      }
       if (f.isMob) {
         if (f.hp <= 0 && f.state !== "dead") {
           f.state = "dead";
@@ -1028,19 +946,6 @@ export class AdventureEngine extends ArenaEngine {
     this.acb.onLog("You rise again at the entrance.", "info");
   }
 
-  private reviveAlly(f: Fighter) {
-    f.state = "idle";
-    f.hp = f.maxHp;
-    f.x = this.player.x + 80;
-    f.y = this.player.y;
-    f.vx = 0;
-    f.vy = 0;
-    f.action = null;
-    f.knockdownTimer = 0;
-    f.hitstun = 0;
-    f.stunTimer = 0;
-  }
-
   private spawnKillFx(f: Fighter, exp: number) {
     this.pushFloating(f.x, f.y - f.h - 8, `+${exp} EXP`, "#a5f3fc", 16);
     this.burstAt(f.x, f.y - f.h * 0.5, MOB_TYPES[f.mobTypeId!].accent, 22);
@@ -1068,8 +973,7 @@ export class AdventureEngine extends ArenaEngine {
     this.stage = stage;
     this.map = stage.map;
 
-    // Only mobs are stage-local — the player and a hired mercenary both
-    // travel together.
+    // Only mobs are stage-local — the player travels between stages.
     this.fighters = this.fighters.filter((f) => !f.isMob);
     this.mobBrains.clear();
     this.hitboxes = [];
@@ -1083,14 +987,6 @@ export class AdventureEngine extends ArenaEngine {
     p.vx = 0;
     p.vy = 0;
     p.state = "idle";
-    const merc = this.fighters.find((f) => f.id === "merc");
-    if (merc) {
-      merc.x = this.map.spawnA.x + 80;
-      merc.y = this.map.spawnA.y;
-      merc.vx = 0;
-      merc.vy = 0;
-      merc.state = "idle";
-    }
     this.spawnStageMobs();
     // Wave/boss-rush/rift state is per-visit: travelling here fresh should
     // always restart clean, same as dying mid-run does, not resume wherever
@@ -1331,71 +1227,14 @@ class MobBrain {
 }
 
 /**
- * The hired mercenary's AI: chase whichever mob is nearest the player (never
- * wander further than ALLY_LEASH from the player chasing something), swing
- * lmb on cooldown once in range, otherwise just stay close. Deliberately the
- * simplest possible brain — no skills, no mana, no positioning tricks — so
- * there's nothing subtle to get wrong.
- */
-class AllyBrain {
-  private attackCd = 0;
-
-  think(self: Fighter, engine: AdventureEngine): Intent {
-    const i = emptyIntent();
-    if (
-      self.state === "dead" ||
-      self.knockdownTimer > 0 ||
-      self.stunTimer > 0 ||
-      self.hitstun > 0 ||
-      self.action
-    ) {
-      return i;
-    }
-    this.attackCd -= DT;
-
-    const player = engine.player;
-    const cls = getClass(self.classId);
-
-    let target: Fighter | null = null;
-    let bestD = Infinity;
-    for (const f of engine.fighters) {
-      if (!f.isMob || f.state === "dead") continue;
-      if (Math.abs(f.x - player.x) > ALLY_LEASH) continue;
-      const d = Math.abs(f.x - self.x);
-      if (d < bestD) {
-        bestD = d;
-        target = f;
-      }
-    }
-
-    const anchor = target ?? player;
-    const dx = anchor.x - self.x;
-    const dist = Math.abs(dx);
-    const dir: 1 | -1 = dx >= 0 ? 1 : -1;
-
-    if (target && dist <= cls.attackRange * 0.85) {
-      self.facing = dir;
-      if (this.attackCd <= 0) {
-        i.lmb = true;
-        this.attackCd = ALLY_ATTACK_CD;
-      }
-    } else if (dist > 40) {
-      self.facing = dir;
-      i.moveX = dir;
-    }
-    return i;
-  }
-}
-
-/**
- * Auto-Grind: walks to the nearest *reachable* mob (same height, within
- * ~90 units — the same "sameHeight" threshold MobBrain itself uses, since
- * this brain doesn't jump either and has no business swinging at something
- * one platform up) and fights it; with nothing reachable, walks to the
- * nearest reachable loot drop instead; with neither, sweeps left and right
- * across the whole map rather than standing still, so it actually walks
- * over loot and finds mobs elsewhere instead of waiting for them to wander
- * into a fixed radius.
+ * Auto-Grind's brain: walks to the nearest *reachable* mob (same height,
+ * within ~90 units — the same "sameHeight" threshold MobBrain itself uses,
+ * since this brain doesn't jump either and has no business swinging at
+ * something one platform up) and fights it; with nothing reachable, walks
+ * to the nearest reachable loot drop instead; with neither, sweeps left
+ * and right across the whole map rather than standing still, turning
+ * around at the edges, so it actually covers the stage instead of waiting
+ * for something to wander into a fixed radius.
  *
  * In range, it presses E/R/F (whichever class you're on) alongside lmb
  * every tick rather than tracking its own cooldown timer — trySkill()
@@ -1408,7 +1247,7 @@ class AllyBrain {
  * dash, not "more damage on cooldown," and blindly mashing them wouldn't
  * actually help.
  */
-class AutoGrindBrain {
+class CombatBrain {
   private patrolDir: 1 | -1 = 1;
 
   think(engine: AdventureEngine): Intent {
