@@ -177,12 +177,12 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   // --- weapons (light -> heavy) -------------------------------------------
   "worn-knuckles": {
     id: "worn-knuckles", name: "Worn Gauntlets", kind: "weapon", slot: "weapon",
-    tier: 1, stats: { attack: 3, atkSpeed: 0.03 }, value: 40, weight: 1, icon: "worn-knuckles",
+    tier: 1, stats: { attack: 3, atkSpeed: 0.018 }, value: 40, weight: 1, icon: "worn-knuckles",
     setId: "tattered",
   },
   "iron-claws": {
     id: "iron-claws", name: "Iron Gauntlets", kind: "weapon", slot: "weapon",
-    tier: 3, stats: { attack: 6, speed: 0.02, atkSpeed: 0.03 }, value: 90, weight: 1.15, icon: "iron-claws",
+    tier: 3, stats: { attack: 6, speed: 0.02, atkSpeed: 0.018 }, value: 90, weight: 1.15, icon: "iron-claws",
     setId: "scaled",
   },
   "ember-gauntlet": {
@@ -213,7 +213,7 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   // family reskinned at higher level).
   "revenants-edge": {
     id: "revenants-edge", name: "Revenant's Gauntlets", kind: "weapon", slot: "weapon",
-    tier: 15, stats: { attack: 30, atkSpeed: 0.04 }, value: 850, weight: 2.7, icon: "iron-claws",
+    tier: 15, stats: { attack: 30, atkSpeed: 0.024 }, value: 850, weight: 2.7, icon: "iron-claws",
     setId: "revenant",
   },
   "sovereigns-blade": {
@@ -238,7 +238,7 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "plagueroot-cleaver": {
     id: "plagueroot-cleaver", name: "Plagueroot Gauntlets", kind: "weapon", slot: "weapon",
-    tier: 44, stats: { attack: 86, atkSpeed: 0.05 }, value: 3700, weight: 3.45, icon: "iron-claws",
+    tier: 44, stats: { attack: 86, atkSpeed: 0.03 }, value: 3700, weight: 3.45, icon: "iron-claws",
     setId: "plaguebound",
   },
   "rotmothers-kiss": {
@@ -317,12 +317,12 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "swift-band": {
     id: "swift-band", name: "Swift Necklace", kind: "trinket", slot: "necklace",
-    tier: 5, stats: { speed: 0.06, mana: 20, atkSpeed: 0.05 }, value: 140, icon: "swift-band",
+    tier: 5, stats: { speed: 0.06, mana: 20, atkSpeed: 0.03 }, value: 140, icon: "swift-band",
     setId: "scaled",
   },
   "heart-of-ash": {
     id: "heart-of-ash", name: "Ember Necklace", kind: "trinket", slot: "necklace",
-    tier: 10, stats: { hp: 70, attack: 6, atkSpeed: 0.02 }, value: 380, icon: "heart-of-ash",
+    tier: 10, stats: { hp: 70, attack: 6, atkSpeed: 0.012 }, value: 380, icon: "heart-of-ash",
     setId: "onyx",
   },
   "revenant-locket": {
@@ -332,27 +332,27 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "sovereign-signet": {
     id: "sovereign-signet", name: "Sovereign Necklace", kind: "trinket", slot: "necklace",
-    tier: 20, stats: { mana: 65, speed: 0.03, atkSpeed: 0.04 }, value: 1300, icon: "swift-band",
+    tier: 20, stats: { mana: 65, speed: 0.03, atkSpeed: 0.024 }, value: 1300, icon: "swift-band",
     setId: "sovereign",
   },
   "frostheart-gem": {
     id: "frostheart-gem", name: "Frostheart Necklace", kind: "trinket", slot: "necklace",
-    tier: 27, stats: { hp: 90, attack: 8, atkSpeed: 0.03 }, value: 1800, icon: "heart-of-ash",
+    tier: 27, stats: { hp: 90, attack: 8, atkSpeed: 0.018 }, value: 1800, icon: "heart-of-ash",
     setId: "frostguard",
   },
   "cinder-talisman": {
     id: "cinder-talisman", name: "Cinder Necklace", kind: "trinket", slot: "necklace",
-    tier: 32, stats: { mana: 95, speed: 0.04, atkSpeed: 0.05 }, value: 2300, icon: "cracked-charm",
+    tier: 32, stats: { mana: 95, speed: 0.04, atkSpeed: 0.03 }, value: 2300, icon: "cracked-charm",
     setId: "cinderplate",
   },
   "stormcallers-sigil": {
     id: "stormcallers-sigil", name: "Storm Necklace", kind: "trinket", slot: "necklace",
-    tier: 38, stats: { hp: 140, mana: 60, atkSpeed: 0.04 }, value: 3000, icon: "swift-band",
+    tier: 38, stats: { hp: 140, mana: 60, atkSpeed: 0.024 }, value: 3000, icon: "swift-band",
     setId: "stormward",
   },
   "plaguebound-vial": {
     id: "plaguebound-vial", name: "Plague Necklace", kind: "trinket", slot: "necklace",
-    tier: 44, stats: { attack: 14, speed: 0.05, atkSpeed: 0.06 }, value: 3800, icon: "heart-of-ash",
+    tier: 44, stats: { attack: 14, speed: 0.05, atkSpeed: 0.036 }, value: 3800, icon: "heart-of-ash",
     setId: "plaguebound",
   },
   "rotmothers-heart": {
@@ -362,7 +362,7 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "sundered-crown-shard": {
     id: "sundered-crown-shard", name: "Sundered Necklace", kind: "trinket", slot: "necklace",
-    tier: 54, stats: { attack: 20, hp: 150, mana: 80, speed: 0.04, atkSpeed: 0.06 }, value: 5600, icon: "heart-of-ash",
+    tier: 54, stats: { attack: 20, hp: 150, mana: 80, speed: 0.04, atkSpeed: 0.036 }, value: 5600, icon: "heart-of-ash",
     setId: "sundered",
   },
 
@@ -483,57 +483,57 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   // --- hand armour --------------------------------------------------------
   "tattered-gloves": {
     id: "tattered-gloves", name: "Tattered Gloves", kind: "armor", slot: "hands",
-    tier: 1, stats: { hp: 6, atkSpeed: 0.021 }, value: 12, icon: "leather-gloves",
+    tier: 1, stats: { hp: 6, atkSpeed: 0.013 }, value: 12, icon: "leather-gloves",
     setId: "tattered",
   },
   "scaled-gauntlets": {
     id: "scaled-gauntlets", name: "Scaled Gloves", kind: "armor", slot: "hands",
-    tier: 4, stats: { hp: 13, atkSpeed: 0.022 }, value: 38, icon: "leather-gloves",
+    tier: 4, stats: { hp: 13, atkSpeed: 0.013 }, value: 38, icon: "leather-gloves",
     setId: "scaled",
   },
   "onyx-grips": {
     id: "onyx-grips", name: "Onyx Gloves", kind: "armor", slot: "hands",
-    tier: 9, stats: { hp: 29, atkSpeed: 0.025 }, value: 105, icon: "leather-gloves",
+    tier: 9, stats: { hp: 29, atkSpeed: 0.015 }, value: 105, icon: "leather-gloves",
     setId: "onyx",
   },
   "revenant-gloves": {
     id: "revenant-gloves", name: "Revenant Gloves", kind: "armor", slot: "hands",
-    tier: 15, stats: { hp: 51, atkSpeed: 0.029 }, value: 315, icon: "leather-gloves",
+    tier: 15, stats: { hp: 51, atkSpeed: 0.017 }, value: 315, icon: "leather-gloves",
     setId: "revenant",
   },
   "sovereign-gauntlets": {
     id: "sovereign-gauntlets", name: "Sovereign Gloves", kind: "armor", slot: "hands",
-    tier: 20, stats: { hp: 66, atkSpeed: 0.032 }, value: 438, icon: "leather-gloves",
+    tier: 20, stats: { hp: 66, atkSpeed: 0.019 }, value: 438, icon: "leather-gloves",
     setId: "sovereign",
   },
   "frostguard-grips": {
     id: "frostguard-grips", name: "Frostguard Gloves", kind: "armor", slot: "hands",
-    tier: 27, stats: { hp: 88, atkSpeed: 0.036 }, value: 612, icon: "leather-gloves",
+    tier: 27, stats: { hp: 88, atkSpeed: 0.022 }, value: 612, icon: "leather-gloves",
     setId: "frostguard",
   },
   "cinderplate-gauntlets": {
     id: "cinderplate-gauntlets", name: "Cinderplate Gloves", kind: "armor", slot: "hands",
-    tier: 32, stats: { hp: 103, atkSpeed: 0.039 }, value: 788, icon: "plate-gloves",
+    tier: 32, stats: { hp: 103, atkSpeed: 0.023 }, value: 788, icon: "plate-gloves",
     setId: "cinderplate",
   },
   "stormward-gloves": {
     id: "stormward-gloves", name: "Stormward Gloves", kind: "armor", slot: "hands",
-    tier: 38, stats: { hp: 123, atkSpeed: 0.043 }, value: 1032, icon: "plate-gloves",
+    tier: 38, stats: { hp: 123, atkSpeed: 0.026 }, value: 1032, icon: "plate-gloves",
     setId: "stormward",
   },
   "plaguebound-grips": {
     id: "plaguebound-grips", name: "Plaguebound Gloves", kind: "armor", slot: "hands",
-    tier: 44, stats: { hp: 143, atkSpeed: 0.046 }, value: 1312, icon: "plate-gloves",
+    tier: 44, stats: { hp: 143, atkSpeed: 0.028 }, value: 1312, icon: "plate-gloves",
     setId: "plaguebound",
   },
   "rotmothers-gauntlets": {
     id: "rotmothers-gauntlets", name: "Rotmother's Gloves", kind: "armor", slot: "hands",
-    tier: 50, stats: { hp: 163, atkSpeed: 0.05 }, value: 1645, icon: "plate-gloves",
+    tier: 50, stats: { hp: 163, atkSpeed: 0.03 }, value: 1645, icon: "plate-gloves",
     setId: "rotmother",
   },
   "sundered-gauntlets": {
     id: "sundered-gauntlets", name: "Sundered Gloves", kind: "armor", slot: "hands",
-    tier: 54, stats: { hp: 180, atkSpeed: 0.052 }, value: 1925, icon: "plate-gloves",
+    tier: 54, stats: { hp: 180, atkSpeed: 0.031 }, value: 1925, icon: "plate-gloves",
     setId: "sundered",
   },
 
@@ -545,12 +545,12 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "swift-ring": {
     id: "swift-ring", name: "Swift Ring", kind: "trinket", slot: "ring",
-    tier: 5, stats: { speed: 0.06, mana: 20, atkSpeed: 0.05 }, value: 140, icon: "iron-ring",
+    tier: 5, stats: { speed: 0.06, mana: 20, atkSpeed: 0.03 }, value: 140, icon: "iron-ring",
     setId: "scaled",
   },
   "ember-loop": {
     id: "ember-loop", name: "Ember Ring", kind: "trinket", slot: "ring",
-    tier: 10, stats: { hp: 70, attack: 6, atkSpeed: 0.02 }, value: 380, icon: "iron-ring",
+    tier: 10, stats: { hp: 70, attack: 6, atkSpeed: 0.012 }, value: 380, icon: "iron-ring",
     setId: "onyx",
   },
   "revenant-ring": {
@@ -560,27 +560,27 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "sovereign-band": {
     id: "sovereign-band", name: "Sovereign Ring", kind: "trinket", slot: "ring",
-    tier: 20, stats: { mana: 65, speed: 0.03, atkSpeed: 0.04 }, value: 1300, icon: "iron-ring",
+    tier: 20, stats: { mana: 65, speed: 0.03, atkSpeed: 0.024 }, value: 1300, icon: "iron-ring",
     setId: "sovereign",
   },
   "frostheart-ring": {
     id: "frostheart-ring", name: "Frostheart Ring", kind: "trinket", slot: "ring",
-    tier: 27, stats: { hp: 90, attack: 8, atkSpeed: 0.03 }, value: 1800, icon: "iron-ring",
+    tier: 27, stats: { hp: 90, attack: 8, atkSpeed: 0.018 }, value: 1800, icon: "iron-ring",
     setId: "frostguard",
   },
   "cinder-loop": {
     id: "cinder-loop", name: "Cinder Ring", kind: "trinket", slot: "ring",
-    tier: 32, stats: { mana: 95, speed: 0.04, atkSpeed: 0.05 }, value: 2300, icon: "gem-ring",
+    tier: 32, stats: { mana: 95, speed: 0.04, atkSpeed: 0.03 }, value: 2300, icon: "gem-ring",
     setId: "cinderplate",
   },
   "storm-ring": {
     id: "storm-ring", name: "Storm Ring", kind: "trinket", slot: "ring",
-    tier: 38, stats: { hp: 140, mana: 60, atkSpeed: 0.04 }, value: 3000, icon: "gem-ring",
+    tier: 38, stats: { hp: 140, mana: 60, atkSpeed: 0.024 }, value: 3000, icon: "gem-ring",
     setId: "stormward",
   },
   "plague-band": {
     id: "plague-band", name: "Plague Ring", kind: "trinket", slot: "ring",
-    tier: 44, stats: { attack: 14, speed: 0.05, atkSpeed: 0.06 }, value: 3800, icon: "gem-ring",
+    tier: 44, stats: { attack: 14, speed: 0.05, atkSpeed: 0.036 }, value: 3800, icon: "gem-ring",
     setId: "plaguebound",
   },
   "rotmothers-ring": {
@@ -590,7 +590,7 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "sundered-band": {
     id: "sundered-band", name: "Sundered Ring", kind: "trinket", slot: "ring",
-    tier: 54, stats: { attack: 20, hp: 150, mana: 80, speed: 0.04, atkSpeed: 0.06 }, value: 5600, icon: "gem-ring",
+    tier: 54, stats: { attack: 20, hp: 150, mana: 80, speed: 0.04, atkSpeed: 0.036 }, value: 5600, icon: "gem-ring",
     setId: "sundered",
   },
 
@@ -655,57 +655,57 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   // this family) ------------------------------------------------------------
   "cracked-stud": {
     id: "cracked-stud", name: "Cracked Earring", kind: "trinket", slot: "earring",
-    tier: 2, stats: { mana: 12, atkSpeed: 0.015 }, value: 40, icon: "hoop-earring",
+    tier: 2, stats: { mana: 12, atkSpeed: 0.009 }, value: 40, icon: "hoop-earring",
     setId: "tattered",
   },
   "swift-hoop": {
     id: "swift-hoop", name: "Swift Earring", kind: "trinket", slot: "earring",
-    tier: 5, stats: { mana: 22, atkSpeed: 0.025 }, value: 130, icon: "hoop-earring",
+    tier: 5, stats: { mana: 22, atkSpeed: 0.015 }, value: 130, icon: "hoop-earring",
     setId: "scaled",
   },
   "ember-drop": {
     id: "ember-drop", name: "Ember Earring", kind: "trinket", slot: "earring",
-    tier: 10, stats: { mana: 40, atkSpeed: 0.035 }, value: 350, icon: "hoop-earring",
+    tier: 10, stats: { mana: 40, atkSpeed: 0.021 }, value: 350, icon: "hoop-earring",
     setId: "onyx",
   },
   "revenant-hoop": {
     id: "revenant-hoop", name: "Revenant Earring", kind: "trinket", slot: "earring",
-    tier: 15, stats: { mana: 60, atkSpeed: 0.045 }, value: 880, icon: "hoop-earring",
+    tier: 15, stats: { mana: 60, atkSpeed: 0.027 }, value: 880, icon: "hoop-earring",
     setId: "revenant",
   },
   "sovereign-stud": {
     id: "sovereign-stud", name: "Sovereign Earring", kind: "trinket", slot: "earring",
-    tier: 20, stats: { mana: 80, atkSpeed: 0.05 }, value: 1250, icon: "hoop-earring",
+    tier: 20, stats: { mana: 80, atkSpeed: 0.03 }, value: 1250, icon: "hoop-earring",
     setId: "sovereign",
   },
   "frostheart-drop": {
     id: "frostheart-drop", name: "Frostheart Earring", kind: "trinket", slot: "earring",
-    tier: 27, stats: { mana: 105, atkSpeed: 0.055 }, value: 1750, icon: "hoop-earring",
+    tier: 27, stats: { mana: 105, atkSpeed: 0.033 }, value: 1750, icon: "hoop-earring",
     setId: "frostguard",
   },
   "cinder-hoop": {
     id: "cinder-hoop", name: "Cinder Earring", kind: "trinket", slot: "earring",
-    tier: 32, stats: { mana: 125, atkSpeed: 0.06 }, value: 2250, icon: "gem-earring",
+    tier: 32, stats: { mana: 125, atkSpeed: 0.036 }, value: 2250, icon: "gem-earring",
     setId: "cinderplate",
   },
   "storm-stud": {
     id: "storm-stud", name: "Storm Earring", kind: "trinket", slot: "earring",
-    tier: 38, stats: { mana: 150, atkSpeed: 0.065 }, value: 2950, icon: "gem-earring",
+    tier: 38, stats: { mana: 150, atkSpeed: 0.039 }, value: 2950, icon: "gem-earring",
     setId: "stormward",
   },
   "plague-drop": {
     id: "plague-drop", name: "Plague Earring", kind: "trinket", slot: "earring",
-    tier: 44, stats: { mana: 175, atkSpeed: 0.07 }, value: 3750, icon: "gem-earring",
+    tier: 44, stats: { mana: 175, atkSpeed: 0.042 }, value: 3750, icon: "gem-earring",
     setId: "plaguebound",
   },
   "rotmothers-hoop": {
     id: "rotmothers-hoop", name: "Rotmother's Earring", kind: "trinket", slot: "earring",
-    tier: 50, stats: { mana: 205, atkSpeed: 0.075 }, value: 4700, icon: "gem-earring",
+    tier: 50, stats: { mana: 205, atkSpeed: 0.045 }, value: 4700, icon: "gem-earring",
     setId: "rotmother",
   },
   "sundered-stud": {
     id: "sundered-stud", name: "Sundered Earring", kind: "trinket", slot: "earring",
-    tier: 54, stats: { mana: 230, atkSpeed: 0.08 }, value: 5500, icon: "gem-earring",
+    tier: 54, stats: { mana: 230, atkSpeed: 0.048 }, value: 5500, icon: "gem-earring",
     setId: "sundered",
   },
 
@@ -730,7 +730,7 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "forgehearts-grasp": {
     id: "forgehearts-grasp", name: "Forgeheart's Grasp", kind: "armor", slot: "hands",
-    tier: 38, stats: { hp: 110, atkSpeed: 0.045 }, value: 13000, icon: "plate-gloves",
+    tier: 38, stats: { hp: 110, atkSpeed: 0.027 }, value: 13000, icon: "plate-gloves",
     unique: true, dropFrom: "forgeheart",
     fixedEffect: { kind: "lifesteal", value: 0.25 },
   },
@@ -748,7 +748,7 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
   "sundered-kings-vow": {
     id: "sundered-kings-vow", name: "The Sundered King's Vow", kind: "weapon", slot: "weapon",
-    tier: 54, stats: { attack: 140, atkSpeed: 0.02 }, value: 20000, weight: 3.4,
+    tier: 54, stats: { attack: 140, atkSpeed: 0.012 }, value: 20000, weight: 3.4,
     icon: "sundered-kings-vow", unique: true, dropFrom: "sunderedking",
     fixedEffect: { kind: "lifesteal", value: 0.35 },
   },

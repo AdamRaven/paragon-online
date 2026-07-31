@@ -156,6 +156,10 @@ export interface AdventureSave {
   /** Lifetime fish caught, just for the character sheet — the fish
    *  themselves land in `inventory` as regular sellable trash items. */
   fishCaught?: number;
+  /** When on, an AI brain drives the player instead of manual input — see
+   *  AdventureEngine.toggleAutoGrind. Deliberately dumb: no skills, no
+   *  jumping, just walk to the nearest mob and swing. */
+  autoGrind?: boolean;
 }
 
 /** Experience needed to advance from `level` to `level + 1`. */
@@ -320,6 +324,7 @@ export function createAdventureSave(
     fishing: false,
     lastFishTick: undefined,
     fishCaught: 0,
+    autoGrind: false,
   };
 }
 

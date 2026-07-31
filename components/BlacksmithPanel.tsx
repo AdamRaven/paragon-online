@@ -192,6 +192,19 @@ export function BlacksmithPanel({
                   Buy 10000 ({STONE_PRICE * 10000}g)
                 </button>
               )}
+              {(() => {
+                const maxN = Math.floor(save.gold / STONE_PRICE);
+                return (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ flex: 1, minWidth: 90 }}
+                    disabled={maxN <= 0}
+                    onClick={() => onBuyStones(maxN)}
+                  >
+                    {maxN <= 0 ? "Buy Max" : `Buy Max (${maxN})`}
+                  </button>
+                );
+              })()}
             </div>
 
             {(() => {
@@ -342,6 +355,15 @@ export function BlacksmithPanel({
                           onClick={() => onEnhanceMany(i, 1000)}
                         >
                           x1000
+                        </button>
+                      )}
+                      {!maxed && save.stones >= 10000 && (
+                        <button
+                          className="btn tiny btn-ghost"
+                          title="Attempts 10000 enhancements back to back, stopping early if it maxes out or you run out of stones."
+                          onClick={() => onEnhanceMany(i, 10000)}
+                        >
+                          x10000
                         </button>
                       )}
                     </span>

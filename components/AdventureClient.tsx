@@ -432,6 +432,7 @@ export function AdventureClient() {
 
   const claimBounty = () => mutate((e) => e.claimBounty());
   const toggleFishing = () => mutate((e) => e.toggleFishing());
+  const toggleAutoGrind = () => mutate((e) => e.toggleAutoGrind());
   const claimWeekly = (index: number) => mutate((e) => claimWeeklyMilestone(e.save, index));
 
   const hireMercenary = (classId: ClassId) =>
@@ -767,6 +768,11 @@ export function AdventureClient() {
             <small>{live.fishCaught ?? 0} caught lifetime</small>
           </div>
         )}
+        {live.autoGrind && (
+          <div className="camp-wave" title="Manual input is ignored while this is on — toggle it off to take back control.">
+            ⚔️ Auto-Grinding…
+          </div>
+        )}
         <div className="bar expbar">
           <div className="bar-fill" style={{ width: `${expPct}%` }} />
           <div className="bar-text">
@@ -791,6 +797,13 @@ export function AdventureClient() {
         </button>
         <button className="btn btn-ghost camp-btn" onClick={() => setPanel("records")}>
           Records
+        </button>
+        <button
+          className={`btn camp-btn ${live.autoGrind ? "" : "btn-ghost"}`}
+          title="AI-driven: walks to the nearest mob, uses E/R/F whenever they're off cooldown, and collects loot. No jumping, no Q/Shift — manual input is ignored while it's on."
+          onClick={toggleAutoGrind}
+        >
+          {live.autoGrind ? "Auto-Grind: On" : "Auto-Grind"}
         </button>
       </div>
 

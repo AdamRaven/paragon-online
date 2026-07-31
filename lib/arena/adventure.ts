@@ -242,6 +242,7 @@ export class AdventureEngine extends ArenaEngine {
   /** Crucible stage only — not private, so MobBrain can read it directly. */
   crucibleAffixes: CrucibleAffix[] = [];
   private mercBrain: AllyBrain | null = null;
+  private autoGrindBrain: AutoGrindBrain | null = null;
   /** World Rifts — id of the currently-open Rift Warden, if any. */
   private riftMobId: string | null = null;
   private riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
@@ -277,6 +278,7 @@ export class AdventureEngine extends ArenaEngine {
     ) {
       this.spawnMercenary(this.save.mercenaryClassId);
     }
+    if (this.save.autoGrind) this.autoGrindBrain = new AutoGrindBrain();
     ensureDailyBounty(this.save);
     ensureWeeklyTrack(this.save);
     this.grantIdleBonus();
@@ -453,6 +455,19 @@ export class AdventureEngine extends ArenaEngine {
   }
 
   /**
+   * Flips Auto-Grind on/off. While on, the player's own manual input is
+   * ignored entirely and an AI brain drives them instead — walk to the
+   * nearest mob, swing, repeat, and wander toward unclaimed loot when
+   * there's nothing left to fight. Deliberately dumb (no skills, no
+   * jumping) rather than a smart combat AI — see AutoGrindBrain.
+   */
+  toggleAutoGrind() {
+    this.save.autoGrind = !this.save.autoGrind;
+    this.autoGrindBrain = this.save.autoGrind ? new AutoGrindBrain() : null;
+    this.acb.onLog(this.save.autoGrind ? "Auto-Grind engaged." : "Auto-Grind stopped.", "info");
+  }
+
+  /**
    * Starting requires standing at the lake; stopping always works from
    * anywhere. While fishing, a fish lands in the backpack about once a
    * minute of real elapsed time — see collectFishing — so it keeps paying
@@ -616,10 +631,16 @@ export class AdventureEngine extends ArenaEngine {
     return mob;
   }
 
-  /** Drives P1 from input, the mercenary (if hired) from its own brain, and
-   *  every mob from its own brain. Mob brains only ever target this.player. */
+  /** Drives P1 from input (or, with Auto-Grind on, from its own brain
+   *  instead), the mercenary (if hired) from its own brain, and every mob
+   *  from its own brain. Mob brains only ever target this.player. */
   stepAdventure(playerIntent: Intent) {
     if (this.over) return;
+
+    const effectivePlayerIntent =
+      this.save.autoGrind && this.autoGrindBrain
+        ? this.autoGrindBrain.think(this)
+        : playerIntent;
 
     for (const mob of this.fighters) {
       if (!mob.isMob) continue;
@@ -627,7 +648,7 @@ export class AdventureEngine extends ArenaEngine {
       if (brain) brain.cache = brain.think(mob, this.player, this);
     }
 
-    this.stepAll(playerIntent, (f) => {
+    this.stepAll(effectivePlayerIntent, (f) => {
       if (f.id === "merc") return this.mercBrain?.think(f, this) ?? emptyIntent();
       return this.mobBrains.get(f.id)?.cache ?? emptyIntent();
     });
@@ -1362,6 +1383,108 @@ class AllyBrain {
       self.facing = dir;
       i.moveX = dir;
     }
+    return i;
+  }
+}
+
+/**
+ * Auto-Grind: walks to the nearest *reachable* mob (same height, within
+ * ~90 units — the same "sameHeight" threshold MobBrain itself uses, since
+ * this brain doesn't jump either and has no business swinging at something
+ * one platform up) and fights it; with nothing reachable, walks to the
+ * nearest reachable loot drop instead; with neither, sweeps left and right
+ * across the whole map rather than standing still, so it actually walks
+ * over loot and finds mobs elsewhere instead of waiting for them to wander
+ * into a fixed radius.
+ *
+ * In range, it presses E/R/F (whichever class you're on) alongside lmb
+ * every tick rather than tracking its own cooldown timer — trySkill()
+ * already rejects anything still on cooldown or short on mana, and a
+ * fighter mid-cast just ignores new input until it resolves (see the
+ * f.action check at the top of updateFighter), so "always ask for
+ * everything" naturally reduces to "use whatever's actually ready" without
+ * this brain needing to duplicate any of that bookkeeping itself. No Q or
+ * Shift, deliberately: those are a timed counter-stance and a movement
+ * dash, not "more damage on cooldown," and blindly mashing them wouldn't
+ * actually help.
+ */
+class AutoGrindBrain {
+  private patrolDir: 1 | -1 = 1;
+
+  think(engine: AdventureEngine): Intent {
+    const i = emptyIntent();
+    const self = engine.player;
+    if (
+      self.state === "dead" ||
+      self.knockdownTimer > 0 ||
+      self.stunTimer > 0 ||
+      self.hitstun > 0 ||
+      self.action
+    ) {
+      return i;
+    }
+    const cls = getClass(self.classId);
+    let target: Fighter | null = null;
+    let bestD = Infinity;
+    for (const f of engine.fighters) {
+      if (!f.isMob || f.state === "dead") continue;
+      if (Math.abs(f.y - self.y) > 90) continue; // different platform — not reachable, don't swing at it
+      const d = Math.abs(f.x - self.x);
+      if (d < bestD) {
+        bestD = d;
+        target = f;
+      }
+    }
+
+    if (target) {
+      const dx = target.x - self.x;
+      const dist = Math.abs(dx);
+      const dir: 1 | -1 = dx >= 0 ? 1 : -1;
+      if (dist <= cls.attackRange * 0.85) {
+        self.facing = dir;
+        // Ask for everything at once — skills that aren't actually ready
+        // (cooldown or mana) just get rejected and it falls through to a
+        // basic swing instead, so this never wastes a tick doing nothing.
+        i.lmb = true;
+        i.e = true;
+        i.r = true;
+        i.f = true;
+      } else {
+        self.facing = dir;
+        i.moveX = dir;
+      }
+      return i;
+    }
+
+    // Nothing reachable to fight — go collect the nearest reachable loot
+    // instead of idling on top of it and hoping.
+    let lootX: number | null = null;
+    let bestLootD = Infinity;
+    for (const drop of engine.lootDrops) {
+      if (Math.abs(drop.y - self.y) > 90) continue;
+      const d = Math.abs(drop.x - self.x);
+      if (d < bestLootD) {
+        bestLootD = d;
+        lootX = drop.x;
+      }
+    }
+    if (lootX !== null && Math.abs(lootX - self.x) > 20) {
+      const dir: 1 | -1 = lootX >= self.x ? 1 : -1;
+      self.facing = dir;
+      i.moveX = dir;
+      return i;
+    }
+
+    // Truly nothing to do nearby — sweep the map instead of standing
+    // still, turning around at the edges, so it actually covers the whole
+    // stage over time rather than camping one spot.
+    if (self.onGround) {
+      const margin = 80;
+      if (self.x <= margin) this.patrolDir = 1;
+      else if (self.x >= engine.map.width - margin) this.patrolDir = -1;
+    }
+    self.facing = this.patrolDir;
+    i.moveX = this.patrolDir;
     return i;
   }
 }
