@@ -1246,6 +1246,12 @@ function drawTerrain(
     for (let bx = x; bx < x + w; bx += 6) px(b, bx, y + 1, 1, 4, PAL.rockBody);
     // Dashed underside: the drop-through tell.
     for (let bx = x; bx < x + w; bx += 4) px(b, bx, y + 6, 2, 1, PAL.rockDark);
+    // A faint biome-coloured glow under each end — small enough not to read
+    // as a light source, just enough to stop every platform in every biome
+    // being the exact same grey slab. Ties the terrain's palette to the
+    // same aura language the fighters and hazards already use.
+    pxGlow(b, x + 2, y + 3, 5, B.accent, 0.18);
+    pxGlow(b, x + w - 2, y + 3, 5, B.accent, 0.18);
   }
 
   // Environmental hazard patches — lava, spike pits, poison bogs.
@@ -1577,6 +1583,7 @@ function drawLootDrops(
 interface Pal {
   primary: string;
   shade: string;
+  lit: string;
   secondary: string;
   trim: string;
   skin: string;
@@ -1592,6 +1599,7 @@ function paletteFor(f: Fighter): Pal {
     return {
       primary: m.color,
       shade: m.accent,
+      lit: lighten(m.color),
       secondary: m.accent,
       trim: m.accent,
       skin: m.color,
@@ -1605,6 +1613,7 @@ function paletteFor(f: Fighter): Pal {
   return {
     primary: c.primary,
     shade: shade(c.primary),
+    lit: lighten(c.primary),
     secondary: c.secondary,
     trim: c.trim,
     skin: c.skin,
@@ -1621,6 +1630,18 @@ function shade(hex: string): string {
   const r = Math.round(((n >> 16) & 255) * 0.62);
   const g = Math.round(((n >> 8) & 255) * 0.62);
   const b = Math.round((n & 255) * 0.62);
+  return `rgb(${r},${g},${b})`;
+}
+
+/** Lightens a hex colour for a rim-lit edge — the mob equivalent of the
+ *  bespoke highlight lines every player kit already gets (KIT.pantsLit,
+ *  SKIT.plateLit, ...), so a monster's body reads as lit from above instead
+ *  of a single flat fill. */
+function lighten(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * 0.4 + 255 * 0.6);
+  const g = Math.round(((n >> 8) & 255) * 0.4 + 255 * 0.6);
+  const b = Math.round((n & 255) * 0.4 + 255 * 0.6);
   return `rgb(${r},${g},${b})`;
 }
 
@@ -1680,9 +1701,26 @@ function drawFighter(
   const knight = !f.isMob && f.classId === "shedim";
   const paladin = !f.isMob && f.classId === "kacper";
 
-  // Ground shadow.
-  const sw = Math.round(w * 0.9);
-  px(b, x - sw / 2, y - 1, sw, 2, "rgba(0,0,0,0.45)");
+  // Ground shadow: a soft-edged ellipse (a bright core fading through two
+  // dimmer rings) instead of one flat bar, so every fighter reads as
+  // actually planted on the ground rather than pasted over it.
+  const sw = Math.round(w * 0.95);
+  px(b, x - sw / 2, y - 1, sw, 1, "rgba(0,0,0,0.4)");
+  px(b, x - Math.round(sw * 0.35), y - 2, Math.round(sw * 0.7), 1, "rgba(0,0,0,0.28)");
+  px(b, x - Math.round(sw * 0.18), y - 3, Math.round(sw * 0.36), 1, "rgba(0,0,0,0.16)");
+
+  // Every mob gets a soft rim-glow in its own aura colour, scaled up with
+  // level — regular trash reads as barely-there, but by the time you're
+  // fighting something with real health it visibly radiates, the same
+  // language already used for boss auras and the class aura ring. Without
+  // this, mobs were flat silhouettes next to a hero who gets full lighting.
+  if (f.isMob) {
+    const m = MOB_TYPES[f.mobTypeId!];
+    if (m) {
+      const glowMag = Math.min(0.5, 0.16 + m.level * 0.006 + (m.isBoss ? 0.15 : 0));
+      pxGlow(b, x, y - h * 0.5, h * 0.62, p.aura, glowMag);
+    }
+  }
 
   // Immunity halo.
   if (f.knockdownTimer > 0 || f.getupImmunity > 0 || f.dashImmunity > 0 || f.respawnInvuln > 0) {
@@ -1825,6 +1863,10 @@ function drawFighter(
       // Knee cop and a gold filigree line down the greave.
       px(b, lx, legY + 1, legW, 2, col(SKIT.plateLit));
       px(b, lx + (dir === 1 ? legW - 1 : 0), legY + 3, 1, legH - 6, col(SKIT.gold));
+    } else if (f.isMob && lx === frontLegX) {
+      // Only the front (lit) leg gets the highlight edge — the back one is
+      // already the deliberately-shaded tone from the loop above.
+      px(b, lx + (dir === 1 ? legW - 1 : 0), legY, 1, legH - 3, col(p.lit));
     }
     // Boot, with a small gold ankle ornament rather than a full-width band.
     px(b, lx - 1, y - 3, legW + 2, 3, col(hero ? KIT.boot : knight ? SKIT.plateDark : p.secondary));
@@ -1887,6 +1929,13 @@ function drawFighter(
     if (!f.isMob) {
       px(b, x - 1, torsoY, 2, Math.max(2, Math.round(torsoH * 0.45)), col(p.secondary));
       px(b, x - half, torsoY, torsoW, 1, col(p.secondary));
+    } else {
+      // A lit-from-above rim: a bright top edge plus a highlight running
+      // down the leading (facing) side, opposite the shaded trailing side
+      // above — mobs used to be one flat fill plus a shadow block, which
+      // read as a paper cutout next to the hero's fully-shaded kit.
+      px(b, x - half, torsoY, torsoW, 1, col(p.lit));
+      px(b, dir === 1 ? x + half - 1 : x - half, torsoY + 1, 1, torsoH - 1, col(p.lit));
     }
     const beltY = torsoY + torsoH - 3;
     px(b, x - half, beltY, torsoW, 3, col(f.isMob ? p.trim : p.secondary));
@@ -1944,6 +1993,7 @@ function drawFighter(
   } else {
     px(b, armX, armY, armLen, 3, col(knight ? SKIT.plate : p.primary));
     if (knight) px(b, armX, armY, armLen, 1, col(SKIT.plateLit));
+    else if (f.isMob) px(b, armX, armY, armLen, 1, col(p.lit));
     px(b, armX, armY + 3, armLen, 1, ink);
     drawFist(
       b,
@@ -1981,6 +2031,9 @@ function drawFighter(
     px(b, headX, topY, headW, headH, col(hero ? KIT.skin : p.skin));
     px(b, dir === 1 ? headX : headX + headW - 1, topY + 1, 1, headH - 1,
        col(hero ? KIT.skinShade : p.skinShade));
+    if (f.isMob) {
+      px(b, dir === 1 ? headX + headW - 1 : headX, topY + 1, 1, headH - 1, col(p.lit));
+    }
     // Hair.
     px(b, headX, topY, headW, hairH, col(hero ? KIT.hair : p.hair));
     px(b, headX + (dir === 1 ? 1 : 0), topY, headW - 1, 1, col(hero ? KIT.hairLit : p.hair));
@@ -2511,6 +2564,16 @@ function drawBlackHole(
   }
 }
 
+/** Blends `hex` toward white by `t` (0 = unchanged, 1 = pure white). */
+function mixWhite(hex: string, t: number): string {
+  if (hex[0] !== "#" || hex.length !== 7) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * (1 - t) + 255 * t);
+  const g = Math.round(((n >> 8) & 255) * (1 - t) + 255 * t);
+  const bl = Math.round((n & 255) * (1 - t) + 255 * t);
+  return `rgb(${r},${g},${bl})`;
+}
+
 function drawParticles(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
@@ -2521,7 +2584,13 @@ function drawParticles(
     const a = Math.max(0, p.life / p.maxLife);
     if (a < 0.15) continue;
     const size = Math.max(1, Math.round((p.size / S) * a));
-    px(b, wx(p.x), wy(p.y), size, size, p.color);
+    // A particle flashes hot-white right as it spawns and cools into its
+    // real colour over its first moment alive — sells "spark thrown off
+    // impact" instead of "solid dot fading out", for the cost of one lerp
+    // (no extra draw calls, so it's free at any particle count).
+    const hot = Math.max(0, (a - 0.65) / 0.35);
+    const color = hot > 0.05 ? mixWhite(p.color, hot) : p.color;
+    px(b, wx(p.x), wy(p.y), size, size, color);
   }
 }
 
