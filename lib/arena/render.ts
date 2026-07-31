@@ -14,7 +14,52 @@ import {
   pxText,
 } from "./pixel";
 import { playSound } from "./sound";
+import { getColorblindMode, getScreenShakeEnabled } from "./settings";
 import type { Fighter } from "./types";
+
+/** Mirrors BOSS_PHASE2 in adventure.ts — this file can't import the campaign
+ *  layer, so the HP fractions that flip a boss's rim-glow hot red are kept
+ *  here too. Update both if a phase threshold ever changes. */
+const BOSS_PHASE2_HP_FRAC: Partial<Record<string, number>> = {
+  warden: 0.5,
+  sovereign: 0.5,
+  frostking: 0.5,
+  forgeheart: 0.4,
+  tempestwarden: 0.5,
+  rotmother: 0.4,
+  sunderedking: 0.25,
+  thehollow: 0.35,
+};
+
+/** Elite affix -> rim-glow colour, so the fight tells you what you're
+ *  looking at before you even read the nameplate. Falls back to violet for
+ *  an elite with no affix loaded yet (shouldn't happen, but never crash). */
+const ELITE_AFFIX_COLOR: Partial<Record<string, string>> = {
+  shielded: "#38bdf8",
+  vampiric: "#dc2626",
+  swift: "#fbbf24",
+  volatile: "#f97316",
+};
+/** Colorblind-safer variant: vampiric's red (too close to the phase2 rage
+ *  glow) and swift's amber (too close to volatile's orange) both move to
+ *  hues that stay distinct across the common deficiencies. */
+const ELITE_AFFIX_COLOR_CB: Partial<Record<string, string>> = {
+  shielded: "#38bdf8",
+  vampiric: "#facc15",
+  swift: "#22d3ee",
+  volatile: "#f97316",
+};
+function eliteAffixColor(affix: string | undefined): string {
+  const cb = getColorblindMode();
+  const table = cb ? ELITE_AFFIX_COLOR_CB : ELITE_AFFIX_COLOR;
+  return table[affix ?? ""] ?? (cb ? "#a78bfa" : "#c026d3");
+}
+/** Boss telegraph ring colour — sweep's purple sits too close to the elite
+ *  fallback/vampiric hues for the same colorblind types, so it moves to blue. */
+function bossTelegraphColor(isSweep: boolean): string {
+  if (!isSweep) return "#ff3b30";
+  return getColorblindMode() ? "#60a5fa" : "#c026d3";
+}
 
 /** Palette shared by the terrain and background so everything reads as one set. */
 const PAL = {
@@ -63,8 +108,9 @@ const FLASH_DURATION = 0.1;
  */
 function cameraArt(engine: ArenaEngine) {
   const t = engine.time * 43;
-  const shakeX = Math.sin(t) * engine.shake * 0.5;
-  const shakeY = Math.cos(t * 1.3) * engine.shake * 0.5;
+  const shakeAmt = getScreenShakeEnabled() ? engine.shake : 0;
+  const shakeX = Math.sin(t) * shakeAmt * 0.5;
+  const shakeY = Math.cos(t * 1.3) * shakeAmt * 0.5;
   return {
     camX: Math.round((engine.camera.x + shakeX) / S),
     camY: Math.round((engine.camera.y + shakeY) / S),
@@ -115,7 +161,7 @@ function trackStateSounds(engine: ArenaEngine) {
     }
     const actionId = f.action?.spec.id ?? "";
     if (actionId !== prevFighterAction.get(f.id)) {
-      if (actionId === "boss-special") playSound("bossTelegraph");
+      if (actionId === "boss-special" || actionId === "boss-sweep") playSound("bossTelegraph");
       prevFighterAction.set(f.id, actionId);
     }
   }
@@ -816,6 +862,10 @@ const BIOMES: Record<string, {
     sky: ["#3a2f52", "#8a6fb0", "#f4d9a0"], far: "#6a5a94", near: "#ecd9b8",
     accent: "#fffbeb", stars: false, cap: "#c9a24a", capLit: "#fff2c9",
   },
+  void: {
+    sky: ["#050310", "#0e0620", "#1a0e34"], far: "#150a2a", near: "#0c0518",
+    accent: "#c4b5fd", stars: true, cap: "#1c1030", capLit: "#3a2360",
+  },
 };
 
 /**
@@ -1276,6 +1326,13 @@ function drawCelestialBody(
       pxCircle(b, x, y, 11, "#ffe9a8");
       pxCircle(b, x, y, 7, "#fffbeb");
       break;
+    case "void":
+      // No sun, no moon — just a tear in the sky the same violet as
+      // everything else out here, faintly pulsing.
+      pxGlow(b, x, y, 15, "#c4b5fd", 0.35);
+      pxCircle(b, x, y, 6, "#0e0620");
+      pxCircle(b, x, y, 4, "#c4b5fd");
+      break;
     default:
       break;
   }
@@ -1397,6 +1454,76 @@ function drawTerrain(
       const dir = e === g.x ? 1 : -1;
       for (let k = 0; k < 4; k++) {
         px(b, ex + dir * (k * 3) - (dir < 0 ? 2 : 0), ey - 2, 2, 2, PAL.hazard);
+      }
+    }
+  }
+
+  // The town's fishing lake — a real basin dropping below the ground line
+  // (there's no physics pit, same "decoration, not terrain" deal as the
+  // hazard patches above, just painted deep enough to read as a lake
+  // instead of a puddle) with a two-layer drifting shimmer for a bit of
+  // parallax on the surface.
+  if (biomeId === "town") {
+    const stage = (engine as ArenaEngine & { stage?: { lakeX?: number; lakeWidth?: number } })
+      .stage;
+    const lakeX = stage?.lakeX;
+    const lakeWidth = stage?.lakeWidth;
+    if (lakeX !== undefined && lakeWidth) {
+      const groundY = map.ground[0]?.y ?? lakeX;
+      const x = wx(lakeX - lakeWidth / 2);
+      const y = wy(groundY);
+      const w = Math.round(lakeWidth / S);
+      if (x < vw && x + w > 0) {
+        const t = engine.time;
+        // Sandy banks framing the water — top edge, plus a thin skirt along
+        // the bottom so the basin reads as sitting in a sandy hollow rather
+        // than just ending abruptly.
+        px(b, x - 6, y - 1, w + 12, 4, "#6b5336");
+        px(b, x - 6, y - 1, w + 12, 1, "#8f7047");
+        px(b, x - 6, y + 51, w + 12, 3, "#5a4429");
+        // A little pebble texture along the shore so the sand doesn't read
+        // as a flat painted stripe.
+        for (let i = 0; i < w + 12; i += 7) {
+          if ((i * 7) % 3 === 0) px(b, x - 6 + i, y, 1, 1, "#a68a5c");
+        }
+        // The basin itself — five times deeper than the first pass, banded
+        // darkest-at-the-bottom to lightest-at-the-surface so it genuinely
+        // reads as a lake instead of a puddle.
+        px(b, x, y, w, 52, "#051f2b");
+        px(b, x, y, w, 40, "#082e3f");
+        px(b, x, y, w, 28, "#0f4c66");
+        px(b, x, y, w, 16, "#1c6f8f");
+        px(b, x, y, w, 6, "#2f8fae");
+        px(b, x, y, w, 1, "#7fd8f2");
+        // Fast surface shimmer.
+        for (let i = 0; i < w; i += 8) {
+          if (Math.sin(t * 1.1 + i * 0.7) > 0.6) px(b, x + i, y + 1, 2, 1, "#d6f3ff");
+        }
+        // Slower, deeper glints scattered through the water for parallax.
+        for (let i = 0; i < w; i += 11) {
+          if (Math.sin(t * 0.6 + i * 0.5 + 2) > 0.7) {
+            const depth = 8 + ((i * 13) % 30);
+            px(b, x + i, y + depth, 2, 1, "#3fa8c9");
+          }
+        }
+        pxGlow(b, x + w / 2, y + 20, w * 0.4, "#1c6f8f", 0.22);
+
+        // A few small fish drifting back and forth in the shallows — each
+        // just a body blob and a tail wedge that flips with its direction.
+        for (let n = 0; n < 3; n++) {
+          const speed = 0.35 + n * 0.12;
+          const phase = n * 2.1;
+          const depthY = y + 10 + n * 12;
+          const span = w / 2 - 10;
+          if (span <= 0) continue;
+          const cx = Math.round(x + w / 2 + Math.sin(t * speed + phase) * span);
+          const goingRight = Math.cos(t * speed + phase) > 0;
+          const fColor = n % 2 === 0 ? "#e8c15a" : "#f97316";
+          const tailDir = goingRight ? -1 : 1;
+          px(b, cx - 2, depthY, 4, 2, fColor);
+          px(b, cx + tailDir * 2, depthY, 1, 2, fColor);
+          px(b, cx - tailDir, depthY, 1, 1, "#fff2cf");
+        }
       }
     }
   }
@@ -1679,7 +1806,9 @@ function paletteFor(f: Fighter): Pal {
     skin: c.skin,
     skinShade: shade(c.skin),
     hair: c.hair,
-    aura: c.aura,
+    // A cosmetic-only override unlocked via achievements — never set for
+    // mobs, so this can never affect anything but the player's own rim-glow.
+    aura: f.auraOverride ?? c.aura,
     outline: PAL.ink,
   };
 }
@@ -1778,8 +1907,59 @@ function drawFighter(
     const m = MOB_TYPES[f.mobTypeId!];
     if (m) {
       const glowMag = Math.min(0.5, 0.16 + m.level * 0.006 + (m.isBoss ? 0.15 : 0));
-      pxGlow(b, x, y - h * 0.5, h * 0.62, p.aura, glowMag);
+      // Three bosses turn this glow hot red once their phase-2 HP threshold
+      // trips (see BOSS_PHASE2 in adventure.ts — kept in sync by hand since
+      // this file can't import the campaign layer, only reads hp/maxHp).
+      const phase2At = BOSS_PHASE2_HP_FRAC[m.id];
+      const inPhase2 = phase2At !== undefined && f.hp / f.maxHp <= phase2At;
+      // Elites (never bosses, so this never fights the phase2 check above)
+      // glow in their affix's colour — violet as a fallback for the
+      // vanishingly unlikely case the affix didn't come through.
+      // Rifts glow gold over whatever their elite affix would normally show
+      // — a Rift Warden is meant to read as "drop everything and go here"
+      // from across the screen, not blend in with an ordinary Elite.
+      const eliteColor = f.rift ? "#fde047" : f.elite ? eliteAffixColor(f.eliteAffix) : null;
+      const glowColor = inPhase2 ? "#ff3b30" : eliteColor ?? p.aura;
+      const glowStrength = inPhase2 || eliteColor ? glowMag + 0.2 : glowMag;
+      pxGlow(b, x, y - h * 0.5, h * 0.62, glowColor, glowStrength);
     }
+  }
+
+  // Cosmetic-only aura, unlocked via achievements and equipped from the
+  // character sheet — off by default, so nobody sees a glow around the
+  // player until they've actually earned and picked one.
+  if (!f.isMob && f.auraOverride) {
+    pxGlow(b, x, y - h * 0.5, h * 0.55, f.auraOverride, 0.4);
+  }
+
+  // A procedural fishing rod while parked at the lake — a held rod with a
+  // gentle idle sway, a line dropping to a bobber that bobs on the water.
+  // Purely cosmetic (see Fighter.fishing), same "simple canvas primitives,
+  // no new art" approach as the birds/lantern-strings elsewhere in this file.
+  if (!f.isMob && f.fishing) {
+    // Waist/forearm height, not shoulder — a held rod hangs from the hands,
+    // arms bent in front of the body, not up near the neck.
+    const handX = x + dir * Math.round(w * 0.3);
+    const handY = y - Math.round(h * 0.36);
+    const sway = Math.sin(time * 1.4) * 4;
+    const tipX = handX + dir * (26 + sway);
+    const tipY = handY - 16 - sway * 0.5;
+    b.strokeStyle = "#6b4a2a";
+    b.lineWidth = 1.5;
+    b.beginPath();
+    b.moveTo(handX, handY);
+    b.lineTo(tipX, tipY);
+    b.stroke();
+
+    const bobX = tipX + dir * 4;
+    const bobY = y - 2 + Math.sin(time * 3 + 1) * 1.5;
+    b.strokeStyle = "#e2c98f";
+    b.lineWidth = 1;
+    b.beginPath();
+    b.moveTo(tipX, tipY);
+    b.lineTo(bobX, bobY);
+    b.stroke();
+    pxCircle(b, bobX, bobY, 1, "#ff6b4a");
   }
 
   // Immunity halo.
@@ -1797,15 +1977,22 @@ function drawFighter(
     const r = Math.round(h * 0.6 + Math.sin(time * 12) * 1.5);
     ringOutline(b, x, y - h * 0.55, r, "#fbbf24");
   }
-  // Boss telegraph: a growing red warning ring through the whole windup, so
-  // the slam reads as "get out" well before the hitbox actually appears —
+  // Boss telegraph: a growing warning ring through the whole windup, so the
+  // move reads as "get out" well before the hitbox actually appears —
   // regular mob swings are fast enough not to need this, but a boss special
-  // is deliberately slow and punishing, and should look it.
-  if (f.isMob && f.action?.spec.id === "boss-special" && MOB_TYPES[f.mobTypeId!]?.isBoss) {
+  // is deliberately slow and punishing, and should look it. Red = the
+  // knockdown slam, purple = the wider stunning sweep, so a player can tell
+  // which read to make before it lands.
+  if (
+    f.isMob &&
+    (f.action?.spec.id === "boss-special" || f.action?.spec.id === "boss-sweep") &&
+    MOB_TYPES[f.mobTypeId!]?.isBoss
+  ) {
+    const color = bossTelegraphColor(f.action.spec.id === "boss-sweep");
     const t = Math.min(1, f.action.elapsed / f.action.spec.activeAt);
     const r = Math.round(h * (0.5 + t * 0.9));
-    pxGlow(b, x, y - h * 0.55, h * (0.6 + t * 0.6), "#ff3b30", 0.35 + t * 0.4);
-    ringOutline(b, x, y - h * 0.55, r, "#ff3b30");
+    pxGlow(b, x, y - h * 0.55, h * (0.6 + t * 0.6), color, 0.35 + t * 0.4);
+    ringOutline(b, x, y - h * 0.55, r, color);
   }
 
   const flash = f.hitFlash > 0 && Math.floor(time * 30) % 2 === 0;
@@ -2530,11 +2717,12 @@ function drawNameplate(
   y: number
 ) {
   if (f.isMob) {
-    const w = MOB_TYPES[f.mobTypeId!]?.isBoss ? 26 : 14;
+    const w = MOB_TYPES[f.mobTypeId!]?.isBoss ? 26 : f.elite ? 20 : 14;
     const pct = Math.max(0, f.hp / f.maxHp);
     px(b, x - w / 2 - 1, y - 3, w + 2, 4, PAL.ink);
     px(b, x - w / 2, y - 2, Math.round(w * pct), 2, pct > 0.4 ? "#7ec850" : "#d94f4f");
-    pxText(b, `${f.name} ${f.level}`, x, y - 5, "#c9d4e8", 5);
+    const nameColor = f.rift ? "#fde047" : f.elite ? eliteAffixColor(f.eliteAffix) : "#c9d4e8";
+    pxText(b, `${f.name} ${f.level}`, x, y - 5, nameColor, 5);
     return;
   }
   // Players sit higher so their label never collides with a mob's.

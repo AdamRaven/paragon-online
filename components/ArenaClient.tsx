@@ -14,7 +14,8 @@ import { CLASSES, getClass, skillKeyLabel } from "@/lib/arena/classes";
 import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
 import { loadDuelStats, rankForStreak, recordDuelResult, type DuelStats } from "@/lib/arena/duelStats";
 import { ArenaEngine, emptyIntent, type Intent } from "@/lib/arena/engine";
-import { ArenaInput, P1_BINDINGS, P2_BINDINGS } from "@/lib/arena/input";
+import { ArenaInput, P2_BINDINGS } from "@/lib/arena/input";
+import { loadCustomBindings } from "@/lib/arena/keybinds";
 import { PIXEL_SCALE, artSize, worldViewSize } from "@/lib/arena/pixel";
 import { renderArena, renderFighterPortraits } from "@/lib/arena/render";
 import { playSound, startMusic, stopMusic } from "@/lib/arena/sound";
@@ -122,7 +123,7 @@ export function ArenaClient() {
     const fxCanvas = fxCanvasRef.current;
     const fxCtx = fxCanvas?.getContext("2d") ?? null;
 
-    const input = new ArenaInput(P1_BINDINGS, true);
+    const input = new ArenaInput(loadCustomBindings(), true);
     input.attach(canvas);
     inputRef.current = input;
 
@@ -264,6 +265,7 @@ export function ArenaClient() {
       {panel === "pause" && !winner && (
         <EscapeMenu
           onResume={() => {
+            inputRef.current?.setBindings(loadCustomBindings());
             panelRef.current = "none";
             setPanel("none");
           }}

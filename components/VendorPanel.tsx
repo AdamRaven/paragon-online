@@ -1,10 +1,12 @@
 "use client";
 
 import { ItemIcon } from "@/components/ItemIcon";
-import { compare, hasOpenSlot, referenceFor, statLine } from "@/components/InventoryPanel";
+import { compare, effectLine, hasOpenSlot, referenceFor, statLine } from "@/components/InventoryPanel";
+import { featuredBaseId } from "@/lib/arena/featuredItem";
 import {
   ITEM_BASES,
   RARITY_META,
+  base,
   itemName,
   itemValue,
   makeItem,
@@ -13,26 +15,35 @@ import {
 } from "@/lib/arena/items";
 import type { AdventureSave } from "@/lib/arena/progression";
 
-/** The vendor only stocks gear roughly around the player's level. */
+/** The vendor only stocks gear roughly around the player's level — uniques
+ *  are never for sale, only a boss kill drops one. */
 function stock(level: number): ItemBase[] {
   return Object.values(ITEM_BASES)
-    .filter((b) => b.kind !== "trash" && b.tier <= level + 3)
+    .filter((b) => b.kind !== "trash" && !b.unique && b.tier <= level + 3)
     .sort((a, b) => a.tier - b.tier);
 }
 
 export function VendorPanel({
   save,
   onBuy,
+  onBuyFeatured,
   lastResult,
   onClose,
 }: {
   save: AdventureSave;
   onBuy: (baseId: string) => void;
+  onBuyFeatured: () => void;
   lastResult: string | null;
   onClose: () => void;
 }) {
   const items = stock(save.level);
   const preview = (baseId: string): Item => makeItem(baseId, "common");
+
+  const featuredBase = base(featuredBaseId());
+  const featured = makeItem(featuredBase.id, "epic");
+  const featuredPrice = itemValue(featured);
+  const featuredOpen = hasOpenSlot(save, featuredBase.slot);
+  const featuredCmp = featuredOpen ? undefined : compare(featured, referenceFor(save, featuredBase.slot));
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -54,6 +65,35 @@ export function VendorPanel({
         </p>
 
         {lastResult && <div className="merchant-result">{lastResult}</div>}
+
+        <h3 className="section-title">Featured This Week</h3>
+        <div
+          className="item-row"
+          style={{ borderLeft: `4px solid ${RARITY_META.epic.color}`, marginBottom: 14 }}
+        >
+          <ItemIcon icon={featuredBase.icon} color={RARITY_META.epic.color} />
+          <span className="item-main">
+            <strong style={{ color: RARITY_META.epic.color }}>{itemName(featured)}</strong>
+            <small className="item-stats">{statLine(featured)}</small>
+            {effectLine(featured) && (
+              <small className="item-effect" style={{ color: RARITY_META.epic.color }}>
+                {effectLine(featured)}
+              </small>
+            )}
+            <small className="item-sub">
+              Guaranteed epic · changes weekly
+              {featuredCmp && (
+                <em className={featuredCmp.good ? "cmp-up" : "cmp-down"}> · {featuredCmp.text}</em>
+              )}
+            </small>
+          </span>
+          <span className="item-value">{featuredPrice}g</span>
+          <button className="btn tiny" disabled={save.gold < featuredPrice} onClick={onBuyFeatured}>
+            Buy
+          </button>
+        </div>
+
+        <h3 className="section-title">General Stock</h3>
 
         <div className="item-list tall">
           {items.map((b) => {

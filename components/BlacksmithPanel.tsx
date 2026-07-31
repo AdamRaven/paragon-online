@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { ItemIcon } from "@/components/ItemIcon";
+import { ClassPortrait } from "@/components/ClassPortrait";
 import { ItemRow, effectLine, statLine } from "@/components/InventoryPanel";
+import { MERC_DURATION_MS, MERC_HIRE_COST } from "@/lib/arena/adventure";
+import { CLASSES, getClass } from "@/lib/arena/classes";
 import {
   DOWNGRADE_FLOOR,
   MAX_PLUS,
@@ -14,7 +17,10 @@ import {
   itemValue,
   type Item,
 } from "@/lib/arena/items";
-import type { AdventureSave } from "@/lib/arena/progression";
+import { BASE_STAT, type AdventureSave } from "@/lib/arena/progression";
+import type { ClassId } from "@/lib/arena/types";
+
+const RESPEC_COST_PER_POINT = 25;
 
 type Tab = "sell" | "buy" | "enhance";
 
@@ -26,6 +32,8 @@ export function BlacksmithPanel({
   onBuyStones,
   onEnhance,
   onEnhanceMany,
+  onRespec,
+  onHireMercenary,
   lastResult,
   onClose,
 }: {
@@ -36,10 +44,17 @@ export function BlacksmithPanel({
   onBuyStones: (n: number) => void;
   onEnhance: (item: Item) => void;
   onEnhanceMany: (item: Item, times: number) => void;
+  onRespec: () => void;
+  onHireMercenary: (classId: ClassId) => void;
   lastResult: string | null;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("sell");
+  const [mercPick, setMercPick] = useState<ClassId>("paragon");
+  const mercActive = !!save.mercenaryExpiresAt && save.mercenaryExpiresAt > Date.now();
+  const mercMinutesLeft = mercActive
+    ? Math.max(0, Math.ceil((save.mercenaryExpiresAt! - Date.now()) / 60000))
+    : 0;
   const trash = save.inventory.filter((i) => base(i.baseId).kind === "trash");
   const trashWorth = trash.reduce((n, i) => n + itemValue(i), 0);
   // Gear you're not wearing can be sold too; equip/unequip happens in the bag.
@@ -176,6 +191,78 @@ export function BlacksmithPanel({
                 >
                   Buy 10000 ({STONE_PRICE * 10000}g)
                 </button>
+              )}
+            </div>
+
+            {(() => {
+              const spent =
+                save.stats.str + save.stats.agi + save.stats.vit + save.stats.foc - BASE_STAT * 4;
+              const cost = spent * RESPEC_COST_PER_POINT;
+              return (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                  <h3 className="section-title">Respec</h3>
+                  <p className="hint" style={{ marginBottom: 10 }}>
+                    Refund every point you&apos;ve put into Strength, Agility, Vitality and
+                    Focus, so you can reallocate them from scratch.
+                  </p>
+                  <button
+                    className="btn"
+                    style={{ width: "100%" }}
+                    disabled={spent <= 0 || save.gold < cost}
+                    onClick={onRespec}
+                  >
+                    {spent <= 0 ? "Nothing to respec" : `Respec ${spent} points (${cost}g)`}
+                  </button>
+                </div>
+              );
+            })()}
+
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+              <h3 className="section-title">Hire a Mercenary</h3>
+              <p className="hint" style={{ marginBottom: 10 }}>
+                A full-strength fighter of the class you pick joins for{" "}
+                {Math.round(MERC_DURATION_MS / 60000)} real minutes — unlike your free companion,
+                this one pulls its full weight.
+              </p>
+              {mercActive ? (
+                <p className="hint">
+                  {getClass(save.mercenaryClassId ?? "paragon").name} mercenary active — {mercMinutesLeft}m left.
+                </p>
+              ) : (
+                <>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                    {(Object.keys(CLASSES) as ClassId[]).map((id) => {
+                      const c = getClass(id);
+                      const picked = mercPick === id;
+                      return (
+                        <button
+                          key={id}
+                          className={`flex-1 ${picked ? "" : "btn-ghost"}`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: 6,
+                            border: `1px solid ${picked ? "var(--accent)" : "var(--border)"}`,
+                            background: picked ? "rgba(110,231,183,0.08)" : "transparent",
+                          }}
+                          onClick={() => setMercPick(id)}
+                        >
+                          <ClassPortrait classId={id} aura={c.colors.aura} size={26} />
+                          <small>{c.name}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    className="btn"
+                    style={{ width: "100%" }}
+                    disabled={save.gold < MERC_HIRE_COST}
+                    onClick={() => onHireMercenary(mercPick)}
+                  >
+                    Hire ({MERC_HIRE_COST}g)
+                  </button>
+                </>
               )}
             </div>
           </>

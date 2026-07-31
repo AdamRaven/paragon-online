@@ -151,6 +151,21 @@ export interface Fighter {
   /** Mobs reuse the whole fighter pipeline but carry their own numbers. */
   isMob: boolean;
   mobTypeId?: string;
+  /** A rarer, tougher, better-rewarding roll of its base type — see
+   *  spawnMob's elite roll in adventure.ts. */
+  elite?: boolean;
+  /** Which modifier this Elite rolled — see ELITE_AFFIXES in adventure.ts. */
+  eliteAffix?: "shielded" | "vampiric" | "swift" | "volatile" | "regenerating" | "berserk" | "colossal";
+  /** A World Rift's bonus spawn — see AdventureEngine.spawnRift. Always also
+   *  `elite`, just with its own glow colour and a guaranteed better payout. */
+  rift?: boolean;
+  /** Cosmetic-only rim-glow override, unlocked via achievements and set from
+   *  AdventureSave.auraColor in applyProgression — never touches combat. */
+  auraOverride?: string;
+  /** Mirrors AdventureSave.fishing on the player's own fighter, set directly
+   *  by toggleFishing — purely cosmetic (draws the rod/line), never touches
+   *  combat or movement. */
+  fishing?: boolean;
   level: number;
   expValue: number;
   spawnX: number;

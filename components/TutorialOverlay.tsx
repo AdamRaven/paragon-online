@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Keycap } from "@/components/KeyList";
 import { playSound } from "@/lib/arena/sound";
 
@@ -91,6 +91,68 @@ export function markTutorialSeen() {
   } catch {
     /* ignore */
   }
+}
+
+// -------------------------------------------------------- first-run quest
+/**
+ * The modal above teaches controls up front, but nothing in it makes a new
+ * player actually go do anything — this is a small non-blocking banner that
+ * tracks the first few real actions (a kill, a level-up, a visit to town)
+ * and checks them off live as they happen, then disappears for good once
+ * they're all done. Global, not per-character, same as hasSeenTutorial.
+ */
+const QUEST_DONE_KEY = "paragon-arena:tutorial-quest-done:v1";
+
+export function hasFinishedTutorialQuest(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(QUEST_DONE_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markTutorialQuestDone() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(QUEST_DONE_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+export interface TutorialQuestState {
+  kills: number;
+  level: number;
+  visitedTown: boolean;
+}
+
+export function TutorialQuestBanner({ state }: { state: TutorialQuestState }) {
+  const steps = [
+    { label: "Get your first kill", done: state.kills >= 1 },
+    { label: "Reach level 2", done: state.level >= 2 },
+    { label: "Visit Emberhold town", done: state.visitedTown },
+  ];
+  const allDone = steps.every((s) => s.done);
+
+  useEffect(() => {
+    if (allDone) markTutorialQuestDone();
+  }, [allDone]);
+
+  if (allDone) return null;
+
+  return (
+    <div className="tutorial-quest-banner">
+      <strong>Getting started</strong>
+      <ul>
+        {steps.map((s) => (
+          <li key={s.label} className={s.done ? "done" : ""}>
+            {s.done ? "✓" : "○"} {s.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function TutorialOverlay({ onClose }: { onClose: () => void }) {

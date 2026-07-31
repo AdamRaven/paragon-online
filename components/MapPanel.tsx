@@ -11,6 +11,7 @@ const BIOME_GLYPH: Record<Biome, string> = {
   storm: "⚡",
   blight: "☠️",
   divine: "✨",
+  void: "🕳️",
 };
 
 const BIOME_TINT: Record<Biome, string> = {
@@ -24,6 +25,7 @@ const BIOME_TINT: Record<Biome, string> = {
   storm: "#93c5fd",
   blight: "#a3e635",
   divine: "#fef3c7",
+  void: "#c4b5fd",
 };
 
 export function MapPanel({

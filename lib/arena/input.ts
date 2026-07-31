@@ -314,4 +314,11 @@ export class ArenaInput {
   getBindings(): KeyBindings {
     return this.bindings;
   }
+
+  /** Swaps in a freshly-edited binding set mid-session — see KeybindsPanel,
+   *  applied when the pause menu closes rather than requiring a page reload. */
+  setBindings(bindings: KeyBindings) {
+    this.bindings = bindings;
+    this.reset();
+  }
 }

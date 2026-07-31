@@ -2,19 +2,189 @@ import { getClass } from "./classes";
 import { DT, GRAVITY, MAX_FALL_SPEED, WALK_SPEED } from "./constants";
 import { ArenaEngine, emptyIntent, type ArenaCallbacks, type Intent } from "./engine";
 import { MOB_TYPES, getStage, mobAttackSpec, type MobType, type Stage } from "./mobs";
-import { itemName, rollDrops, type Item } from "./items";
+import { base, itemName, itemValue, makeItem, RARITY_META, rollDrops, type Item, type Rarity } from "./items";
+import { bountyComplete, bountyReward, ensureDailyBounty } from "./bounties";
+import { claimDailyLogin } from "./streak";
+import { ensureWeeklyTrack } from "./weekly";
 import {
   deriveArenaStats,
   expToNext,
   expWithLevelPenalty,
   grantExp,
   type AdventureSave,
+  type Difficulty,
   type LevelUpResult,
 } from "./progression";
-import type { Fighter } from "./types";
+import type { ClassId, CombatLogEntry, Facing, Fighter } from "./types";
 
 const MOB_RESPAWN = 7;
 const PLAYER_RESPAWN = 2.5;
+/** Any non-boss spawn has this flat shot at rolling Elite. */
+const ELITE_CHANCE = 0.1;
+const ELITE_HP_MULT = 1.8;
+const ELITE_DAMAGE_MULT = 1.35;
+const ELITE_EXP_MULT = 2.5;
+const ELITE_SIZE_MULT = 1.15;
+
+type EliteAffix =
+  | "shielded"
+  | "vampiric"
+  | "swift"
+  | "volatile"
+  | "regenerating"
+  | "berserk"
+  | "colossal";
+const ELITE_AFFIXES: EliteAffix[] = [
+  "shielded",
+  "vampiric",
+  "swift",
+  "volatile",
+  "regenerating",
+  "berserk",
+  "colossal",
+];
+/** Shown in the nameplate so a fight actually tells you why this one's
+ *  behaving differently, not just that it's bigger. */
+const ELITE_AFFIX_LABEL: Record<EliteAffix, string> = {
+  shielded: "Shielded",
+  vampiric: "Vampiric",
+  swift: "Swift",
+  volatile: "Volatile",
+  regenerating: "Regenerating",
+  berserk: "Berserk",
+  colossal: "Colossal",
+};
+const ELITE_VAMPIRIC_LIFESTEAL = 0.3;
+const ELITE_SWIFT_SPEED_MULT = 1.4;
+/** Volatile detonates on death within this radius of the player, for flat
+ *  (unmitigated) damage — the same "hazard-style" damage path environmental
+ *  hazards already use, not a normal mitigated hit. */
+const ELITE_VOLATILE_RADIUS = 140;
+/** Regenerating: reuses the same regenHp field legendary gear/set bonuses
+ *  already tick every frame for any fighter — heals per second, scaled by
+ *  the mob's own level so it stays relevant late. */
+const ELITE_REGEN_PER_LEVEL = 1.4;
+/** Berserk: once below this HP fraction, permanently (for the rest of that
+ *  fight) hits harder and moves faster — a one-time trigger tracked per
+ *  MobBrain instance, the same shape as a boss's phase2. */
+const ELITE_BERSERK_HP_FRAC = 0.5;
+const ELITE_BERSERK_ATK_MULT = 1.4;
+const ELITE_BERSERK_SPEED_MULT = 1.25;
+/** Colossal: bigger, tankier and harder-hitting than a normal Elite, at the
+ *  cost of being noticeably slower — a tradeoff rather than a strict
+ *  upgrade, so it reads as a different fight instead of just "more Elite." */
+const ELITE_COLOSSAL_SIZE_MULT = 1.35;
+const ELITE_COLOSSAL_HP_MULT = 2.4;
+const ELITE_COLOSSAL_DAMAGE_MULT = 1.5;
+const ELITE_COLOSSAL_SPEED_MULT = 0.75;
+/** Survival mode: dead mobs are removed rather than revived in place, but
+ *  still get a beat to play their death animation/loot pop first. */
+const SURVIVAL_MOB_CLEANUP = 0.4;
+/** Weakest to strongest — how many of these are in play scales with wave
+ *  number (see startNextWave), so early waves stay approachable. */
+const SURVIVAL_POOL = [
+  "husk",
+  "brawler",
+  "rabid-cur",
+  "blade-wraith",
+  "cultist",
+  "shieldbearer",
+  "colossus",
+  "sentinel",
+  "revenant",
+  "frostfang",
+];
+/** Stat multipliers applied to every mob spawned, on top of any Elite
+ *  multiplier — chosen once at character creation and fixed for the save's
+ *  life (see AdventureSave.difficulty). Loot bonus feeds rollDrops' rarity
+ *  roll and unique-drop chance, so harder difficulties are worth playing. */
+const DIFFICULTY_MULT: Record<Difficulty, { hp: number; damage: number; loot: number }> = {
+  normal: { hp: 1, damage: 1, loot: 0 },
+  hard: { hp: 1.6, damage: 1.3, loot: 0.15 },
+  nightmare: { hp: 2.4, damage: 1.7, loot: 0.35 },
+};
+
+/** A hired mercenary's AI never presses anything but lmb, so there's no
+ *  mana/cooldown decision-making to get wrong. Seconds to respawn after
+ *  dying, same shape as a mob; leash keeps it from wandering off alone. */
+const ALLY_RESPAWN = 6;
+const ALLY_LEASH = 460;
+const ALLY_ATTACK_CD = 0.55;
+
+/** A hired mercenary is full-strength and lasts this long in real time,
+ *  gold-gated at the blacksmith — see hireMercenary. */
+export const MERC_DURATION_MS = 20 * 60 * 1000;
+export const MERC_HIRE_COST = 3000;
+
+/** "Welcome back" idle trickle: capped low and short so it's a nice
+ *  return-bonus, never a reason to leave the game running unattended
+ *  instead of actually playing it. Only counts time between page loads
+ *  (see AdventureEngine's constructor), not a background timer. */
+const IDLE_CAP_MS = 8 * 60 * 60 * 1000;
+const IDLE_GOLD_PER_MINUTE = 2;
+
+/** The town lake: an explicit, opt-in version of the same idea, toggled at
+ *  a fixed spot rather than automatic — see AdventureEngine.toggleFishing.
+ *  Wider than the lake's own half-width (130) so the whole visible pool is
+ *  interactive with a little margin, rather than only its exact center. */
+const FISH_INTERACT_RADIUS = 150;
+const FISH_CAP_MS = 10 * 60 * 60 * 1000;
+/** One catch a minute, no more, no less — a fixed cadence rather than a
+ *  probability roll, so "leave it running for an hour" has a predictable
+ *  payout to plan around. Only the *type* of fish is random. */
+const FISH_CATCH_INTERVAL_MS = 60 * 1000;
+/** Each species is always caught at the same fixed rarity, so its value
+ *  (see items.ts) gets the same multiplier a rolled weapon of that rarity
+ *  would — an Ancient Leviathan is legendary-tier money on purpose, the
+ *  rare "worth actually leaving this running for" payout. */
+const FISH_POOL: Array<{ id: string; rarity: Rarity; weight: number }> = [
+  { id: "minnow", rarity: "common", weight: 65 },
+  { id: "river-trout", rarity: "uncommon", weight: 22 },
+  { id: "golden-carp", rarity: "rare", weight: 9 },
+  { id: "storm-pike", rarity: "epic", weight: 3 },
+  { id: "ancient-leviathan", rarity: "legendary", weight: 1 },
+];
+
+/** The Sundered Crucible's rotating modifiers — two rolled at random on
+ *  every entry (and every death), layered on top of Survival's wave engine
+ *  (see AdventureEngine.rollCrucibleAffixes and spawnMob/MobBrain.think). */
+export type CrucibleAffix = "reinforced" | "frenzied" | "bountiful" | "swarming" | "volatile";
+export const CRUCIBLE_AFFIX_POOL: CrucibleAffix[] = [
+  "reinforced",
+  "frenzied",
+  "bountiful",
+  "swarming",
+  "volatile",
+];
+export const CRUCIBLE_AFFIX_META: Record<CrucibleAffix, { label: string; blurb: string }> = {
+  reinforced: { label: "Reinforced", blurb: "+60% mob health" },
+  frenzied: { label: "Frenzied", blurb: "Mobs attack 25% faster" },
+  bountiful: { label: "Bountiful", blurb: "Much better loot odds" },
+  swarming: { label: "Swarming", blurb: "+2 mobs every wave" },
+  volatile: { label: "Volatile", blurb: "Elite chance tripled" },
+};
+
+/** World Rifts: a rare bonus encounter that can open in any regular combat
+ *  stage — a forced-Elite "Rift Warden" of whatever the stage would spawn
+ *  anyway, worth going out of your way for. Unclaimed, it closes on its own. */
+const RIFT_COOLDOWN_MIN = 75;
+const RIFT_COOLDOWN_RANGE = 90;
+const RIFT_CLAIM_WINDOW = 45;
+/** Added on top of every other loot bonus (difficulty, Bountiful) for a
+ *  Rift kill specifically. */
+const RIFT_LOOT_BONUS = 0.5;
+
+/** Level order for Boss Rush — see AdventureEngine.updateBossRush. */
+const BOSS_RUSH_ORDER = [
+  "warden",
+  "sovereign",
+  "frostking",
+  "forgeheart",
+  "tempestwarden",
+  "rotmother",
+  "sunderedking",
+];
+
 /** How close (world units) the player has to walk to auto-pick up a drop. */
 const PICKUP_RADIUS_X = 34;
 const PICKUP_RADIUS_Y = 50;
@@ -60,32 +230,181 @@ export class AdventureEngine extends ArenaEngine {
   private acb: AdventureCallbacks;
   private mobSeq = 0;
   private lootSeq = 0;
+  /** Survival stage only. */
+  waveNumber = 0;
+  private waveCooldown = 0;
+  /** Boss Rush stage only. -1 = no boss spawned yet. */
+  bossRushIndex = -1;
+  /** Seconds elapsed on the current Boss Rush attempt. */
+  bossRushTime = 0;
+  bossRushCleared = false;
+  private bossRushCooldown = 0;
+  /** Crucible stage only — not private, so MobBrain can read it directly. */
+  crucibleAffixes: CrucibleAffix[] = [];
+  private mercBrain: AllyBrain | null = null;
+  /** World Rifts — id of the currently-open Rift Warden, if any. */
+  private riftMobId: string | null = null;
+  private riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
+  private riftTimer = 0;
 
   constructor(save: AdventureSave, cb: AdventureCallbacks) {
-    super(save.classId as "paragon" | "shedim", "shedim", cb);
+    super(save.classId as ClassId, "shedim", cb);
     this.mode = "adventure";
     this.acb = cb;
     this.save = save;
     this.stage = getStage(save.stage);
     this.map = this.stage.map;
 
-    // Drop the duel rival; this mode is player versus mobs.
-    this.fighters = [this.fighters[0]];
     const p = this.fighters[0];
     p.spawnX = this.map.spawnA.x;
     p.spawnY = this.map.spawnA.y;
     p.x = p.spawnX;
     p.y = p.spawnY;
 
+    // Drop the duel-rival fighter the base ArenaEngine constructor built —
+    // this mode is player vs mobs, solo.
+    this.fighters = [this.fighters[0]];
+
     this.applyProgression();
     this.player.hp = this.player.maxHp;
     this.spawnStageMobs();
+    if (this.stage.crucible) this.rollCrucibleAffixes();
+    if (this.stage.survival) this.startNextWave();
+    if (
+      this.save.mercenaryClassId &&
+      this.save.mercenaryExpiresAt &&
+      this.save.mercenaryExpiresAt > Date.now()
+    ) {
+      this.spawnMercenary(this.save.mercenaryClassId);
+    }
+    ensureDailyBounty(this.save);
+    ensureWeeklyTrack(this.save);
+    this.grantIdleBonus();
+    const login = claimDailyLogin(this.save);
+    if (login) {
+      const streakNote = login.brokeStreak ? "" : ` (${login.streak}-day streak)`;
+      this.acb.onLog(
+        `Daily login bonus: +${login.gold}g, +${login.stones} stones${streakNote}.`,
+        "good"
+      );
+    }
+  }
+
+  /** Capped, transparent "welcome back" bonus for time away between
+   *  sessions — see IDLE_CAP_MS/IDLE_GOLD_PER_MINUTE above for why it's
+   *  deliberately modest. */
+  private grantIdleBonus() {
+    const last = this.save.lastSeenAt;
+    this.save.lastSeenAt = Date.now();
+    if (!last) return;
+    const elapsed = Math.min(Date.now() - last, IDLE_CAP_MS);
+    const minutes = Math.floor(elapsed / 60000);
+    if (minutes < 1) return;
+    const gold = Math.round(minutes * IDLE_GOLD_PER_MINUTE);
+    if (gold <= 0) return;
+    this.save.gold += gold;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    this.acb.onLog(`Welcome back! Away for ${timeStr} — +${gold}g waiting for you.`, "good");
+  }
+
+  /** Picks 2 distinct modifiers for a fresh Crucible attempt — called on
+   *  entry and again every time a Crucible run wipes, so no two attempts
+   *  play quite the same. */
+  private rollCrucibleAffixes() {
+    const pool = [...CRUCIBLE_AFFIX_POOL];
+    const picked: CrucibleAffix[] = [];
+    while (picked.length < 2 && pool.length) {
+      picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    this.crucibleAffixes = picked;
+    const labels = picked.map((a) => CRUCIBLE_AFFIX_META[a].label).join(" + ");
+    this.acb.onLog(`The Crucible warps: ${labels}.`, "big");
+  }
+
+  /** Called on every mob kill — a no-op unless it's the bounty's target
+   *  type and today's goal was *just* crossed by this specific kill, in
+   *  which case it's worth a log line so the player notices without having
+   *  to keep the board open. Actually claiming still needs claimBounty(). */
+  private progressBounty(mobTypeId: string | undefined) {
+    ensureDailyBounty(this.save);
+    const b = this.save.dailyBounty;
+    if (!mobTypeId || !b || b.claimed || b.typeId !== mobTypeId) return;
+    const total = this.save.mobKills?.[mobTypeId] ?? 0;
+    if (total - b.baseline === b.goal) {
+      this.acb.onLog("Bounty complete! Claim your reward from the board.", "big");
+    }
+  }
+
+  /** Grants the reward and marks today's bounty claimed — a no-op if it
+   *  isn't actually complete yet or was already claimed. */
+  claimBounty() {
+    ensureDailyBounty(this.save);
+    const b = this.save.dailyBounty;
+    if (!b || b.claimed || !bountyComplete(this.save)) return;
+    const reward = bountyReward(this.save);
+    this.save.gold += reward.gold;
+    this.save.stones += reward.stones;
+    b.claimed = true;
+    this.acb.onLog(`Bounty claimed: +${reward.gold}g, +${reward.stones} stones.`, "good");
+  }
+
+  /** Rents a mercenary of the chosen class for MERC_DURATION_MS of real
+   *  time, full-strength, gold-gated. */
+  hireMercenary(classId: ClassId) {
+    this.save.mercenaryClassId = classId;
+    this.save.mercenaryExpiresAt = Date.now() + MERC_DURATION_MS;
+    if (!this.fighters.some((f) => f.id === "merc")) this.spawnMercenary(classId);
+    this.acb.onLog(`Hired a ${getClass(classId).name} mercenary.`, "good");
+  }
+
+  private spawnMercenary(classId: ClassId) {
+    const cls = getClass(classId);
+    const merc = this.makeFighter(
+      "merc",
+      classId,
+      `${cls.name} (Hired)`,
+      false,
+      { x: this.player.x + 80, y: this.player.y },
+      -1 as Facing
+    );
+    merc.team = 0;
+    const d = deriveArenaStats(cls, this.save.level, { str: 5, agi: 5, vit: 5, foc: 5 });
+    merc.maxHp = d.maxHp;
+    merc.hp = merc.maxHp;
+    merc.attackPower = d.attackPower;
+    merc.speedMult = d.speedMult;
+    merc.attackSpeed = d.attackSpeed;
+    this.fighters.push(merc);
+    this.mercBrain = new AllyBrain();
+  }
+
+  /** Checked every tick — the rental is real-world time, so it can lapse
+   *  even while the tab is closed, same as any actual "hire until X o'clock." */
+  private expireMercenary() {
+    if (!this.save.mercenaryExpiresAt || Date.now() < this.save.mercenaryExpiresAt) return;
+    const existing = this.fighters.find((f) => f.id === "merc");
+    if (existing) {
+      this.fighters = this.fighters.filter((f) => f.id !== "merc");
+      this.mobBrains.delete("merc");
+      this.mercBrain = null;
+      this.acb.onLog("Your mercenary's contract has ended.", "info");
+    }
+    this.save.mercenaryExpiresAt = undefined;
+    this.save.mercenaryClassId = undefined;
   }
 
   /** Re-applies level and stat bonuses to the player's live fighter. */
   applyProgression() {
     const cls = getClass(this.save.classId);
-    const d = deriveArenaStats(cls, this.save.level, this.save.stats, this.save.equipped);
+    const d = deriveArenaStats(
+      cls,
+      this.save.level,
+      this.save.stats,
+      this.save.equipped,
+      this.save.ascension ?? 0
+    );
     const p = this.fighters[0];
     const prevMax = p.maxHp;
     p.maxHp = d.maxHp;
@@ -101,6 +420,8 @@ export class AdventureEngine extends ArenaEngine {
     p.name = cls.name;
     p.hp = Math.min(p.maxHp, p.hp + Math.max(0, d.maxHp - prevMax));
     p.mana = Math.min(p.mana, p.maxMana);
+    p.auraOverride = this.save.auraColor;
+    p.fishing = this.save.fishing;
   }
 
   /** True when the player is close enough to the blacksmith to trade. */
@@ -121,8 +442,80 @@ export class AdventureEngine extends ArenaEngine {
     return Math.abs(this.player.x - this.stage.bankX) < 90;
   }
 
+  /** True when standing close enough to the lake to start fishing. */
+  get nearLake(): boolean {
+    if (!this.stage.isTown || this.stage.lakeX === undefined) return false;
+    return Math.abs(this.player.x - this.stage.lakeX) < FISH_INTERACT_RADIUS;
+  }
+
   get inTown(): boolean {
     return !!this.stage.isTown;
+  }
+
+  /**
+   * Starting requires standing at the lake; stopping always works from
+   * anywhere. While fishing, a fish lands in the backpack about once a
+   * minute of real elapsed time — see collectFishing — so it keeps paying
+   * out whether the tab is foregrounded, backgrounded, or the player's just
+   * stepped away, right up to FISH_CAP_MS.
+   */
+  toggleFishing() {
+    if (this.save.fishing) {
+      this.collectFishing();
+      this.save.fishing = false;
+      this.player.fishing = false;
+      this.acb.onLog("You stop fishing.", "info");
+      return;
+    }
+    if (!this.nearLake) return;
+    this.save.fishing = true;
+    this.player.fishing = true;
+    this.save.lastFishTick = Date.now();
+    this.acb.onLog(
+      "You settle in to fish. About one catch a minute, even away from the keyboard — sell them at the blacksmith.",
+      "good"
+    );
+  }
+
+  /** Picks a fish species — common minnows most of the time, a genuinely
+   *  valuable golden carp rarely, so there's still a "nice" moment to an
+   *  otherwise predictable background activity. */
+  private catchFish(): Item {
+    const total = FISH_POOL.reduce((n, f) => n + f.weight, 0);
+    let r = Math.random() * total;
+    for (const f of FISH_POOL) {
+      if (r < f.weight) return makeItem(f.id, f.rarity);
+      r -= f.weight;
+    }
+    return makeItem(FISH_POOL[0].id, FISH_POOL[0].rarity);
+  }
+
+  /** Grants one fish per full minute of real time elapsed since the last
+   *  collection, capped at FISH_CAP_MS worth at once. Cheap no-op when not
+   *  fishing; called every tick so it self-corrects regardless of how
+   *  sparsely the tab actually runs frames while backgrounded. Anchors
+   *  lastFishTick to `now` (minus whatever fractional minute is still
+   *  owed) rather than advancing it step by step, so a days-long gap can't
+   *  re-trigger the same capped payout on every subsequent tick. */
+  private collectFishing() {
+    if (!this.save.fishing || !this.save.lastFishTick) return;
+    const now = Date.now();
+    const elapsed = Math.min(now - this.save.lastFishTick, FISH_CAP_MS);
+    const catches = Math.floor(elapsed / FISH_CATCH_INTERVAL_MS);
+    if (catches <= 0) return;
+    this.save.lastFishTick = now - (elapsed % FISH_CATCH_INTERVAL_MS);
+    const caught: Item[] = [];
+    for (let i = 0; i < catches; i++) caught.push(this.catchFish());
+    this.save.inventory.push(...caught);
+    this.save.fishCaught = (this.save.fishCaught ?? 0) + catches;
+    this.acb.onLoot(caught);
+    // The jackpot catch gets its own moment instead of blending into the
+    // usual loot-pickup log line.
+    if (caught.some((i) => i.rarity === "legendary")) {
+      this.acb.onLog("The line goes taut — you've hooked an Ancient Leviathan!", "big");
+      this.burstAt(this.player.x, this.player.y - this.player.h * 0.6, "#ff8a3d", 26);
+      this.shake = Math.max(this.shake, 8);
+    }
   }
 
   private spawnStageMobs() {
@@ -133,40 +526,83 @@ export class AdventureEngine extends ArenaEngine {
     }
   }
 
-  private spawnMob(type: MobType, x: number, y?: number): Fighter {
+  /** Combat-log access for MobBrain — a boss phase transition is worth a
+   *  line in the log, but `cb`/`acb` themselves stay private to the engine. */
+  logMessage(text: string, tone: CombatLogEntry["tone"]) {
+    this.acb.onLog(text, tone);
+  }
+
+  /** Not private: boss phase transitions (MobBrain, below) spawn adds mid-fight. */
+  spawnMob(type: MobType, x: number, y?: number, opts?: { forceElite?: boolean; rift?: boolean }): Fighter {
     const base = this.fighters[0];
     const feetY = y ?? this.map.spawnA.y;
+    // Bosses are already the special case; anything else has a flat shot at
+    // rolling Elite — bigger, tougher, hits harder, and worth actually
+    // hunting for the guaranteed better drop (see handleDeaths' rollDrops
+    // call). No new spawn list to maintain: every mob type can roll one.
+    // A Rift Warden always forces the roll (see spawnRift) rather than
+    // gambling on it, since the whole point is a guaranteed bonus encounter.
+    const crucible = this.stage.crucible ? this.crucibleAffixes : [];
+    const eliteChance = crucible.includes("volatile") ? ELITE_CHANCE * 3 : ELITE_CHANCE;
+    const elite = !type.isBoss && (opts?.forceElite || Math.random() < eliteChance);
+    const eliteAffix = elite
+      ? ELITE_AFFIXES[Math.floor(Math.random() * ELITE_AFFIXES.length)]
+      : undefined;
+    const diff = DIFFICULTY_MULT[this.save.difficulty ?? "normal"];
+    const reinforcedMult = crucible.includes("reinforced") ? 1.6 : 1;
+    const colossal = eliteAffix === "colossal";
+    const hpMult =
+      (elite ? ELITE_HP_MULT : 1) *
+      (colossal ? ELITE_COLOSSAL_HP_MULT / ELITE_HP_MULT : 1) *
+      diff.hp *
+      reinforcedMult;
+    const dmgMult =
+      (elite ? ELITE_DAMAGE_MULT : 1) *
+      (colossal ? ELITE_COLOSSAL_DAMAGE_MULT / ELITE_DAMAGE_MULT : 1) *
+      diff.damage;
+    const sizeMult = colossal ? ELITE_COLOSSAL_SIZE_MULT : elite ? ELITE_SIZE_MULT : 1;
+    const speedAffixMult =
+      eliteAffix === "swift" ? ELITE_SWIFT_SPEED_MULT : colossal ? ELITE_COLOSSAL_SPEED_MULT : 1;
     const mob: Fighter = {
       ...base,
       id: `m${this.mobSeq++}`,
-      name: type.name,
+      name: opts?.rift
+        ? `Rift Warden: ${type.name}`
+        : elite
+          ? `Elite ${type.name} (${ELITE_AFFIX_LABEL[eliteAffix!]})`
+          : type.name,
       isPlayer: false,
       isMob: true,
+      elite,
+      eliteAffix,
+      rift: !!opts?.rift,
       team: 1,
       mobTypeId: type.id,
       level: type.level,
-      expValue: type.expValue,
+      expValue: Math.round(type.expValue * (elite ? ELITE_EXP_MULT : 1)),
       x,
       y: feetY,
       spawnX: x,
       spawnY: feetY,
       vx: 0,
       vy: 0,
-      w: type.w,
-      h: type.h,
-      hp: type.maxHp,
-      maxHp: type.maxHp,
+      w: Math.round(type.w * sizeMult),
+      h: Math.round(type.h * sizeMult),
+      hp: Math.round(type.maxHp * hpMult),
+      maxHp: Math.round(type.maxHp * hpMult),
       mana: 0,
       maxMana: 1,
-      attackPower: type.damage,
+      attackPower: Math.round(type.damage * dmgMult),
       attackRange: type.range,
-      speedMult: type.speed / WALK_SPEED,
+      speedMult: (type.speed / WALK_SPEED) * speedAffixMult,
       attackSpeed: 1,
       // Mobs never equip gear — without this they'd inherit whatever
-      // legendary affixes the player currently has on.
-      lifesteal: 0,
+      // legendary affixes the player currently has on. Vampiric is the one
+      // exception: it reuses this exact field, the same lifesteal-on-hit
+      // math dealDamage already runs for players and legendary gear.
+      lifesteal: eliteAffix === "vampiric" ? ELITE_VAMPIRIC_LIFESTEAL : 0,
       negation: 0,
-      regenHp: 0,
+      regenHp: eliteAffix === "regenerating" ? Math.round(type.level * ELITE_REGEN_PER_LEVEL) : 0,
       regenMana: 0,
       state: "idle",
       stateTime: 0,
@@ -180,7 +616,8 @@ export class AdventureEngine extends ArenaEngine {
     return mob;
   }
 
-  /** Drives the player from input and every mob from its own brain. */
+  /** Drives P1 from input, the mercenary (if hired) from its own brain, and
+   *  every mob from its own brain. Mob brains only ever target this.player. */
   stepAdventure(playerIntent: Intent) {
     if (this.over) return;
 
@@ -190,10 +627,138 @@ export class AdventureEngine extends ArenaEngine {
       if (brain) brain.cache = brain.think(mob, this.player, this);
     }
 
-    this.stepAll(playerIntent, (f) => this.mobBrains.get(f.id)?.cache ?? emptyIntent());
+    this.stepAll(playerIntent, (f) => {
+      if (f.id === "merc") return this.mercBrain?.think(f, this) ?? emptyIntent();
+      return this.mobBrains.get(f.id)?.cache ?? emptyIntent();
+    });
 
     this.handleDeaths();
     this.updateLootDrops();
+    if (this.stage.survival) this.updateSurvival();
+    if (this.stage.bossRush) this.updateBossRush();
+    this.updateRifts();
+    this.expireMercenary();
+    this.collectFishing();
+  }
+
+  /** Spawns the next boss in BOSS_RUSH_ORDER once the arena is clear, healing
+   *  the party first (except before the very first boss, which the player
+   *  already entered the stage at full health for). Records the fastest
+   *  full clear once the last boss falls. */
+  private updateBossRush() {
+    if (this.bossRushCleared) return;
+    const anyAlive = this.fighters.some((f) => f.isMob && f.state !== "dead");
+    if (anyAlive) {
+      this.bossRushTime += DT;
+      return;
+    }
+    this.bossRushCooldown -= DT;
+    if (this.bossRushCooldown > 0) return;
+
+    const nextIndex = this.bossRushIndex + 1;
+    if (nextIndex >= BOSS_RUSH_ORDER.length) {
+      this.bossRushCleared = true;
+      const cleared = this.bossRushTime;
+      const best = this.save.bestBossRushTime;
+      if (best === undefined || cleared < best) {
+        this.save.bestBossRushTime = cleared;
+        this.acb.onLog(`Boss Rush cleared in ${cleared.toFixed(1)}s — new best!`, "big");
+      } else {
+        this.acb.onLog(`Boss Rush cleared in ${cleared.toFixed(1)}s.`, "big");
+      }
+      return;
+    }
+
+    this.bossRushIndex = nextIndex;
+    if (nextIndex > 0) {
+      this.player.hp = this.player.maxHp;
+      this.player.mana = this.player.maxMana;
+    }
+    const type = MOB_TYPES[BOSS_RUSH_ORDER[nextIndex]];
+    if (type) {
+      this.acb.onLog(`${type.name} enters the arena!`, "big");
+      this.pushFloating(this.player.x, this.player.y - this.player.h - 40, type.name, "#f87171", 20);
+      this.spawnMob(type, this.map.width / 2);
+    }
+    this.bossRushCooldown = 2.5;
+  }
+
+  /** Once every mob from the current wave is gone, a short beat later the
+   *  next one spawns — bigger, and drawing from a wider mob pool. */
+  private updateSurvival() {
+    const anyAlive = this.fighters.some((f) => f.isMob && f.state !== "dead");
+    if (anyAlive) return;
+    this.waveCooldown -= DT;
+    if (this.waveCooldown > 0) return;
+    this.startNextWave();
+  }
+
+  private startNextWave() {
+    this.waveNumber += 1;
+    this.waveCooldown = 3;
+    this.acb.onLog(`Wave ${this.waveNumber} incoming!`, "big");
+    this.pushFloating(this.player.x, this.player.y - this.player.h - 40, `WAVE ${this.waveNumber}`, "#fbbf24", 20);
+
+    const poolSize = Math.min(SURVIVAL_POOL.length, 2 + Math.floor(this.waveNumber / 2));
+    const swarming = this.stage.crucible && this.crucibleAffixes.includes("swarming");
+    const count = Math.min(10, 3 + Math.floor(this.waveNumber / 2)) + (swarming ? 2 : 0);
+    for (let i = 0; i < count; i++) {
+      const typeId = SURVIVAL_POOL[Math.floor(Math.random() * poolSize)];
+      const type = MOB_TYPES[typeId];
+      if (!type) continue;
+      const x = 200 + Math.random() * (this.map.width - 400);
+      this.spawnMob(type, x);
+    }
+  }
+
+  /** Ticks the current Rift (claim window, or the cooldown to the next one)
+   *  — only in regular combat stages, since Survival/Boss Rush/Crucible/town
+   *  already have their own spawn rhythm a surprise extra mob would clash with. */
+  private updateRifts() {
+    if (this.stage.isTown || this.stage.survival || this.stage.bossRush) return;
+    if (this.riftMobId) {
+      const mob = this.fighters.find((f) => f.id === this.riftMobId);
+      if (!mob) {
+        // Killed and already cleaned up (or otherwise gone) — free to roll
+        // the next one.
+        this.riftMobId = null;
+        this.riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
+        return;
+      }
+      if (mob.state === "dead") return; // still playing its death beat
+      this.riftTimer -= DT;
+      if (this.riftTimer <= 0) {
+        this.acb.onLog("The Rift closes, unclaimed.", "info");
+        this.mobBrains.delete(mob.id);
+        this.fighters = this.fighters.filter((f) => f.id !== mob.id);
+        this.riftMobId = null;
+        this.riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
+      }
+      return;
+    }
+    this.riftCooldown -= DT;
+    if (this.riftCooldown > 0) return;
+    this.spawnRift();
+  }
+
+  private spawnRift() {
+    const typeIds = Array.from(new Set(this.stage.spawns.map((s) => s.typeId))).filter(
+      (id) => !MOB_TYPES[id]?.isBoss
+    );
+    if (!typeIds.length) {
+      this.riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
+      return;
+    }
+    const typeId = typeIds[Math.floor(Math.random() * typeIds.length)];
+    const type = MOB_TYPES[typeId];
+    if (!type) return;
+    const x = 200 + Math.random() * (this.map.width - 400);
+    const mob = this.spawnMob(type, x, undefined, { forceElite: true, rift: true });
+    this.riftMobId = mob.id;
+    this.riftTimer = RIFT_CLAIM_WINDOW;
+    this.acb.onLog("A Rift has torn open nearby!", "big");
+    this.pushFloating(mob.x, mob.y - mob.h - 40, "RIFT!", "#fde047", 20);
+    this.burstAt(mob.x, mob.y - mob.h * 0.5, "#fde047", 28);
   }
 
   /** Spawns one item, popped up and out from a kill spot to fall to the floor. */
@@ -248,20 +813,47 @@ export class AdventureEngine extends ArenaEngine {
         this.save.inventory.push(drop.item);
         this.pushFloating(drop.x, drop.y - 30, itemName(drop.item), "#fcd34d", 14);
         this.acb.onLoot([drop.item]);
+        if (base(drop.item.baseId).unique) {
+          this.save.uniquesFound = this.save.uniquesFound ?? [];
+          if (!this.save.uniquesFound.includes(drop.item.baseId)) {
+            this.save.uniquesFound.push(drop.item.baseId);
+          }
+        }
         continue; // picked up — don't keep it
       }
+
       remaining.push(drop);
     }
     this.lootDrops = remaining;
   }
 
   private handleDeaths() {
+    const toRemove: Fighter[] = [];
     for (const f of this.fighters) {
+      // A downed mercenary just gets back up — no death penalty, doesn't
+      // count as a player death or end a Survival/Boss Rush run — handled
+      // before the isMob/player branches below since it's neither.
+      if (f.id === "merc") {
+        if (f.hp <= 0 && f.state !== "dead") {
+          f.state = "dead";
+          f.deadTimer = ALLY_RESPAWN;
+        } else if (f.state === "dead") {
+          f.deadTimer -= DT;
+          if (f.deadTimer <= 0) this.reviveAlly(f);
+        }
+        continue;
+      }
       if (f.isMob) {
         if (f.hp <= 0 && f.state !== "dead") {
           f.state = "dead";
-          f.deadTimer = MOB_RESPAWN;
+          f.deadTimer =
+            this.stage.survival || this.stage.bossRush || f.rift ? SURVIVAL_MOB_CLEANUP : MOB_RESPAWN;
           this.save.kills += 1;
+          if (f.mobTypeId) {
+            this.save.mobKills = this.save.mobKills ?? {};
+            this.save.mobKills[f.mobTypeId] = (this.save.mobKills[f.mobTypeId] ?? 0) + 1;
+          }
+          this.progressBounty(f.mobTypeId);
 
           const gained = expWithLevelPenalty(
             this.save.level,
@@ -273,10 +865,44 @@ export class AdventureEngine extends ArenaEngine {
           this.spawnKillFx(f, gained);
           this.acb.onExp(gained, f.name, result);
 
+          // Volatile Elites go out with a bang: flat, unmitigated damage to
+          // anyone standing close (same "ignores armor" precedent as
+          // environmental hazards use), rather than a normal mitigated hit.
+          if (f.eliteAffix === "volatile") {
+            for (const ally of this.fighters) {
+              if (ally.isMob || ally.state === "dead") continue;
+              if (Math.abs(ally.x - f.x) > ELITE_VOLATILE_RADIUS) continue;
+              const dmg = Math.round(f.level * 3 + 15);
+              ally.hp = Math.max(0, ally.hp - dmg);
+              this.pushFloating(ally.x, ally.y - ally.h - 10, `${dmg}`, "#f97316", 16);
+            }
+            this.burstAt(f.x, f.y - f.h * 0.5, "#f97316", 26);
+            this.shake = Math.max(this.shake, 10);
+          }
+
           // Drops pop out onto the floor — walk over them to pick them up.
+          // Elites roll the same generous boss drop table (worse odds don't
+          // matter if the reward for spotting one is the same as a trash mob).
           const type = MOB_TYPES[f.mobTypeId!];
-          const drops = rollDrops(f.level, !!type?.isBoss);
-          for (const item of drops) this.spawnLootDrop(item, f.x, f.y);
+          const bountiful = this.stage.crucible && this.crucibleAffixes.includes("bountiful");
+          const lootBonus =
+            DIFFICULTY_MULT[this.save.difficulty ?? "normal"].loot +
+            (bountiful ? 0.5 : 0) +
+            (f.rift ? RIFT_LOOT_BONUS : 0);
+          // A Rift Warden always rolls the boss-tier gear odds (the guaranteed
+          // 4 rolls at 75% gear chance instead of 1 roll at 18%), on top of
+          // the extra rarity bonus above — the whole point is a windfall.
+          const drops = rollDrops(f.level, !!type?.isBoss || !!f.elite || !!f.rift, f.mobTypeId, lootBonus);
+          for (const item of drops.items) this.spawnLootDrop(item, f.x, f.y);
+          if (drops.nearMiss) {
+            this.pushFloating(
+              f.x,
+              f.y - f.h - 20,
+              `SO CLOSE! (almost ${drops.nearMiss})`,
+              RARITY_META[drops.nearMiss].color,
+              14
+            );
+          }
 
           if (result.levelsGained > 0) {
             this.applyProgression();
@@ -288,7 +914,15 @@ export class AdventureEngine extends ArenaEngine {
           }
         } else if (f.state === "dead") {
           f.deadTimer -= DT;
-          if (f.deadTimer <= 0) this.reviveMob(f);
+          if (f.deadTimer <= 0) {
+            // Survival mobs are gone for good once their wave clears — a
+            // fresh, bigger batch spawns instead of the same handful cycling
+            // back in, which is what every other stage's mob roster does.
+            // A Rift Warden never revives either — it's a one-shot bonus
+            // encounter, not a permanent addition to the stage's roster.
+            if (this.stage.survival || this.stage.bossRush || f.rift) toRemove.push(f);
+            else this.reviveMob(f);
+          }
         }
         continue;
       }
@@ -300,10 +934,46 @@ export class AdventureEngine extends ArenaEngine {
         this.save.deaths += 1;
         this.acb.onLog("You were defeated. Recovering…", "bad");
         this.acb.onPlayerDeath();
+        if (this.stage.survival) {
+          const reached = this.waveNumber;
+          if (this.stage.crucible) {
+            if (reached > (this.save.bestCrucibleWave ?? 0)) {
+              this.save.bestCrucibleWave = reached;
+              this.acb.onLog(`New Crucible best: wave ${reached}!`, "big");
+            }
+          } else if (reached > (this.save.bestSurvivalWave ?? 0)) {
+            this.save.bestSurvivalWave = reached;
+            this.acb.onLog(`New best: wave ${reached}!`, "big");
+          }
+          this.waveNumber = 0;
+          this.waveCooldown = 1.5;
+          // A fresh attempt gets fresh modifiers, so no two Crucible runs
+          // play quite the same.
+          if (this.stage.crucible) this.rollCrucibleAffixes();
+          for (const mob of this.fighters) {
+            if (mob.isMob) toRemove.push(mob);
+          }
+        }
+        // A Boss Rush death resets the run back to the first boss, same as a
+        // Survival wipe resets the wave count — no partial credit for a run
+        // that didn't finish.
+        if (this.stage.bossRush) {
+          this.bossRushIndex = -1;
+          this.bossRushTime = 0;
+          this.bossRushCleared = false;
+          this.bossRushCooldown = 1.5;
+          for (const mob of this.fighters) {
+            if (mob.isMob) toRemove.push(mob);
+          }
+        }
       } else if (f.state === "dead") {
         f.deadTimer -= DT;
         if (f.deadTimer <= 0) this.revivePlayer(f);
       }
+    }
+    if (toRemove.length) {
+      for (const f of toRemove) this.mobBrains.delete(f.id);
+      this.fighters = this.fighters.filter((f) => !toRemove.includes(f));
     }
   }
 
@@ -337,6 +1007,19 @@ export class AdventureEngine extends ArenaEngine {
     this.acb.onLog("You rise again at the entrance.", "info");
   }
 
+  private reviveAlly(f: Fighter) {
+    f.state = "idle";
+    f.hp = f.maxHp;
+    f.x = this.player.x + 80;
+    f.y = this.player.y;
+    f.vx = 0;
+    f.vy = 0;
+    f.action = null;
+    f.knockdownTimer = 0;
+    f.hitstun = 0;
+    f.stunTimer = 0;
+  }
+
   private spawnKillFx(f: Fighter, exp: number) {
     this.pushFloating(f.x, f.y - f.h - 8, `+${exp} EXP`, "#a5f3fc", 16);
     this.burstAt(f.x, f.y - f.h * 0.5, MOB_TYPES[f.mobTypeId!].accent, 22);
@@ -352,11 +1035,21 @@ export class AdventureEngine extends ArenaEngine {
       );
       return false;
     }
+    // Leaving town (or just leaving the lake) ends the fishing session —
+    // collect whatever's owed first so nothing's lost.
+    if (this.save.fishing) {
+      this.collectFishing();
+      this.save.fishing = false;
+      this.player.fishing = false;
+    }
+
     this.save.stage = index;
     this.stage = stage;
     this.map = stage.map;
 
-    this.fighters = [this.fighters[0]];
+    // Only mobs are stage-local — the player and a hired mercenary both
+    // travel together.
+    this.fighters = this.fighters.filter((f) => !f.isMob);
     this.mobBrains.clear();
     this.hitboxes = [];
     this.projectiles = [];
@@ -369,7 +1062,29 @@ export class AdventureEngine extends ArenaEngine {
     p.vx = 0;
     p.vy = 0;
     p.state = "idle";
+    const merc = this.fighters.find((f) => f.id === "merc");
+    if (merc) {
+      merc.x = this.map.spawnA.x + 80;
+      merc.y = this.map.spawnA.y;
+      merc.vx = 0;
+      merc.vy = 0;
+      merc.state = "idle";
+    }
     this.spawnStageMobs();
+    // Wave/boss-rush/rift state is per-visit: travelling here fresh should
+    // always restart clean, same as dying mid-run does, not resume wherever
+    // a previous visit left off (spawns are otherwise empty for the two wave
+    // stage types, so without this nothing would ever spawn at all).
+    this.waveNumber = 0;
+    this.waveCooldown = 0;
+    this.bossRushIndex = -1;
+    this.bossRushTime = 0;
+    this.bossRushCleared = false;
+    this.bossRushCooldown = 0;
+    this.riftMobId = null;
+    this.riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
+    if (this.stage.crucible) this.rollCrucibleAffixes();
+    if (this.stage.survival) this.startNextWave();
     this.acb.onLog(`Entered ${stage.name}.`, "good");
     return true;
   }
@@ -380,6 +1095,27 @@ export class AdventureEngine extends ArenaEngine {
 }
 
 /** Ground-bound mob behaviour: patrol, chase, swing, never walk off a ledge. */
+/**
+ * One-time HP-threshold phase transitions for three bosses, each leaning on
+ * a different existing system rather than a new one: Warden gets a stat/pace
+ * boost (mutating the fighter fields spawnMob already sets per-instance),
+ * Frostking calls in reinforcements (the same spawnMob the stage's initial
+ * mob list uses), and the Sundered King leans on the frontGuard/stoic fields
+ * every fighter already carries for a "won't go down easy" final stand.
+ */
+const BOSS_PHASE2: Partial<
+  Record<string, { hpFrac: number; announce: string }>
+> = {
+  warden: { hpFrac: 0.5, announce: "The Warden flies into a rage!" },
+  sovereign: { hpFrac: 0.5, announce: "The Sovereign cloaks itself in abyssal power!" },
+  frostking: { hpFrac: 0.5, announce: "The Frostking calls the cold to arms!" },
+  forgeheart: { hpFrac: 0.4, announce: "The Forgeheart cracks the earth into flame!" },
+  tempestwarden: { hpFrac: 0.5, announce: "The Tempest Warden calls down the storm!" },
+  rotmother: { hpFrac: 0.4, announce: "The Rotmother's decay spreads across the field!" },
+  sunderedking: { hpFrac: 0.25, announce: "The Sundered King refuses to fall!" },
+  thehollow: { hpFrac: 0.35, announce: "The Hollow unmakes itself to become something worse." },
+};
+
 class MobBrain {
   cache: Intent = emptyIntent();
   private type: MobType;
@@ -389,9 +1125,87 @@ class MobBrain {
   // Bosses only: delay the first slam so a fight always opens with a few
   // normal swings before the telegraphed one shows up.
   private specialCd = 4 + Math.random() * 3;
+  /** Alternates which of the boss's two telegraphed moves fires next. */
+  private specialToggle = false;
+  private enraged = false;
+  private phase2Done = false;
+  private berserkDone = false;
 
   constructor(type: MobType) {
     this.type = type;
+  }
+
+  /** Berserk Elites: a one-time, permanent-for-the-fight power spike once
+   *  they drop below half health — the same "one-time HP-threshold buff"
+   *  shape as a boss's phase2, just available to any mob that rolled the
+   *  affix rather than the seven hand-picked bosses. */
+  private checkBerserk(self: Fighter) {
+    if (this.berserkDone || self.eliteAffix !== "berserk") return;
+    if (self.hp / self.maxHp > ELITE_BERSERK_HP_FRAC) return;
+    this.berserkDone = true;
+    self.attackPower = Math.round(self.attackPower * ELITE_BERSERK_ATK_MULT);
+    self.speedMult *= ELITE_BERSERK_SPEED_MULT;
+  }
+
+  private checkPhase2(self: Fighter, engine: AdventureEngine) {
+    if (this.phase2Done || !this.type.isBoss) return;
+    const phase = BOSS_PHASE2[this.type.id];
+    if (!phase || self.hp / self.maxHp > phase.hpFrac) return;
+    this.phase2Done = true;
+
+    engine.pushFloating(self.x, self.y - self.h - 30, "ENRAGED", "#ff3b30", 20);
+    engine.burstAt(self.x, self.y - self.h * 0.5, "#ff3b30", 30);
+    engine.logMessage(phase.announce, "big");
+
+    if (this.type.id === "warden") {
+      this.enraged = true;
+      self.attackPower = Math.round(self.attackPower * 1.25);
+      self.speedMult *= 1.2;
+    } else if (this.type.id === "frostking") {
+      const frostfang = MOB_TYPES.frostfang;
+      if (frostfang) {
+        engine.spawnMob(frostfang, self.x - 90, self.y);
+        engine.spawnMob(frostfang, self.x + 90, self.y);
+      }
+    } else if (this.type.id === "sunderedking") {
+      // Hyper-armour for the rest of the fight (stunlock/knockdown just
+      // don't interrupt it anymore) plus a real damage bump — the last
+      // stretch of the last fight in the game is meant to hurt.
+      self.stoicTimer = 9999;
+      self.attackPower = Math.round(self.attackPower * 1.3);
+    } else if (this.type.id === "sovereign") {
+      // Shields itself in the same negation/lifesteal fields legendary gear
+      // and Vampiric Elites already use — no new damage-mitigation system,
+      // just a boss actually using the one that exists.
+      self.negation = Math.max(self.negation, 0.35);
+      self.lifesteal = Math.max(self.lifesteal, 0.25);
+    } else if (this.type.id === "forgeheart" || this.type.id === "rotmother") {
+      // Cracks the ground open around itself — reuses the same standing
+      // damage-patch hazards the Forge/Blight stages already scatter
+      // statically, just placed live at the boss's position instead of
+      // fixed in the map data.
+      const groundY = engine.map.ground[0]?.y ?? self.y;
+      const kind = this.type.id === "forgeheart" ? "lava" : "poison";
+      const dps = this.type.id === "forgeheart" ? 22 : 16;
+      engine.map.hazards.push(
+        { x: self.x - 150, w: 90, y: groundY, dps, kind },
+        { x: self.x + 60, w: 90, y: groundY, dps, kind }
+      );
+    } else if (this.type.id === "tempestwarden") {
+      // Calls down the storm: noticeably faster and hits harder for the
+      // rest of the fight, the same "enrage" shape as the Warden's phase2
+      // but without the pace changes (its kit is already fast).
+      self.speedMult *= 1.25;
+      self.attackSpeed *= 1.2;
+      self.attackPower = Math.round(self.attackPower * 1.15);
+    } else if (this.type.id === "thehollow") {
+      // The last boss combines the Sundered King's hyper-armour with the
+      // Sovereign's lifesteal — both proven fields, just stacked together
+      // for the one fight meant to ask everything of the previous ones at once.
+      self.stoicTimer = 9999;
+      self.lifesteal = Math.max(self.lifesteal, 0.3);
+      self.attackPower = Math.round(self.attackPower * 1.2);
+    }
   }
 
   think(self: Fighter, player: Fighter, engine: AdventureEngine): Intent {
@@ -406,11 +1220,17 @@ class MobBrain {
       return i;
     }
 
+    this.checkPhase2(self, engine);
+    this.checkBerserk(self);
+
     // Shielded mobs block anything landing on their facing side outright —
     // refreshed every tick they have control, so it drops the instant a
     // knockdown or stun actually interrupts them (see the early return just
-    // above), giving a real opening rather than an unbreakable wall.
-    if (this.type.shielded) self.frontGuard = Math.max(self.frontGuard, 0.2);
+    // above), giving a real opening rather than an unbreakable wall. The
+    // Shielded Elite affix grants any mob type the exact same behaviour.
+    if (this.type.shielded || self.eliteAffix === "shielded") {
+      self.frontGuard = Math.max(self.frontGuard, 0.2);
+    }
 
     this.attackCd -= DT;
     this.repathCd -= DT;
@@ -424,7 +1244,9 @@ class MobBrain {
     if (dist < this.type.aggro && sameHeight && player.hp > 0) {
       const specialRange = this.type.range * 1.6;
       if (this.type.isBoss && this.specialCd <= 0 && dist <= specialRange) {
-        i.special = true;
+        if (this.specialToggle) i.special2 = true;
+        else i.special = true;
+        this.specialToggle = !this.specialToggle;
         // Long telegraph, so the cooldown is long too — this is meant to be
         // a rare "watch out" moment, not a constant threat.
         this.specialCd = 9 + Math.random() * 5;
@@ -439,13 +1261,20 @@ class MobBrain {
           i.moveX = dir;
         } else if (this.attackCd <= 0) {
           i.lmb = true;
-          this.attackCd = this.type.windup + this.type.recover + 0.6;
+          let pace = self.eliteAffix === "swift" ? 0.65 : 1;
+          if (engine.stage.crucible && engine.crucibleAffixes.includes("frenzied")) pace *= 0.75;
+          this.attackCd = (this.type.windup + this.type.recover) * pace + 0.6;
         }
       } else if (dist > this.type.range * 0.8) {
         i.moveX = dir;
       } else if (this.attackCd <= 0) {
         i.lmb = true;
-        this.attackCd = this.type.windup + this.type.recover + 0.25;
+        // Enraged Warden (and any Swift Elite, or a Crucible run rolling
+        // Frenzied) swings noticeably faster, not just harder — the rest of
+        // the recovery-padding formula is untouched.
+        let pace = this.enraged || self.eliteAffix === "swift" ? 0.6 : 1;
+        if (engine.stage.crucible && engine.crucibleAffixes.includes("frenzied")) pace *= 0.75;
+        this.attackCd = (this.type.windup + this.type.recover) * pace + 0.25;
       }
       self.facing = dir;
     } else {
@@ -475,6 +1304,63 @@ class MobBrain {
         i.moveX = 0;
         this.patrolDir = (-this.patrolDir) as 1 | -1;
       }
+    }
+    return i;
+  }
+}
+
+/**
+ * The hired mercenary's AI: chase whichever mob is nearest the player (never
+ * wander further than ALLY_LEASH from the player chasing something), swing
+ * lmb on cooldown once in range, otherwise just stay close. Deliberately the
+ * simplest possible brain — no skills, no mana, no positioning tricks — so
+ * there's nothing subtle to get wrong.
+ */
+class AllyBrain {
+  private attackCd = 0;
+
+  think(self: Fighter, engine: AdventureEngine): Intent {
+    const i = emptyIntent();
+    if (
+      self.state === "dead" ||
+      self.knockdownTimer > 0 ||
+      self.stunTimer > 0 ||
+      self.hitstun > 0 ||
+      self.action
+    ) {
+      return i;
+    }
+    this.attackCd -= DT;
+
+    const player = engine.player;
+    const cls = getClass(self.classId);
+
+    let target: Fighter | null = null;
+    let bestD = Infinity;
+    for (const f of engine.fighters) {
+      if (!f.isMob || f.state === "dead") continue;
+      if (Math.abs(f.x - player.x) > ALLY_LEASH) continue;
+      const d = Math.abs(f.x - self.x);
+      if (d < bestD) {
+        bestD = d;
+        target = f;
+      }
+    }
+
+    const anchor = target ?? player;
+    const dx = anchor.x - self.x;
+    const dist = Math.abs(dx);
+    const dir: 1 | -1 = dx >= 0 ? 1 : -1;
+
+    if (target && dist <= cls.attackRange * 0.85) {
+      self.facing = dir;
+      if (this.attackCd <= 0) {
+        i.lmb = true;
+        this.attackCd = ALLY_ATTACK_CD;
+      }
+    } else if (dist > 40) {
+      self.facing = dir;
+      i.moveX = dir;
     }
     return i;
   }

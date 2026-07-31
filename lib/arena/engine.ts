@@ -64,7 +64,13 @@ import {
   WALK_SPEED,
 } from "./constants";
 import { ARENA, groundAt } from "./map";
-import { MOB_TYPES, mobAttackSpec, mobBossSpecialSpec, mobRangedAttackSpec } from "./mobs";
+import {
+  MOB_TYPES,
+  mobAttackSpec,
+  mobBossSpecialSpec,
+  mobBossSweepSpec,
+  mobRangedAttackSpec,
+} from "./mobs";
 import type {
   ActiveAction,
   AttackSpec,
@@ -102,6 +108,10 @@ export interface Intent {
   shift: boolean;
   /** Mob-only: use the boss telegraphed slam instead of the regular swing. */
   special: boolean;
+  /** Mob-only: the boss's second telegraphed move — a wider, stunning sweep
+   *  instead of the knockdown slam, so a boss fight has two distinct
+   *  "watch out" reads instead of just one repeated. */
+  special2: boolean;
 }
 
 export function emptyIntent(): Intent {
@@ -124,6 +134,7 @@ export function emptyIntent(): Intent {
     f: false,
     shift: false,
     special: false,
+    special2: false,
   };
 }
 
@@ -183,7 +194,9 @@ export class ArenaEngine {
     this.viewport.h = h;
   }
 
-  private makeFighter(
+  /** Not private: AdventureEngine's pet companion reuses this to build its
+   *  own class-based fighter instead of duplicating the field list. */
+  protected makeFighter(
     id: string,
     classId: ClassId,
     name: string,
@@ -270,6 +283,7 @@ export class ArenaEngine {
       sprinting: false,
       wantsUp: false,
       hazardTick: 0,
+      elite: false,
     };
   }
 
@@ -506,15 +520,18 @@ export class ArenaEngine {
 
     // --- basic attacks -----------------------------------------------------
     const cls = getClass(f.classId);
-    if ((input.lmb || input.special) && f.isMob) {
+    if ((input.lmb || input.special || input.special2) && f.isMob) {
       const type = MOB_TYPES[f.mobTypeId!];
       if (type) {
         const useSpecial = input.special && type.isBoss;
-        const spec = useSpecial
-          ? mobBossSpecialSpec(type)
-          : type.ranged
-            ? mobRangedAttackSpec(type)
-            : mobAttackSpec(type);
+        const useSpecial2 = input.special2 && type.isBoss;
+        const spec = useSpecial2
+          ? mobBossSweepSpec(type)
+          : useSpecial
+            ? mobBossSpecialSpec(type)
+            : type.ranged
+              ? mobRangedAttackSpec(type)
+              : mobAttackSpec(type);
         this.startAttack(f, spec);
         this.advanceAction(f, opponent);
         this.physics(f);
@@ -1149,13 +1166,22 @@ export class ArenaEngine {
     const mitigated = raw * (1 - target.armor / 100);
     const dmg = Math.max(1, Math.round(mitigated));
     target.hp = Math.max(0, target.hp - dmg);
+    // A hit chunking a real fraction of the target's own health reads as
+    // "big" regardless of the raw number — a boss losing 15% of its bar in
+    // one swing deserves a bigger callout than the running damage numbers,
+    // the same way a trash mob losing 15% (a couple hits from dead) doesn't
+    // need one at all thanks to the absolute floor.
+    const crushing = dmg >= 30 && dmg >= target.maxHp * 0.15;
     this.spawnText(
       target.x + (Math.random() - 0.5) * 16,
       target.y - target.h - 4,
       `${dmg}`,
-      target.isPlayer ? "#f87171" : "#ffffff",
-      17
+      crushing ? "#fde047" : target.isPlayer ? "#f87171" : "#ffffff",
+      crushing ? 24 : 17
     );
+    if (crushing) {
+      this.spawnText(target.x, target.y - target.h - 24, "CRUSHING HIT", "#fde047", 15);
+    }
 
     // Legendary Lifesteal: the attacker heals off whatever actually landed.
     if (source.lifesteal > 0 && source.hp > 0) {
@@ -1748,8 +1774,11 @@ export class ArenaEngine {
   }
 
   private updateCamera() {
-    // Frame both fighters in a duel; in the campaign just lead the player.
-    const other = this.mode === "duel" && this.enemy ? this.enemy.x : this.player.x + this.player.facing * 90;
+    // Frame both fighters in a duel; in campaign just lead the player.
+    const other =
+      this.mode === "duel" && this.enemy
+        ? this.enemy.x
+        : this.player.x + this.player.facing * 90;
     const mid = (this.player.x + other) / 2;
     const targetX = clamp(
       mid - this.viewport.w / 2,

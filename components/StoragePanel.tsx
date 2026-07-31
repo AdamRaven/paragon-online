@@ -1,20 +1,30 @@
 "use client";
 
 import { ItemRow } from "@/components/InventoryPanel";
-import type { Item } from "@/lib/arena/items";
+import {
+  STORAGE_BASE_CAP,
+  STORAGE_EXPANSION_SIZE,
+  storageExpansionCost,
+  type Item,
+} from "@/lib/arena/items";
 import type { AdventureSave } from "@/lib/arena/progression";
 
 export function StoragePanel({
   save,
   onStore,
   onRetrieve,
+  onExpand,
   onClose,
 }: {
   save: AdventureSave;
   onStore: (item: Item) => void;
   onRetrieve: (item: Item) => void;
+  onExpand: () => void;
   onClose: () => void;
 }) {
+  const cap = save.storageCap ?? STORAGE_BASE_CAP;
+  const full = save.storage.length >= cap;
+  const expandCost = storageExpansionCost(cap);
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet wide" onClick={(e) => e.stopPropagation()}>
@@ -22,7 +32,7 @@ export function StoragePanel({
           <div>
             <h2>Bank</h2>
             <span style={{ color: "var(--muted)", fontSize: 12 }}>
-              {save.storage.length} items stored
+              {save.storage.length} / {cap} items stored
             </span>
           </div>
           <button className="btn btn-ghost" onClick={onClose}>
@@ -34,6 +44,15 @@ export function StoragePanel({
           Items in storage are safe and don&apos;t clutter your backpack. Move
           things back any time.
         </p>
+
+        <button
+          className="btn btn-ghost"
+          style={{ width: "100%", marginBottom: 12 }}
+          disabled={save.gold < expandCost}
+          onClick={onExpand}
+        >
+          {full ? "Storage full — " : ""}Buy {STORAGE_EXPANSION_SIZE} more slots ({expandCost}g)
+        </button>
 
         <div className="inv-layout">
           <section>

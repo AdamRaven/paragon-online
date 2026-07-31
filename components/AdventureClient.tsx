@@ -10,13 +10,30 @@ import { DevLevelTools } from "@/components/DevTools";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { MapPanel } from "@/components/MapPanel";
+import { StageMinimap, type MinimapData } from "@/components/StageMinimap";
+import { BestiaryPanel } from "@/components/BestiaryPanel";
 import { BlacksmithPanel } from "@/components/BlacksmithPanel";
+import { BountyBoard } from "@/components/BountyBoard";
+import { HallOfRecordsPanel } from "@/components/HallOfRecordsPanel";
+import { RunCompleteModal } from "@/components/RunCompleteModal";
+import { claimWeeklyMilestone } from "@/lib/arena/weekly";
+import { featuredBaseId } from "@/lib/arena/featuredItem";
 import { VendorPanel } from "@/components/VendorPanel";
 import { StoragePanel } from "@/components/StoragePanel";
-import { hasSeenTutorial, markTutorialSeen, TutorialOverlay } from "@/components/TutorialOverlay";
+import {
+  hasFinishedTutorialQuest,
+  hasSeenTutorial,
+  markTutorialSeen,
+  TutorialOverlay,
+  TutorialQuestBanner,
+} from "@/components/TutorialOverlay";
 import {
   MAX_PLUS,
+  RARITY_META,
   STONE_PRICE,
+  STORAGE_BASE_CAP,
+  STORAGE_EXPANSION_SIZE,
+  activeSetProgress,
   attemptEnhance,
   base,
   familySlots,
@@ -24,25 +41,45 @@ import {
   itemScore,
   itemValue,
   makeItem,
+  storageExpansionCost,
+  totalUniqueCount,
   type EquipSlot,
   type Item,
 } from "@/lib/arena/items";
-import { AdventureEngine } from "@/lib/arena/adventure";
+import {
+  AdventureEngine,
+  CRUCIBLE_AFFIX_META,
+  MERC_HIRE_COST,
+  type CrucibleAffix,
+} from "@/lib/arena/adventure";
+import {
+  ACHIEVEMENTS,
+  checkNewAchievements,
+  getAchievement,
+  nearestAchievement,
+  unlockedAuras,
+} from "@/lib/arena/achievements";
 import { CLASSES, getClass } from "@/lib/arena/classes";
 import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
 import { emptyIntent, type Intent } from "@/lib/arena/engine";
 import { ArenaInput } from "@/lib/arena/input";
-import { STAGES } from "@/lib/arena/mobs";
+import { loadCustomBindings } from "@/lib/arena/keybinds";
+import { MOB_TYPES, STAGES } from "@/lib/arena/mobs";
 import {
+  BASE_STAT,
+  DIFFICULTY_META,
   MAX_LEVEL,
   STAT_META,
+  ascend,
   clearAdventure,
   createAdventureSave,
   deriveArenaStats,
   expToNext,
+  importAdventureSave,
   loadAdventure,
   saveAdventure,
   type AdventureSave,
+  type Difficulty,
   type StatKey,
 } from "@/lib/arena/progression";
 import { PIXEL_SCALE, artSize, worldViewSize } from "@/lib/arena/pixel";
@@ -51,6 +88,10 @@ import { playSound, startMusic, stopMusic } from "@/lib/arena/sound";
 import type { ClassId, CombatLogEntry } from "@/lib/arena/types";
 
 const MAX_LOGS = 6;
+/** Meta-completion threshold for the run-complete screen — Ascension has no
+ *  hard cap, so this is a deliberately deep, chosen milestone rather than
+ *  "the" ceiling. */
+const RUN_COMPLETE_ASCENSION = 10;
 
 export function AdventureClient() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,6 +106,21 @@ export function AdventureClient() {
   const [started, setStarted] = useState(false);
   const [hud, setHud] = useState<ArenaHudData | null>(null);
   const [exp, setExp] = useState({ exp: 0, next: 1, level: 1, points: 0 });
+  /** Survival Fields only — current wave, live off the engine each HUD tick. */
+  const [wave, setWave] = useState(0);
+  /** Boss Rush only — live off the engine each HUD tick. */
+  const [bossRush, setBossRush] = useState({ index: -1, time: 0, cleared: false });
+  /** Sundered Crucible only — this run's rolled modifiers. */
+  const [crucibleAffixes, setCrucibleAffixes] = useState<CrucibleAffix[]>([]);
+  /** Every non-town stage — player/mob positions along the stage, for the
+   *  progress bar under the camp HUD. Null in town, where there's nothing
+   *  to show. */
+  const [minimap, setMinimap] = useState<MinimapData | null>(null);
+  /** First-run quest banner: sticky once true, never reset by leaving town. */
+  const [visitedTown, setVisitedTown] = useState(false);
+  const [showRunComplete, setShowRunComplete] = useState(false);
+  /** True while standing near the town lake — drives the "Press E to fish" prompt. */
+  const [nearLake, setNearLake] = useState(false);
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [panel, setPanel] = useState<
     | "none"
@@ -77,6 +133,9 @@ export function AdventureClient() {
     | "escape"
     | "combo"
     | "tutorial"
+    | "bounty"
+    | "bestiary"
+    | "records"
   >("none");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   /** Bumped whenever the save mutates, to re-render the panels. */
@@ -96,6 +155,10 @@ export function AdventureClient() {
     setBooted(true);
   }, []);
 
+  useEffect(() => {
+    if (save && STAGES[save.stage]?.isTown) setVisitedTown(true);
+  }, [save?.stage]);
+
   // ------------------------------------------------------------- engine boot
   useEffect(() => {
     if (!started || !save) return;
@@ -106,7 +169,7 @@ export function AdventureClient() {
     const fxCanvas = fxCanvasRef.current;
     const fxCtx = fxCanvas?.getContext("2d") ?? null;
 
-    const input = new ArenaInput();
+    const input = new ArenaInput(loadCustomBindings());
     input.attach(canvas);
     inputRef.current = input;
 
@@ -186,6 +249,64 @@ export function AdventureClient() {
           level: engine.save.level,
           points: engine.save.statPoints,
         });
+        if (engine.stage.survival) setWave(engine.waveNumber);
+        if (engine.stage.bossRush) {
+          setBossRush({
+            index: engine.bossRushIndex,
+            time: engine.bossRushTime,
+            cleared: engine.bossRushCleared,
+          });
+        }
+        if (engine.stage.crucible) setCrucibleAffixes(engine.crucibleAffixes);
+        // Fishing earnings tick up silently on the engine's own save object —
+        // nothing else re-renders while it's happening, so force a refresh
+        // here or the gold counter would only ever catch up after some
+        // unrelated action.
+        if (engine.save.fishing) setSave({ ...engine.save });
+        setNearLake(engine.nearLake);
+        if (engine.stage.isTown) {
+          setMinimap(null);
+        } else {
+          setMinimap({
+            mapWidth: engine.map.width,
+            playerX: engine.player.x,
+            mobs: engine.fighters
+              .filter((f) => f.isMob)
+              .map((f) => ({
+                x: f.x,
+                boss: !!MOB_TYPES[f.mobTypeId ?? ""]?.isBoss,
+                elite: !!f.elite,
+                dead: f.state === "dead",
+              })),
+            loot: engine.lootDrops.map((d) => ({
+              x: d.x,
+              label: itemName(d.item),
+              color: RARITY_META[d.item.rarity].color,
+            })),
+          });
+        }
+        const newAchievements = checkNewAchievements(engine.save);
+        if (newAchievements.length) {
+          engine.save.achievements = [...(engine.save.achievements ?? []), ...newAchievements];
+          for (const id of newAchievements) {
+            const a = getAchievement(id);
+            if (a) pushLog(`Achievement unlocked: ${a.name}!`, "big");
+          }
+          playSound("levelUp");
+          saveAdventure(engine.save);
+          setSave({ ...engine.save });
+        }
+        if (
+          !engine.save.seenRunComplete &&
+          (engine.save.ascension ?? 0) >= RUN_COMPLETE_ASCENSION &&
+          (engine.save.uniquesFound?.length ?? 0) >= totalUniqueCount()
+        ) {
+          engine.save.seenRunComplete = true;
+          saveAdventure(engine.save);
+          setSave({ ...engine.save });
+          setShowRunComplete(true);
+          playSound("victory");
+        }
       }
       if (++saveTick >= 240) {
         saveTick = 0;
@@ -243,6 +364,8 @@ export function AdventureClient() {
         } else if (eng.nearBank) {
           setRev((r) => r + 1);
           setPanel((p) => (p === "storage" ? "none" : "storage"));
+        } else if (eng.nearLake || eng.save.fishing) {
+          toggleFishing();
         }
       } else if (e.code === "Escape") {
         setPanel((p) => {
@@ -277,6 +400,65 @@ export function AdventureClient() {
     saveAdventure(e.save);
     setSave({ ...e.save });
     setRev((r) => r + 1);
+  };
+
+  const ascendNow = () => {
+    const e = engineRef.current;
+    if (!e || !ascend(e.save)) return;
+    // Recompute stats for the new (level 1, +1 ascension) state before
+    // healing to full, rather than healing at the stale pre-Ascend numbers.
+    e.applyProgression();
+    e.player.hp = e.player.maxHp;
+    e.player.mana = e.player.maxMana;
+    saveAdventure(e.save);
+    setSave({ ...e.save });
+    setRev((r) => r + 1);
+    pushLog(
+      `Ascended to rank ${e.save.ascension}! Back to level 1 — permanently stronger.`,
+      "big"
+    );
+    playSound("levelUp");
+  };
+
+  const setTitle = (title: string | undefined) =>
+    mutate((e) => {
+      e.save.title = title;
+    });
+
+  const setAura = (color: string | undefined) =>
+    mutate((e) => {
+      e.save.auraColor = color;
+    });
+
+  const claimBounty = () => mutate((e) => e.claimBounty());
+  const toggleFishing = () => mutate((e) => e.toggleFishing());
+  const claimWeekly = (index: number) => mutate((e) => claimWeeklyMilestone(e.save, index));
+
+  const hireMercenary = (classId: ClassId) =>
+    mutate((e) => {
+      if (e.save.gold < MERC_HIRE_COST) {
+        setShopMsg("Not enough gold to hire a mercenary.");
+        return;
+      }
+      e.save.gold -= MERC_HIRE_COST;
+      e.hireMercenary(classId);
+      playSound("uiClick");
+    });
+
+  const importSaveFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imported = importAdventureSave(String(reader.result));
+      if (!imported) {
+        window.alert("That doesn't look like a valid Paragon save file.");
+        playSound("uiError");
+        return;
+      }
+      saveAdventure(imported);
+      setSave(imported);
+      playSound("uiClick");
+    };
+    reader.readAsText(file);
   };
 
   // Dev-only: never reachable in a production build (see DevLevelTools).
@@ -356,6 +538,29 @@ export function AdventureClient() {
       playSound("uiClick");
     });
 
+  /** Gold sink: refund every spent stat point at a per-point cost, so a
+   *  respec is a real decision instead of a free do-over. */
+  const RESPEC_COST_PER_POINT = 25;
+  const respec = () =>
+    mutate((e) => {
+      const s = e.save.stats;
+      const spent = s.str + s.agi + s.vit + s.foc - BASE_STAT * 4;
+      if (spent <= 0) {
+        setShopMsg("Nothing to respec.");
+        return;
+      }
+      const cost = spent * RESPEC_COST_PER_POINT;
+      if (e.save.gold < cost) {
+        setShopMsg(`Respec costs ${cost}g for ${spent} points — you don't have enough.`);
+        return;
+      }
+      e.save.gold -= cost;
+      e.save.statPoints += spent;
+      e.save.stats = { str: BASE_STAT, agi: BASE_STAT, vit: BASE_STAT, foc: BASE_STAT };
+      setShopMsg(`Respec complete — ${spent} points refunded for ${cost}g.`);
+      playSound("uiClick");
+    });
+
   const buyGear = (baseId: string) =>
     mutate((e) => {
       const item = makeItem(baseId, "common");
@@ -368,10 +573,41 @@ export function AdventureClient() {
       playSound("uiClick");
     });
 
+  const buyFeaturedGear = () =>
+    mutate((e) => {
+      const item = makeItem(featuredBaseId(), "epic");
+      const price = itemValue(item);
+      if (e.save.gold < price) return;
+      e.save.gold -= price;
+      e.save.inventory.push(item);
+      setShopMsg(`Bought ${itemName(item)} for ${price}g.`);
+      pushLog(`Bought this week's featured ${itemName(item)}.`, "good");
+      playSound("uiClick");
+    });
+
   const storeItem = (item: Item) =>
     mutate((e) => {
+      const cap = e.save.storageCap ?? STORAGE_BASE_CAP;
+      if (e.save.storage.length >= cap) {
+        setShopMsg(`Storage is full (${cap}). Buy more room from the bank keeper.`);
+        return;
+      }
       e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
       e.save.storage.push(item);
+    });
+
+  const expandStorage = () =>
+    mutate((e) => {
+      const cap = e.save.storageCap ?? STORAGE_BASE_CAP;
+      const cost = storageExpansionCost(cap);
+      if (e.save.gold < cost) {
+        setShopMsg(`Expanding storage costs ${cost}g — you don't have enough.`);
+        return;
+      }
+      e.save.gold -= cost;
+      e.save.storageCap = cap + STORAGE_EXPANSION_SIZE;
+      setShopMsg(`Storage expanded to ${e.save.storageCap} slots.`);
+      playSound("uiClick");
     });
 
   const retrieveItem = (item: Item) =>
@@ -463,6 +699,7 @@ export function AdventureClient() {
           clearAdventure();
           setSave(null);
         }}
+        onImport={importSaveFile}
       />
     );
   }
@@ -475,6 +712,13 @@ export function AdventureClient() {
       <canvas ref={canvasRef} tabIndex={0} />
       <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
       {hud && <ArenaHud hud={hud} logs={logs} />}
+      {!hasFinishedTutorialQuest() && (
+        <TutorialQuestBanner state={{ kills: live.kills, level: live.level, visitedTown }} />
+      )}
+
+      {showRunComplete && (
+        <RunCompleteModal save={live} onClose={() => setShowRunComplete(false)} />
+      )}
 
       {process.env.NODE_ENV !== "production" && (
         <DevLevelTools level={live.level} maxLevel={MAX_LEVEL} onAdjust={devAdjustLevel} />
@@ -486,6 +730,43 @@ export function AdventureClient() {
           LV {exp.level}
           {exp.points > 0 && <span className="pip">+{exp.points}</span>}
         </div>
+        {STAGES[live.stage]?.crucible ? (
+          <div className="camp-wave">
+            Wave {wave}
+            <small>best {live.bestCrucibleWave ?? 0}</small>
+          </div>
+        ) : (
+          STAGES[live.stage]?.survival && (
+            <div className="camp-wave">
+              Wave {wave}
+              <small>best {live.bestSurvivalWave ?? 0}</small>
+            </div>
+          )
+        )}
+        {STAGES[live.stage]?.crucible && crucibleAffixes.length > 0 && (
+          <div className="camp-affixes" title={crucibleAffixes.map((a) => CRUCIBLE_AFFIX_META[a].blurb).join(" · ")}>
+            {crucibleAffixes.map((a) => (
+              <span key={a} className="camp-affix-pip">{CRUCIBLE_AFFIX_META[a].label}</span>
+            ))}
+          </div>
+        )}
+        {STAGES[live.stage]?.bossRush && (
+          <div className="camp-wave">
+            {bossRush.cleared
+              ? "Cleared!"
+              : `Boss ${Math.max(1, bossRush.index + 1)}/7`}
+            <small>
+              {bossRush.time.toFixed(1)}s
+              {live.bestBossRushTime !== undefined && ` · best ${live.bestBossRushTime.toFixed(1)}s`}
+            </small>
+          </div>
+        )}
+        {live.fishing && (
+          <div className="camp-wave" title="About one catch a minute, even while the tab is in the background.">
+            🎣 Fishing…
+            <small>{live.fishCaught ?? 0} caught lifetime</small>
+          </div>
+        )}
         <div className="bar expbar">
           <div className="bar-fill" style={{ width: `${expPct}%` }} />
           <div className="bar-text">
@@ -502,14 +783,53 @@ export function AdventureClient() {
         <button className="btn btn-ghost camp-btn" onClick={() => setPanel("map")}>
           Stages (M)
         </button>
+        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bounty")}>
+          Bounty
+        </button>
+        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bestiary")}>
+          Bestiary
+        </button>
+        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("records")}>
+          Records
+        </button>
       </div>
+
+      {minimap && <StageMinimap data={minimap} />}
+
+      {nearLake && (
+        <div className="interact-hint">
+          {live.fishing ? "Press E to stop fishing" : "Press E to fish"}
+        </div>
+      )}
+
+      {(() => {
+        const nearest = nearestAchievement(live);
+        if (!nearest) return null;
+        return (
+          <div className="almost-there">
+            <span>Almost there: {nearest.achievement.name}</span>
+            <div className="bar hpbar">
+              <div className="bar-fill" style={{ width: `${Math.min(100, nearest.pct * 100)}%` }} />
+              <div className="bar-text">
+                {Math.min(nearest.current, nearest.goal)} / {nearest.goal}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {panel === "sheet" && (
         <div className="overlay" onClick={() => setPanel("none")}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-head">
               <div>
-                <h2>{getClass(live.classId).name}</h2>
+                <h2>
+                  {getClass(live.classId).name}
+                  {(live.ascension ?? 0) > 0 && (
+                    <span className="ascension-badge">Ascension {live.ascension}</span>
+                  )}
+                </h2>
+                {live.title && <div className="title-badge">&ldquo;{live.title}&rdquo;</div>}
                 <span style={{ color: "var(--muted)", fontSize: 12 }}>
                   Level {live.level} · {live.kills} kills · {live.deaths} deaths
                 </span>
@@ -524,6 +844,18 @@ export function AdventureClient() {
                 {live.statPoints}
               </strong>
             </div>
+            {live.level >= MAX_LEVEL && (
+              <div className="ascend-prompt">
+                <p>
+                  You&apos;ve hit the level cap. Ascend to reset to level 1 in exchange for a
+                  permanent +5% to health, mana and attack power — stacking with every
+                  Ascension after this one. Gear, gold and stats already spent are untouched.
+                </p>
+                <button className="btn" onClick={ascendNow}>
+                  Ascend to rank {(live.ascension ?? 0) + 1}
+                </button>
+              </div>
+            )}
             {(Object.keys(STAT_META) as StatKey[]).map((k) => (
               <div className="stat-row" key={k}>
                 <div className="stat-key" style={{ color: STAT_META[k].color }}>
@@ -545,6 +877,29 @@ export function AdventureClient() {
               </div>
             ))}
             <DerivedPanel save={live} />
+            {unlockedAuras(live).length > 0 && (
+              <div className="aura-picker">
+                <h3 className="section-title">Aura</h3>
+                <div className="aura-swatches">
+                  <button
+                    className={`aura-swatch${!live.auraColor ? " active" : ""}`}
+                    style={{ background: "transparent", border: "2px dashed var(--border)" }}
+                    onClick={() => setAura(undefined)}
+                    title="None"
+                  />
+                  {unlockedAuras(live).map((a) => (
+                    <button
+                      key={a.color}
+                      className={`aura-swatch${live.auraColor === a.color ? " active" : ""}`}
+                      style={{ background: a.color }}
+                      onClick={() => setAura(a.color)}
+                      title={a.label}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            <AchievementsPanel save={live} onSetTitle={setTitle} />
           </div>
         </div>
       )}
@@ -567,6 +922,8 @@ export function AdventureClient() {
           onBuyStones={buyStones}
           onEnhance={enhance}
           onEnhanceMany={enhanceMany}
+          onRespec={respec}
+          onHireMercenary={hireMercenary}
           lastResult={shopMsg}
           onClose={() => setPanel("none")}
         />
@@ -576,6 +933,7 @@ export function AdventureClient() {
         <VendorPanel
           save={live}
           onBuy={buyGear}
+          onBuyFeatured={buyFeaturedGear}
           lastResult={shopMsg}
           onClose={() => setPanel("none")}
         />
@@ -586,6 +944,7 @@ export function AdventureClient() {
           save={live}
           onStore={storeItem}
           onRetrieve={retrieveItem}
+          onExpand={expandStorage}
           onClose={() => setPanel("none")}
         />
       )}
@@ -600,10 +959,27 @@ export function AdventureClient() {
         />
       )}
 
+      {panel === "bounty" && (
+        <BountyBoard
+          save={live}
+          onClaim={claimBounty}
+          onClaimWeekly={claimWeekly}
+          onClose={() => setPanel("none")}
+        />
+      )}
+
+      {panel === "bestiary" && <BestiaryPanel save={live} onClose={() => setPanel("none")} />}
+
+      {panel === "records" && <HallOfRecordsPanel save={live} onClose={() => setPanel("none")} />}
+
       {panel === "escape" && (
         <EscapeMenu
-          onResume={() => setPanel("none")}
+          onResume={() => {
+            inputRef.current?.setBindings(loadCustomBindings());
+            setPanel("none");
+          }}
           onShowTutorial={() => setPanel("tutorial")}
+          save={live}
         />
       )}
 
@@ -619,36 +995,118 @@ export function AdventureClient() {
   );
 }
 
-function DerivedPanel({ save }: { save: AdventureSave }) {
-  const d = deriveArenaStats(getClass(save.classId), save.level, save.stats);
-  const cls = getClass(save.classId);
+/** "+85 HP", "+2% SPD/AS", "+19 HP/s" — one set bonus tier, human-readable. */
+function describeSetBonus(b: { stats: { hp?: number; attack?: number; speed?: number; atkSpeed?: number }; effect?: { value: number } }): string {
+  const parts: string[] = [];
+  if (b.stats.hp) parts.push(`+${b.stats.hp} HP`);
+  if (b.stats.attack) parts.push(`+${b.stats.attack} ATK`);
+  if (b.stats.speed) parts.push(`+${Math.round(b.stats.speed * 100)}% SPD/AS`);
+  if (b.effect) parts.push(`+${b.effect.value} regen`);
+  return parts.join(" ");
+}
+
+/** Lists every achievement, checked off as it unlocks, with an equip button
+ *  for the title text it grants — the character sheet's own section, not a
+ *  separate panel, since there's nothing else competing for that space. */
+function AchievementsPanel({
+  save,
+  onSetTitle,
+}: {
+  save: AdventureSave;
+  onSetTitle: (title: string | undefined) => void;
+}) {
+  const unlocked = new Set(save.achievements ?? []);
   return (
-    <div className="derived">
-      <div>
-        <span>Health</span>
-        <strong>{d.maxHp}</strong>
-      </div>
-      <div>
-        <span>{cls.manaLabel}</span>
-        <strong>{d.maxMana}</strong>
-      </div>
-      <div>
-        <span>Attack power</span>
-        <strong>{d.attackPower.toFixed(1)}</strong>
-      </div>
-      <div>
-        <span>Move speed</span>
-        <strong>{d.speedMult.toFixed(2)}x</strong>
-      </div>
-      <div>
-        <span>Attack speed</span>
-        <strong>{d.attackSpeed.toFixed(2)}x</strong>
-      </div>
-      <div>
-        <span>Power</span>
-        <strong>{d.power.toLocaleString()}</strong>
+    <div className="achievements-panel">
+      <h3 className="section-title">
+        Achievements ({unlocked.size}/{ACHIEVEMENTS.length})
+      </h3>
+      <div className="achievement-list">
+        {ACHIEVEMENTS.map((a) => {
+          const done = unlocked.has(a.id);
+          const active = save.title === a.title;
+          return (
+            <div className={`achievement-row${done ? " done" : ""}`} key={a.id}>
+              <span className="achievement-main">
+                <strong>{done ? "✓ " : "○ "}{a.name}</strong>
+                <small>{done ? `"${a.title}"` : a.description}</small>
+              </span>
+              {done && (
+                <button
+                  className="btn tiny btn-ghost"
+                  disabled={active}
+                  onClick={() => onSetTitle(active ? undefined : a.title)}
+                >
+                  {active ? "Equipped" : "Equip"}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+function DerivedPanel({ save }: { save: AdventureSave }) {
+  const d = deriveArenaStats(
+    getClass(save.classId),
+    save.level,
+    save.stats,
+    save.equipped,
+    save.ascension ?? 0
+  );
+  const cls = getClass(save.classId);
+  const sets = activeSetProgress(save.equipped);
+  return (
+    <>
+      <div className="derived">
+        <div>
+          <span>Health</span>
+          <strong>{d.maxHp}</strong>
+        </div>
+        <div>
+          <span>{cls.manaLabel}</span>
+          <strong>{d.maxMana}</strong>
+        </div>
+        <div>
+          <span>Attack power</span>
+          <strong>{d.attackPower.toFixed(1)}</strong>
+        </div>
+        <div>
+          <span>Move speed</span>
+          <strong>{d.speedMult.toFixed(2)}x</strong>
+        </div>
+        <div>
+          <span>Attack speed</span>
+          <strong>{d.attackSpeed.toFixed(2)}x</strong>
+        </div>
+        <div>
+          <span>Power</span>
+          <strong>{d.power.toLocaleString()}</strong>
+        </div>
+      </div>
+      {sets.length > 0 && (
+        <div className="set-bonuses">
+          <h3 className="section-title">Gear Sets</h3>
+          {sets.map((s) => (
+            <div className="set-row" key={s.id}>
+              <div className="set-row-head">
+                <strong>{s.name}</strong>
+                <span>{s.count} equipped</span>
+              </div>
+              <div className="set-tiers">
+                {s.bonuses.map((b) => (
+                  <span key={b.count} className={b.active ? "set-tier active" : "set-tier"}>
+                    {b.count}pc {describeSetBonus(b)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -710,21 +1168,63 @@ function buildHud(engine: AdventureEngine, input: ArenaInput): ArenaHudData {
   };
 }
 
+/** Difficulty picker for a brand-new character — locked in for the
+ *  character's life, same as the class choice, so it's shown once here and
+ *  never again after "Begin the Campaign". */
+function DifficultyPicker({
+  difficulty,
+  setDifficulty,
+}: {
+  difficulty: Difficulty;
+  setDifficulty: (d: Difficulty) => void;
+}) {
+  const ids = Object.keys(DIFFICULTY_META) as Difficulty[];
+  return (
+    <div className="mt-4 pt-4 border-t border-outline-variant/20">
+      <h3 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-2">
+        Difficulty
+      </h3>
+      <div className="flex gap-2">
+        {ids.map((id) => {
+          const meta = DIFFICULTY_META[id];
+          const isPicked = difficulty === id;
+          return (
+            <button
+              key={id}
+              className={`flex-1 p-2 border transition-colors text-left ${
+                isPicked ? "border-paragon-gold bg-paragon-gold/10" : "border-outline-variant/30"
+              }`}
+              onClick={() => setDifficulty(id)}
+              title={meta.blurb}
+            >
+              <strong className="block text-on-surface text-sm">{meta.label}</strong>
+              <small className="text-on-surface-variant text-xs">{meta.blurb}</small>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CharacterGate({
   save,
   onStart,
   onWipe,
+  onImport,
 }: {
   save: AdventureSave | null;
   onStart: (s: AdventureSave) => void;
   onWipe: () => void;
+  onImport: (file: File) => void;
 }) {
   const [picked, setPicked] = useState<ClassId>("paragon");
+  const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const ids = Object.keys(CLASSES) as ClassId[];
 
   if (save) {
     const cls = getClass(save.classId);
-    const d = deriveArenaStats(cls, save.level, save.stats);
+    const d = deriveArenaStats(cls, save.level, save.stats, save.equipped, save.ascension ?? 0);
     return (
       <main className="landing-page font-body-md text-body-md min-h-screen bg-void-black text-on-surface px-margin-mobile py-12 md:py-16">
         <div className="max-w-2xl mx-auto space-y-stack-lg">
@@ -750,7 +1250,16 @@ function CharacterGate({
               Your Fighter
             </h2>
             <div className="flex justify-between items-baseline">
-              <strong className="text-xl text-on-surface">{cls.name}</strong>
+              <strong className="text-xl text-on-surface">
+                {cls.name}
+                {(save.ascension ?? 0) > 0 && (
+                  <span className="ascension-badge">Ascension {save.ascension}</span>
+                )}
+                {save.difficulty && save.difficulty !== "normal" && (
+                  <span className="ascension-badge">{DIFFICULTY_META[save.difficulty].label}</span>
+                )}
+                {save.title && <span className="title-badge inline">&ldquo;{save.title}&rdquo;</span>}
+              </strong>
               <span className="text-paragon-gold font-section-label text-section-label">
                 Level {save.level}
               </span>
@@ -793,6 +1302,24 @@ function CharacterGate({
               >
                 Delete
               </button>
+            </div>
+            <div className="flex gap-3 mt-3 text-xs">
+              <label className="flex-1 text-on-surface-variant hover:text-on-surface underline underline-offset-2 cursor-pointer text-center">
+                Import a save file
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    if (window.confirm("This replaces your current character with the imported save. Continue?")) {
+                      onImport(file);
+                    }
+                  }}
+                />
+              </label>
             </div>
           </section>
 
@@ -864,12 +1391,26 @@ function CharacterGate({
               );
             })}
           </div>
+          <DifficultyPicker difficulty={difficulty} setDifficulty={setDifficulty} />
           <button
             className="w-full mt-6 bg-paragon-gold text-void-black py-4 font-section-label text-section-label uppercase tracking-widest font-bold glow-border-gold transition-all hover:scale-105"
-            onClick={() => onStart(createAdventureSave(picked))}
+            onClick={() => onStart(createAdventureSave(picked, difficulty))}
           >
             Begin the Campaign
           </button>
+          <label className="block w-full mt-3 text-center text-xs text-on-surface-variant hover:text-on-surface underline underline-offset-2 cursor-pointer">
+            Or import an existing save file
+            <input
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) onImport(file);
+              }}
+            />
+          </label>
         </section>
       </div>
     </main>

@@ -30,28 +30,37 @@ export type SoundName =
 const STORAGE_KEY = "paragon:audio";
 
 interface AudioSettings {
-  volume: number;
+  sfxVolume: number;
+  musicVolume: number;
   muted: boolean;
 }
 
 function loadSettings(): AudioSettings {
-  if (typeof window === "undefined") return { volume: 0.6, muted: false };
+  const fallback: AudioSettings = { sfxVolume: 0.6, musicVolume: 0.6, muted: false };
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { volume: 0.6, muted: false };
+    if (!raw) return fallback;
     const parsed = JSON.parse(raw);
+    // Older saves only had one combined "volume" — seed both new sliders
+    // from it so upgrading doesn't silently reset anyone's preference.
+    const legacy = typeof parsed.volume === "number" ? parsed.volume : undefined;
     return {
-      volume: typeof parsed.volume === "number" ? parsed.volume : 0.6,
+      sfxVolume: typeof parsed.sfxVolume === "number" ? parsed.sfxVolume : legacy ?? fallback.sfxVolume,
+      musicVolume: typeof parsed.musicVolume === "number" ? parsed.musicVolume : legacy ?? fallback.musicVolume,
       muted: !!parsed.muted,
     };
   } catch {
-    return { volume: 0.6, muted: false };
+    return fallback;
   }
 }
 
 let settings = loadSettings();
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+/** Separate bus for the ambient music, so it can have its own volume
+ *  independent of hit/skill/UI cues. */
+let musicMaster: GainNode | null = null;
 let noiseBuffer: AudioBuffer | null = null;
 // Sounds are fired from the game loop, which runs far faster than they
 // should audibly repeat (e.g. every combo hit) — a short per-name cooldown
@@ -74,8 +83,11 @@ function getCtx(): AudioContext | null {
   if (!ctx) {
     ctx = new Ctor();
     master = ctx.createGain();
-    master.gain.value = settings.muted ? 0 : settings.volume;
+    master.gain.value = settings.muted ? 0 : settings.sfxVolume;
     master.connect(ctx.destination);
+    musicMaster = ctx.createGain();
+    musicMaster.gain.value = settings.muted ? 0 : settings.musicVolume;
+    musicMaster.connect(ctx.destination);
   }
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
   return ctx;
@@ -91,7 +103,11 @@ function getNoiseBuffer(c: AudioContext): AudioBuffer {
 }
 
 export function getVolume() {
-  return settings.volume;
+  return settings.sfxVolume;
+}
+
+export function getMusicVolume() {
+  return settings.musicVolume;
 }
 
 export function isMuted() {
@@ -99,14 +115,21 @@ export function isMuted() {
 }
 
 export function setVolume(v: number) {
-  settings = { ...settings, volume: Math.max(0, Math.min(1, v)) };
-  if (master) master.gain.value = settings.muted ? 0 : settings.volume;
+  settings = { ...settings, sfxVolume: Math.max(0, Math.min(1, v)) };
+  if (master) master.gain.value = settings.muted ? 0 : settings.sfxVolume;
+  persist();
+}
+
+export function setMusicVolume(v: number) {
+  settings = { ...settings, musicVolume: Math.max(0, Math.min(1, v)) };
+  if (musicMaster) musicMaster.gain.value = settings.muted ? 0 : settings.musicVolume;
   persist();
 }
 
 export function setMuted(m: boolean) {
   settings = { ...settings, muted: m };
-  if (master) master.gain.value = settings.muted ? 0 : settings.volume;
+  if (master) master.gain.value = settings.muted ? 0 : settings.sfxVolume;
+  if (musicMaster) musicMaster.gain.value = settings.muted ? 0 : settings.musicVolume;
   persist();
 }
 
@@ -294,7 +317,8 @@ export type MusicTrack =
   | "forge"
   | "storm"
   | "blight"
-  | "divine";
+  | "divine"
+  | "void";
 
 interface MusicPatch {
   /** Drone root, Hz. */
@@ -327,6 +351,7 @@ const MUSIC_PATCHES: Record<MusicTrack, MusicPatch> = {
   storm: { root: 164.8, chord: [1, 1.19, 1.42, 1.68], waveform: "square", filterFreq: 1900, tremoloHz: 0.5, tremoloDepth: 0.25, tempo: 1.7, noiseWash: true, noiseFreq: 2200 },
   blight: { root: 116.5, chord: [1, 1.06, 1.335, 1.5], waveform: "sawtooth", filterFreq: 800, tremoloHz: 0.07, tremoloDepth: 0.2, tempo: 3.3, noiseWash: true, noiseFreq: 700 },
   divine: { root: 261.6, chord: [1, 1.25, 1.5, 2], waveform: "sine", filterFreq: 3200, tremoloHz: 0.14, tremoloDepth: 0.1, tempo: 2.7, noiseWash: false, noiseFreq: 0 },
+  void: { root: 87.3, chord: [1, 1.06, 1.19, 1.414], waveform: "sine", filterFreq: 500, tremoloHz: 0.05, tremoloDepth: 0.25, tempo: 4.2, noiseWash: true, noiseFreq: 300 },
 };
 
 let musicTrack: MusicTrack | null = null;
@@ -384,7 +409,7 @@ function scheduleArpeggio(c: AudioContext, out: AudioNode, patch: MusicPatch, ge
 /** Starts (or switches to) a biome's ambient loop; a no-op if it's already playing. */
 export function startMusic(track: MusicTrack) {
   const c = getCtx();
-  if (!c || !master) return;
+  if (!c || !musicMaster) return;
   if (musicTrack === track) return;
   stopMusic();
   musicGen++;
@@ -394,7 +419,7 @@ export function startMusic(track: MusicTrack) {
 
   const gain = c.createGain();
   gain.gain.value = 0;
-  gain.connect(master);
+  gain.connect(musicMaster);
   gain.gain.linearRampToValueAtTime(0.16, c.currentTime + 2.5);
   musicGain = gain;
 

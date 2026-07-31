@@ -6,6 +6,7 @@ import { ItemIcon } from "@/components/ItemIcon";
 import {
   EFFECT_META,
   RARITY_META,
+  SET_NAME,
   base,
   familySlots,
   itemLore,
@@ -75,6 +76,25 @@ export function compare(item: Item, equipped?: Item): { text: string; good: bool
   return { text: d > 0 ? "UPGRADE" : "worse", good: d > 0 };
 }
 
+/** Per-stat breakdown against whatever's currently equipped in the slot —
+ *  the single UPGRADE/worse badge above says "better or worse", this says
+ *  "by how much, and in what." Empty when there's nothing to compare (an
+ *  open slot, or every stat tied). */
+function statDeltas(item: Item, equipped?: Item): Array<{ label: string; delta: number; pct?: boolean }> {
+  const a = itemStats(item);
+  const b = equipped ? itemStats(equipped) : {};
+  const rows: Array<{ label: string; delta: number; pct?: boolean }> = [];
+  const push = (label: string, delta: number, pct?: boolean) => {
+    if (Math.abs(delta) > (pct ? 0.001 : 0.4)) rows.push({ label, delta, pct });
+  };
+  push("ATK", (a.attack ?? 0) - (b.attack ?? 0));
+  push("HP", (a.hp ?? 0) - (b.hp ?? 0));
+  push("MP", (a.mana ?? 0) - (b.mana ?? 0));
+  push("SPD", (a.speed ?? 0) - (b.speed ?? 0), true);
+  push("AS", (a.atkSpeed ?? 0) - (b.atkSpeed ?? 0), true);
+  return rows;
+}
+
 /**
  * Whichever currently-equipped item a candidate for this item's slot family
  * should be judged against — `undefined` when the family (earrings, rings)
@@ -120,10 +140,19 @@ function withUpgradesFirst(items: Item[], save: AdventureSave): Item[] {
  * from the hovered element's own rect, so it can never get clipped by the
  * inventory sheet's own scroll container the way an in-flow tooltip would.
  */
-function ItemHoverCard({ item, rect }: { item: Item; rect: DOMRect }) {
+function ItemHoverCard({
+  item,
+  rect,
+  compareTo,
+}: {
+  item: Item;
+  rect: DOMRect;
+  compareTo?: Item;
+}) {
   const b = base(item.baseId);
   const r = RARITY_META[item.rarity];
   const fx = effectLine(item);
+  const deltas = compareTo ? statDeltas(item, compareTo) : [];
   const width = 230;
   const margin = 10;
   const left = Math.max(
@@ -133,16 +162,31 @@ function ItemHoverCard({ item, rect }: { item: Item; rect: DOMRect }) {
   const top = Math.min(window.innerHeight - margin, rect.bottom + 8);
   return createPortal(
     <div className="item-hover-card" style={{ left, top, width }}>
+      {b.unique && <div className="item-hover-unique">★ Unique</div>}
       <strong style={{ color: r.color }}>{itemName(item)}</strong>
       <small className="item-hover-sub">
         {r.label} · {b.kind}
         {b.tier ? ` · tier ${b.tier}` : ""}
       </small>
       <div className="item-hover-stats">{statLine(item)}</div>
+      {deltas.length > 0 && (
+        <div className="item-hover-delta">
+          <small>vs equipped</small>
+          {deltas.map((d) => (
+            <span key={d.label} className={d.delta > 0 ? "cmp-up" : "cmp-down"}>
+              {d.delta > 0 ? "+" : ""}
+              {d.pct ? `${Math.round(d.delta * 100)}%` : Math.round(d.delta)} {d.label}
+            </span>
+          ))}
+        </div>
+      )}
       {fx && (
         <div className="item-hover-effect" style={{ color: r.color }}>
           {fx}
         </div>
+      )}
+      {b.setId && (
+        <div className="item-hover-set">{SET_NAME[b.setId]} Set</div>
       )}
       <div className="item-hover-price">{itemValue(item)}g</div>
       <p className="item-hover-lore">&ldquo;{itemLore(item)}&rdquo;</p>
@@ -159,7 +203,7 @@ function ItemHoverCard({ item, rect }: { item: Item; rect: DOMRect }) {
  * (an empty equip slot): the ref/handlers still attach, they just never
  * produce a card, which is exactly "no popup on an empty slot".
  */
-function useItemHoverCard(item: Item | undefined) {
+function useItemHoverCard(item: Item | undefined, compareTo?: Item) {
   const ref = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   return {
@@ -168,7 +212,7 @@ function useItemHoverCard(item: Item | undefined) {
     onMouseLeave: () => setHovered(false),
     card:
       hovered && item && ref.current ? (
-        <ItemHoverCard item={item} rect={ref.current.getBoundingClientRect()} />
+        <ItemHoverCard item={item} rect={ref.current.getBoundingClientRect()} compareTo={compareTo} />
       ) : null,
   };
 }
@@ -189,7 +233,7 @@ export function ItemRow({
   const r = RARITY_META[item.rarity];
   const cmp = compare(item, compareTo);
   const fx = effectLine(item);
-  const hover = useItemHoverCard(item);
+  const hover = useItemHoverCard(item, compareTo);
   return (
     <div
       className="item-row"

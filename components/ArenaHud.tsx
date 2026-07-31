@@ -78,8 +78,15 @@ export function ArenaHud({
     }
   }, [hud.cooldowns, cls.skills]);
 
+  const hpPct = hud.playerHp / hud.playerMaxHp;
   return (
     <div className="arena-hud">
+      {hpPct <= 0.3 && (
+        <div
+          className="low-hp-vignette"
+          style={{ opacity: Math.min(0.85, (0.3 - hpPct) / 0.3) }}
+        />
+      )}
       <div className="arena-top">
         <FighterPanel
           name={hud.playerName}

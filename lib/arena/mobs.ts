@@ -395,6 +395,59 @@ export const MOB_TYPES: Record<string, MobType> = {
     accent: "#92400e",
     isBoss: true,
   },
+  voidling: {
+    id: "voidling",
+    name: "Voidling",
+    level: 52,
+    maxHp: 5200,
+    damage: 165,
+    speed: 3.4,
+    expValue: 5800,
+    range: 80,
+    windup: 0.2,
+    recover: 0.24,
+    aggro: 620,
+    w: 32,
+    h: 78,
+    color: "#4c1d95",
+    accent: "#1e0a3c",
+  },
+  hollowsentinel: {
+    id: "hollowsentinel",
+    name: "Hollow Sentinel",
+    level: 53,
+    maxHp: 6100,
+    damage: 172,
+    speed: 1.6,
+    expValue: 6400,
+    range: 300,
+    windup: 0.5,
+    recover: 0.4,
+    aggro: 680,
+    w: 40,
+    h: 92,
+    color: "#312e81",
+    accent: "#0f0a2e",
+    ranged: true,
+  },
+  thehollow: {
+    id: "thehollow",
+    name: "The Hollow",
+    level: 58,
+    maxHp: 18500,
+    damage: 245,
+    speed: 2.5,
+    expValue: 28000,
+    range: 120,
+    windup: 0.34,
+    recover: 0.36,
+    aggro: 950,
+    w: 66,
+    h: 122,
+    color: "#c4b5fd",
+    accent: "#1e0a3c",
+    isBoss: true,
+  },
 };
 
 /** The single melee swing every mob uses. */
@@ -435,6 +488,29 @@ export function mobBossSpecialSpec(type: MobType): AttackSpec {
     height: type.h * 0.8,
     knockback: 9,
     effect: "knockdown",
+  };
+}
+
+/**
+ * A boss's second telegraphed move, alternating with the slam above (see
+ * MobBrain.think's specialCd rotation in adventure.ts) — wider reach and a
+ * stun instead of a knockdown, so standing at mid-range isn't automatically
+ * safe just because you learned to sidestep the slam.
+ */
+export function mobBossSweepSpec(type: MobType): AttackSpec {
+  return {
+    id: "boss-sweep",
+    label: `${type.name} Sweep`,
+    kind: "lmb",
+    castTime: 1.1,
+    activeAt: 0.75,
+    activeDuration: 0.16,
+    damageMult: 1.7,
+    rangeMult: 2.2,
+    height: type.h * 1.1,
+    knockback: 5,
+    effect: "stun",
+    effectDuration: 1.1,
   };
 }
 
@@ -481,8 +557,32 @@ export interface Stage {
   vendorX?: number;
   /** The bank keeper: stores items outside the backpack. */
   bankX?: number;
+  /** Center of the fishing lake — stand near it and press E to fish for a
+   *  slow, passive trickle of gold. See AdventureEngine.nearLake/toggleFishing. */
+  lakeX?: number;
+  /** Half-width of the lake's water rendering and its interaction zone. */
+  lakeWidth?: number;
   /** Drives the backdrop the renderer paints for this stage. */
   biome: Biome;
+  /**
+   * No fixed spawn list — AdventureEngine spawns escalating waves here
+   * instead (see startNextWave), and a player death resets the wave count
+   * back to 1 rather than just respawning into the same static roster.
+   */
+  survival?: boolean;
+  /**
+   * Every boss, back to back, full heal between each — see BOSS_RUSH_ORDER
+   * and AdventureEngine.updateBossRush in adventure.ts. No fixed spawn list,
+   * same reasoning as `survival` above.
+   */
+  bossRush?: boolean;
+  /**
+   * Same endless-wave engine as `survival` (Crucible sets both flags), plus
+   * two random modifiers rerolled on every entry/death — see
+   * CRUCIBLE_AFFIX_POOL and AdventureEngine.rollCrucibleAffixes in
+   * adventure.ts.
+   */
+  crucible?: boolean;
 }
 
 export type Biome =
@@ -495,7 +595,8 @@ export type Biome =
   | "forge"
   | "storm"
   | "blight"
-  | "divine";
+  | "divine"
+  | "void";
 
 const GROUND_Y = 560;
 
@@ -615,6 +716,9 @@ const BLIGHT_TERRAIN = proceduralTerrain("blight-hummocks", 3600, 6, {
 const THRONE_TERRAIN = proceduralTerrain("throne-risers", 3600, 5, {
   minLow: 80, maxLow: 120, minHigh: 90, maxHigh: 140, minW: 200, maxW: 260,
 });
+const HOLLOW_TERRAIN = proceduralTerrain("hollow-beyond", 3600, 5, {
+  minLow: 80, maxLow: 130, minHigh: 100, maxHigh: 160, minW: 190, maxW: 250,
+});
 
 export const STAGES: Stage[] = [
   {
@@ -626,6 +730,8 @@ export const STAGES: Stage[] = [
     npcX: 500,
     vendorX: 1000,
     bankX: 1500,
+    lakeX: 1850,
+    lakeWidth: 260,
     biome: "town",
     map: makeMap(2000, []),
     spawns: [],
@@ -866,6 +972,67 @@ export const STAGES: Stage[] = [
       ...["seraphremnant", "seraphremnant", "rotmother", "seraphremnant", "seraphremnant"].map(
         (typeId, i) => ({ typeId, x: THRONE_TERRAIN.perches[i].x, y: THRONE_TERRAIN.perches[i].y })
       ),
+    ],
+  },
+  // Appended at the end rather than slotted in by level, so it never shifts
+  // any other stage's array index — existing saves store `stage` as a plain
+  // index into this array, and reordering would silently teleport them.
+  {
+    id: "survival-fields",
+    biome: "outskirts",
+    name: "The Survival Fields",
+    subtitle: "No fixed foes here — just endless waves. How far can you get?",
+    requiredLevel: 1,
+    survival: true,
+    map: makeMap(1800, []),
+    spawns: [],
+  },
+  // Also appended last, for the same array-index-stability reason as
+  // survival-fields above.
+  {
+    id: "boss-rush",
+    biome: "divine",
+    name: "The Boss Rush",
+    subtitle: "Every boss you've faced, back to back. Full heal between each. How fast can you clear it?",
+    requiredLevel: 50,
+    bossRush: true,
+    map: makeMap(2000, []),
+    spawns: [],
+  },
+  // Also appended last, for the same array-index-stability reason.
+  {
+    id: "crucible",
+    biome: "abyss",
+    name: "The Sundered Crucible",
+    subtitle: "Endless waves, warped by whatever the Crucible rolls this time. Survive as long as you can.",
+    requiredLevel: 50,
+    survival: true,
+    crucible: true,
+    map: makeMap(1800, []),
+    spawns: [],
+  },
+  // Also appended last, for the same array-index-stability reason.
+  {
+    id: "hollow",
+    biome: "void",
+    name: "The Hollow Beyond",
+    subtitle: "Past the Throne, past the last road — whatever's out here was never meant to be found",
+    requiredLevel: 50,
+    map: makeMap(3600, HOLLOW_TERRAIN.platforms),
+    spawns: [
+      { typeId: "voidling", x: 500 },
+      { typeId: "voidling", x: 740 },
+      { typeId: "hollowsentinel", x: 1300 },
+      { typeId: "voidling", x: 1540 },
+      { typeId: "voidling", x: 2150 },
+      { typeId: "hollowsentinel", x: 2450 },
+      { typeId: "voidling", x: 2960 },
+      { typeId: "thehollow", x: 3400 },
+      ...["voidling", "voidling", "hollowsentinel", "voidling", "voidling"].map((typeId, i) => ({
+        typeId,
+        x: HOLLOW_TERRAIN.perches[i].x,
+        y: HOLLOW_TERRAIN.perches[i].y,
+      })),
     ],
   },
 ];
