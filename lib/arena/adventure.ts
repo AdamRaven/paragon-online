@@ -103,8 +103,8 @@ export class AdventureEngine extends ArenaEngine {
     p.mana = Math.min(p.mana, p.maxMana);
   }
 
-  /** True when the player is close enough to the merchant to trade. */
-  get nearMerchant(): boolean {
+  /** True when the player is close enough to the blacksmith to trade. */
+  get nearBlacksmith(): boolean {
     if (!this.stage.isTown || this.stage.npcX === undefined) return false;
     return Math.abs(this.player.x - this.stage.npcX) < 90;
   }

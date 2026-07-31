@@ -18,7 +18,7 @@ import type { AdventureSave } from "@/lib/arena/progression";
 
 type Tab = "sell" | "buy" | "enhance";
 
-export function MerchantPanel({
+export function BlacksmithPanel({
   save,
   onSellAll,
   onSellAllGear,
@@ -57,7 +57,7 @@ export function MerchantPanel({
       <div className="sheet wide" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <div>
-            <h2>Emberhold Merchant</h2>
+            <h2>Emberhold Blacksmith</h2>
             <span style={{ color: "var(--muted)", fontSize: 12 }}>
               {save.gold} gold · {save.stones} enhancement stones
             </span>

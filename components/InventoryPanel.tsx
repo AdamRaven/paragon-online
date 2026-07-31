@@ -370,7 +370,7 @@ export function InventoryPanel({
             {tab === "trash" && trash.length > 0 && (
               <p className="hint" style={{ marginTop: 10 }}>
                 Worth <strong style={{ color: "var(--exp)" }}>{trashWorth}g</strong> at
-                the Emberhold merchant (travel with M, then press E at the stall).
+                the Emberhold blacksmith (travel with M, then press E at the forge).
               </p>
             )}
           </section>

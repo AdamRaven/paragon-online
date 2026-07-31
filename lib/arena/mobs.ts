@@ -475,7 +475,7 @@ export interface Stage {
   spawns: MobSpawn[];
   /** Towns are safe: no mobs, and NPCs are stationed at fixed spots. */
   isTown?: boolean;
-  /** The enhancer: sells trash + gear, buys stones, enhances weapons. */
+  /** The blacksmith: sells trash + gear, buys stones, enhances weapons. */
   npcX?: number;
   /** The gear vendor: sells fresh gear for gold. */
   vendorX?: number;

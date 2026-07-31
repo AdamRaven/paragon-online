@@ -173,6 +173,76 @@ const PORTRAIT_SCALE: Partial<Record<string, number>> = {
 };
 const portraitCache = new Map<string, HTMLImageElement>();
 
+/**
+ * Emberhold's shopkeepers all have hand-painted reference art now, same
+ * "crisp fx overlay" treatment as the three playable classes rather than the
+ * chunky procedural pixel art every other town prop still gets. `crop` is
+ * measured from each source PNG's actual alpha content (via a one-off script
+ * against the raw file, not eyeballed) with a small margin, since the source
+ * canvases aren't consistently centred or padded the same amount — cropping
+ * to content means the anchor point always lands on the character's actual
+ * feet instead of wherever the padding happened to leave them.
+ */
+interface NpcSprite {
+  src: string;
+  crop: { x: number; y: number; w: number; h: number };
+  /** Art-pixel height on screen, before physicalPerArtPixel scaling. */
+  heightArt: number;
+  img: HTMLImageElement | null;
+}
+const NPC_SPRITES: Record<"blacksmith" | "vendor" | "storage", NpcSprite> = {
+  blacksmith: {
+    src: "/art/blacksmith.png",
+    crop: { x: 9, y: 0, w: 426, h: 477 },
+    heightArt: 32,
+    img: null,
+  },
+  vendor: {
+    src: "/art/vendor.png",
+    crop: { x: 199, y: 71, w: 269, h: 384 },
+    heightArt: 31,
+    img: null,
+  },
+  storage: {
+    src: "/art/storage.png",
+    crop: { x: 114, y: 54, w: 264, h: 423 },
+    heightArt: 25,
+    img: null,
+  },
+};
+
+function getNpcSprite(id: keyof typeof NPC_SPRITES): NpcSprite | null {
+  const entry = NPC_SPRITES[id];
+  if (!entry.img) {
+    if (typeof Image === "undefined") return null;
+    entry.img = new Image();
+    entry.img.src = entry.src;
+  }
+  return entry.img.complete && entry.img.naturalWidth > 0 ? entry : null;
+}
+
+
+/** Draws one cropped NPC sprite feet-anchored at (x, yFeet) in physical
+ *  (crisp overlay) pixel space. */
+function drawNpcSprite(
+  fx: CanvasRenderingContext2D,
+  sprite: NpcSprite,
+  x: number,
+  yFeet: number,
+  physicalPerArtPixel: number
+) {
+  const { img, crop } = sprite;
+  if (!img) return;
+  const drawH = sprite.heightArt * physicalPerArtPixel;
+  const drawW = drawH * (crop.w / crop.h);
+  fx.save();
+  fx.translate(x, yFeet);
+  fx.imageSmoothingEnabled = true;
+  fx.imageSmoothingQuality = "high";
+  fx.drawImage(img, crop.x, crop.y, crop.w, crop.h, -drawW / 2, -drawH, drawW, drawH);
+  fx.restore();
+}
+
 function getPortraitImage(classId: string): HTMLImageElement | null {
   const src = PORTRAIT_SRC[classId];
   if (!src) return null;
@@ -499,6 +569,33 @@ export function renderFighterPortraits(
   const px2 = (v: number) => (Math.round(v / S) - camX) * physicalPerArtPixel;
   const py2 = (v: number) => (Math.round(v / S) - camY) * physicalPerArtPixel;
 
+  const stage = (
+    engine as ArenaEngine & {
+      stage?: { isTown?: boolean; npcX?: number; vendorX?: number; bankX?: number };
+    }
+  ).stage;
+
+  // Emberhold's three shopkeepers all stand in for hand-painted reference
+  // art now — same crisp overlay treatment as the playable classes, rather
+  // than the chunky low-res pixel art every other town prop still gets.
+  // Drawn before the fighter loop below so the player always draws on top
+  // of them (walking "in front of" an NPC) instead of the NPC's own layer
+  // pasting over the player when they overlap.
+  if (stage?.isTown) {
+    for (const [id, npcX] of [
+      ["blacksmith", stage.npcX],
+      ["vendor", stage.vendorX],
+      ["storage", stage.bankX],
+    ] as const) {
+      if (npcX === undefined) continue;
+      const sprite = getNpcSprite(id);
+      if (!sprite) continue;
+      const gy = engine.groundAtX(npcX);
+      if (gy === null) continue;
+      drawNpcSprite(fx, sprite, px2(npcX), py2(gy), physicalPerArtPixel);
+    }
+  }
+
   for (const f of engine.fighters) {
     if (f.isMob || f.state === "dead") continue;
 
@@ -591,6 +688,7 @@ export function renderFighterPortraits(
     }
     fx.restore();
   }
+
   fx.restore();
 }
 
@@ -643,7 +741,7 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
     drawBlackHole(b, wx(bh.x), wy(bh.y), bh.radius / S, bh.life / bh.maxLife, engine.time);
   }
   drawVillageProps(b, engine, wx, wy, engine.time);
-  drawMerchant(b, engine, wx, wy, engine.time);
+  drawBlacksmith(b, engine, wx, wy, engine.time);
   drawVendor(b, engine, wx, wy, engine.time);
   drawBank(b, engine, wx, wy, engine.time);
   drawLootDrops(b, engine, wx, wy);
@@ -1304,7 +1402,6 @@ function drawTerrain(
   }
 }
 
-/** The town merchant, plus a prompt when the player is close enough to trade. */
 /**
  * Shared setup for the three town NPCs: resolves a screen position and a
  * gentle idle bob from a fixed stage-x anchor. Returns null wherever the
@@ -1338,7 +1435,13 @@ function drawInteractPrompt(
   pxText(b, "PRESS E", x, y - 40 + bob, pulse, 5);
 }
 
-function drawMerchant(
+/**
+ * The blacksmith's own body is real reference art drawn in the crisp fx
+ * overlay (see the blacksmith block in renderFighterPortraits) — this pass
+ * only contributes his forge, the ground shadow under him, and the "PRESS E"
+ * prompt, the same division of labour the playable classes use.
+ */
+function drawBlacksmith(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
   wx: (v: number) => number,
@@ -1347,51 +1450,52 @@ function drawMerchant(
 ) {
   const stage = (engine as ArenaEngine & {
     stage?: { isTown?: boolean; npcX?: number };
-    nearMerchant?: boolean;
+    nearBlacksmith?: boolean;
   }).stage;
   if (!stage?.isTown) return;
   const anchor = npcAnchor(engine, wx, wy, stage.npcX, time, 0);
   if (!anchor) return;
-  const { x, y, bob } = anchor;
+  const { x, y } = anchor;
 
-  // Stall awning behind him.
-  px(b, x - 20, y - 34, 40, 3, "#7a3b2e");
-  for (let i = 0; i < 40; i += 6) px(b, x - 20 + i, y - 31, 3, 3, "#b8543f");
-  px(b, x - 20, y - 31, 2, 31, "#4a2b22");
-  px(b, x + 18, y - 31, 2, 31, "#4a2b22");
-  // Crates of wares.
-  px(b, x + 8, y - 10, 10, 10, "#6b4a2a");
-  px(b, x + 8, y - 10, 10, 1, "#8f6738");
-  px(b, x + 10, y - 14, 6, 4, "#8f6738");
+  // Anvil in front of him.
+  px(b, x - 7, y - 9, 14, 2, "#1c1f28");
+  px(b, x - 5, y - 13, 10, 4, "#3a4050");
+  px(b, x - 5, y - 13, 10, 1, "#6b7690");
+  px(b, x - 9, y - 12, 4, 2, "#3a4050"); // tapered horn
+  px(b, x + 5, y - 13, 2, 3, "#565f73");
 
-  // The merchant: layered hooded robe, warm lantern glow.
-  px(b, x - 6, y - 20 + bob, 12, 20, "#243347"); // cloak back-drape, for depth
-  px(b, x - 5, y - 22 + bob, 10, 22, "#3f5b7a");
-  px(b, x - 5, y - 22 + bob, 10, 3, "#5a7ea6"); // shoulder highlight
-  px(b, x - 5, y - 12 + bob, 10, 6, "#33506e"); // torso shade band
-  px(b, x - 5, y - 4, 10, 4, "#22334a");
-  px(b, x - 5, y - 5, 10, 1, "#c9a24a"); // gold hem trim
-  px(b, x - 4, y - 1, 3, 1, "#1a1f2a"); // feet
-  px(b, x + 1, y - 1, 3, 1, "#1a1f2a");
-  px(b, x + 4, y - 12 + bob, 4, 5, "#7a4a2e"); // satchel at the hip
-  px(b, x + 4, y - 12 + bob, 4, 1, "#a06a3e");
-  px(b, x - 4, y - 30 + bob, 8, 8, "#e8c9a0");
-  px(b, x - 5, y - 31 + bob, 10, 4, "#7a4a2e");
-  px(b, x - 5, y - 28 + bob, 2, 3, "#5a3a22"); // hood shadow
-  px(b, x - 2, y - 26 + bob, 1, 1, PAL.ink);
-  px(b, x + 1, y - 26 + bob, 1, 1, PAL.ink);
-  px(b, x - 1, y - 24 + bob, 2, 1, "#c9906a");
-  px(b, x - 5, y - 20 + bob, 10, 1, "#c9a24a");
-  // A hand raised with a glinting coin.
-  px(b, x + 6, y - 20 + bob, 2, 5, "#e8c9a0");
-  px(b, x + 6, y - 21 + bob, 2, 2, "#f6d675");
-  pxGlow(b, x + 7, y - 21 + bob, 3, "#ffe9a8", 0.5);
-  pxGlow(b, x + 12, y - 18, 7, "#f6b352", 0.6);
+  // Forge hearth behind him: stone housing, glowing coals, drifting embers.
+  px(b, x + 12, y - 22, 15, 18, "#241a14");
+  px(b, x + 12, y - 22, 15, 2, "#3a2a1e");
+  px(b, x + 12, y - 6, 15, 2, "#160f0a");
+  pxGlow(b, x + 19, y - 8, 9, "#f6742c", 0.55);
+  px(b, x + 15, y - 8, 8, 3, "#f97316");
+  px(b, x + 16, y - 7, 6, 1, "#fde68a");
+  for (let i = 0; i < 4; i++) {
+    const ex = x + 15 + ((i * 5 + Math.floor(time * 20)) % 10);
+    const ey = y - 10 - ((i * 7 + Math.floor(time * 30)) % 16);
+    px(b, ex, ey, 1, 1, i % 2 === 0 ? "#fde68a" : "#f97316");
+  }
 
-  drawInteractPrompt(b, (engine as ArenaEngine & { nearMerchant?: boolean }).nearMerchant, x, y, bob, time);
+  // Ground shadow — his own reference-art body has none of its own.
+  px(b, x - 8, y - 1, 16, 2, "rgba(0,0,0,0.4)");
+
+  drawInteractPrompt(
+    b,
+    (engine as ArenaEngine & { nearBlacksmith?: boolean }).nearBlacksmith,
+    x,
+    y,
+    0,
+    time
+  );
 }
 
-/** The gear vendor: a rack of weapons/armour behind a mail-clad trader. */
+/**
+ * The gear vendor's own reference art already includes his stall (table,
+ * potions, coin, the "Vendor" sign) — see the blacksmith block in
+ * renderFighterPortraits — so this pass only contributes the ground shadow
+ * beneath him and the "PRESS E" prompt.
+ */
 function drawVendor(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
@@ -1405,43 +1509,16 @@ function drawVendor(
   if (!stage?.isTown) return;
   const anchor = npcAnchor(engine, wx, wy, stage.vendorX, time, 1);
   if (!anchor) return;
-  const { x, y, bob } = anchor;
+  const { x, y } = anchor;
 
-  // Weapon rack behind him: two uprights and a crossbar hung with gear.
-  px(b, x - 18, y - 36, 2, 36, "#4a3626");
-  px(b, x + 16, y - 36, 2, 36, "#4a3626");
-  px(b, x - 18, y - 36, 36, 2, "#5c4530");
-  // A sword, an axe-head and a shield hung along the bar.
-  px(b, x - 14, y - 34, 2, 12, "#c3cad4");
-  px(b, x - 15, y - 34, 4, 2, "#8b93a0");
-  px(b, x - 2, y - 33, 6, 5, "#8a3a22");
-  px(b, x, y - 33, 2, 5, "#5c5040");
-  px(b, x + 8, y - 34, 6, 8, "#3a4050");
-  px(b, x + 8, y - 34, 6, 1, "#565f73");
-  px(b, x + 10, y - 31, 2, 2, "#c9b896");
-
-  // The vendor: banded mail vest over a tunic, thicker-set than the merchant.
-  px(b, x - 7, y - 19 + bob, 14, 19, "#33383f"); // cape/bulk behind the mail
-  px(b, x - 6, y - 21 + bob, 12, 19, "#5a5f6b");
-  px(b, x - 6, y - 21 + bob, 12, 3, "#7a8090"); // pauldron highlight
-  px(b, x - 6, y - 8, 12, 6, "#3f4450");
-  for (let i = 0; i < 12; i += 3) px(b, x - 6 + i, y - 15 + bob, 2, 8, "#454a55");
-  px(b, x - 5, y - 1, 4, 1, "#1a1f2a"); // boots
-  px(b, x + 1, y - 1, 4, 1, "#1a1f2a");
-  // A sheathed shortsword at the hip.
-  px(b, x + 5, y - 14 + bob, 2, 10, "#3a4050");
-  px(b, x + 4, y - 15 + bob, 4, 2, "#8b93a0");
-  px(b, x - 4, y - 29 + bob, 8, 8, "#d9a878");
-  px(b, x - 5, y - 30 + bob, 10, 3, "#3a2a1c");
-  px(b, x - 2, y - 25 + bob, 1, 1, PAL.ink);
-  px(b, x + 1, y - 25 + bob, 1, 1, PAL.ink);
-  px(b, x - 1, y - 23 + bob, 2, 1, "#b8875a"); // jaw shade
-  px(b, x - 6, y - 5, 12, 1, "#c9a24a");
-
-  drawInteractPrompt(b, (engine as ArenaEngine & { nearVendor?: boolean }).nearVendor, x, y, bob, time);
+  px(b, x - 10, y - 1, 20, 2, "rgba(0,0,0,0.4)");
+  drawInteractPrompt(b, (engine as ArenaEngine & { nearVendor?: boolean }).nearVendor, x, y, 0, time);
 }
 
-/** The bank keeper: a robed figure minding a reinforced vault chest. */
+/**
+ * The bank keeper's reference art is just the figure, so this pass keeps the
+ * reinforced vault chest beside him plus the ground shadow and prompt.
+ */
 function drawBank(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
@@ -1455,9 +1532,9 @@ function drawBank(
   if (!stage?.isTown) return;
   const anchor = npcAnchor(engine, wx, wy, stage.bankX, time, 2);
   if (!anchor) return;
-  const { x, y, bob } = anchor;
+  const { x, y } = anchor;
 
-  // A squat, iron-banded vault chest beside her.
+  // A squat, iron-banded vault chest beside him.
   px(b, x + 8, y - 14, 16, 14, "#3a4050");
   px(b, x + 8, y - 14, 16, 2, "#565f73");
   px(b, x + 8, y - 8, 16, 2, "#2a2f3a");
@@ -1465,25 +1542,8 @@ function drawBank(
   px(b, x + 15, y - 11, 2, 2, "#1c1f28");
   pxGlow(b, x + 16, y - 10, 5, "#7dd3fc", 0.5);
 
-  // The keeper: deep violet robe (distinct from the merchant's blue), calm hood.
-  px(b, x - 6, y - 21 + bob, 12, 21, "#2e2648"); // cloak back-drape
-  px(b, x - 5, y - 23 + bob, 10, 23, "#463a6b");
-  px(b, x - 5, y - 23 + bob, 10, 3, "#6a5a96"); // shoulder highlight
-  px(b, x - 5, y - 13 + bob, 10, 6, "#3a3060"); // torso shade band
-  px(b, x - 5, y - 4, 10, 4, "#2e2648");
-  px(b, x - 4, y - 1, 3, 1, "#1a1f2a"); // feet
-  px(b, x + 1, y - 1, 3, 1, "#1a1f2a");
-  px(b, x + 4, y - 16 + bob, 4, 5, "#8f6738"); // ledger under one arm
-  px(b, x + 4, y - 16 + bob, 4, 1, "#c9a24a");
-  px(b, x - 4, y - 31 + bob, 8, 8, "#e8c9a0");
-  px(b, x - 5, y - 32 + bob, 10, 4, "#332a4a");
-  px(b, x - 5, y - 29 + bob, 2, 3, "#221c33"); // hood shadow
-  px(b, x - 2, y - 27 + bob, 1, 1, PAL.ink);
-  px(b, x + 1, y - 27 + bob, 1, 1, PAL.ink);
-  px(b, x - 5, y - 21 + bob, 10, 1, "#c9a24a");
-  pxGlow(b, x - 12, y - 18, 6, "#7dd3fc", 0.5);
-
-  drawInteractPrompt(b, (engine as ArenaEngine & { nearBank?: boolean }).nearBank, x, y, bob, time);
+  px(b, x - 8, y - 1, 16, 2, "rgba(0,0,0,0.4)");
+  drawInteractPrompt(b, (engine as ArenaEngine & { nearBank?: boolean }).nearBank, x, y, 0, time);
 }
 
 /**
@@ -1518,7 +1578,7 @@ function drawVillageProps(
   lampAt(1250);
   lampAt(1700);
 
-  // The village well, centred in the square between the merchant and vendor.
+  // The village well, centred in the square between the blacksmith and vendor.
   const wellX = 750;
   const wgy = engine.groundAtX(wellX);
   if (wgy !== null) {

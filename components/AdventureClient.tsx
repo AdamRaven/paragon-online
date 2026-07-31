@@ -10,7 +10,7 @@ import { DevLevelTools } from "@/components/DevTools";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { MapPanel } from "@/components/MapPanel";
-import { MerchantPanel } from "@/components/MerchantPanel";
+import { BlacksmithPanel } from "@/components/BlacksmithPanel";
 import { VendorPanel } from "@/components/VendorPanel";
 import { StoragePanel } from "@/components/StoragePanel";
 import { hasSeenTutorial, markTutorialSeen, TutorialOverlay } from "@/components/TutorialOverlay";
@@ -71,7 +71,7 @@ export function AdventureClient() {
     | "sheet"
     | "map"
     | "inventory"
-    | "merchant"
+    | "blacksmith"
     | "vendor"
     | "storage"
     | "escape"
@@ -209,7 +209,7 @@ export function AdventureClient() {
   }, [started, pushLog]);
 
   // Pointer lock only while actually walking/fighting in the world — every
-  // panel here (sheet, map, inventory, merchant/vendor/storage, pause, combo
+  // panel here (sheet, map, inventory, blacksmith/vendor/storage, pause, combo
   // list, tutorial) is ordinary DOM buttons that need a real visible cursor.
   useEffect(() => {
     const input = inputRef.current;
@@ -232,10 +232,10 @@ export function AdventureClient() {
         // E doubles as "talk" when standing at any of the town NPCs.
         const eng = engineRef.current;
         if (!eng) return;
-        if (eng.nearMerchant) {
+        if (eng.nearBlacksmith) {
           setShopMsg(null);
           setRev((r) => r + 1);
-          setPanel((p) => (p === "merchant" ? "none" : "merchant"));
+          setPanel((p) => (p === "blacksmith" ? "none" : "blacksmith"));
         } else if (eng.nearVendor) {
           setShopMsg(null);
           setRev((r) => r + 1);
@@ -558,8 +558,8 @@ export function AdventureClient() {
         />
       )}
 
-      {panel === "merchant" && (
-        <MerchantPanel
+      {panel === "blacksmith" && (
+        <BlacksmithPanel
           save={live}
           onSellAll={sellAllTrash}
           onSellAllGear={sellAllGear}
