@@ -197,6 +197,10 @@ export interface Fighter {
   negation: number;
   regenHp: number;
   regenMana: number;
+  /** Fraction shaved off every skill's cooldown when it's put on cooldown,
+   *  from legendary gear affixes/set bonuses — 0 unless something equipped
+   *  rolled one. */
+  cdr: number;
 
   state: FighterState;
   stateTime: number;

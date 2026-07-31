@@ -19,6 +19,8 @@ export interface ArenaHudData {
   playerMaxHp: number;
   playerMana: number;
   playerMaxMana: number;
+  /** Fraction shaved off skill cooldowns from gear, 0 if none equipped. */
+  playerCdr?: number;
   enemyName: string;
   enemyClass: string;
   enemyHp: number;
@@ -174,7 +176,8 @@ export function ArenaHud({
               const cd = hud.cooldowns[s.id] ?? 0;
               const poor = !!s.manaCost && hud.playerMana < s.manaCost;
               const ready = cd <= 0;
-              const pct = s.cooldown > 0 ? Math.min(1, cd / s.cooldown) : 0;
+              const effectiveCooldown = s.cooldown * (1 - (hud.playerCdr ?? 0));
+              const pct = effectiveCooldown > 0 ? Math.min(1, cd / effectiveCooldown) : 0;
               const justUsed = flash[s.id] && Date.now() - flash[s.id] < 400;
               return (
                 <div

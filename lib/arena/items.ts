@@ -75,7 +75,7 @@ export const RARITY_META: Record<
 };
 
 /** The magical affixes only a legendary item can roll. */
-export type ItemEffect = "lifesteal" | "negation" | "regen";
+export type ItemEffect = "lifesteal" | "negation" | "regen" | "cdr";
 
 export const EFFECT_META: Record<
   ItemEffect,
@@ -92,6 +92,10 @@ export const EFFECT_META: Record<
   regen: {
     label: "Vitality",
     describe: (v) => `Regenerate ${v} HP and ${Math.round(v * 0.6)} mana per second`,
+  },
+  cdr: {
+    label: "Cooldown Reduction",
+    describe: (v) => `${Math.round(v * 100)}% shorter skill cooldowns`,
   },
 };
 
@@ -915,19 +919,25 @@ function rollRarityDetailed(
  */
 function rollEffect(scale: number): { kind: ItemEffect; value: number } {
   const roll = Math.random();
-  if (roll < 0.34) {
+  if (roll < 0.25) {
     return {
       kind: "lifesteal",
       value: Math.round((0.08 + Math.random() * 0.1) * scale * 1000) / 1000,
     };
   }
-  if (roll < 0.67) {
+  if (roll < 0.5) {
     return {
       kind: "negation",
       value: Math.round((0.12 + Math.random() * 0.13) * scale * 1000) / 1000,
     };
   }
-  return { kind: "regen", value: Math.max(1, Math.round((6 + Math.random() * 8) * scale)) };
+  if (roll < 0.75) {
+    return { kind: "regen", value: Math.max(1, Math.round((6 + Math.random() * 8) * scale)) };
+  }
+  return {
+    kind: "cdr",
+    value: Math.round((0.1 + Math.random() * 0.1) * scale * 1000) / 1000,
+  };
 }
 
 /** Epics roll a weaker affix this often — a taste of what legendary gets guaranteed. */
@@ -1253,6 +1263,7 @@ export interface GearEffects {
   negation: number;
   regenHp: number;
   regenMana: number;
+  cdr: number;
 }
 
 /** Sum of every equipped legendary's combat affix, softly capped so stacking
@@ -1263,17 +1274,22 @@ export function equippedEffects(
   let lifesteal = 0;
   let negation = 0;
   let regenHp = 0;
+  let cdr = 0;
   for (const item of Object.values(equipped)) {
     if (!item?.effect) continue;
     if (item.effect.kind === "lifesteal") lifesteal += item.effect.value;
     else if (item.effect.kind === "negation") negation += item.effect.value;
     else if (item.effect.kind === "regen") regenHp += item.effect.value;
+    else if (item.effect.kind === "cdr") cdr += item.effect.value;
   }
   return {
     lifesteal: Math.min(0.5, lifesteal),
     negation: Math.min(0.6, negation),
     regenHp,
     regenMana: Math.round(regenHp * 0.6),
+    // Capped well short of 100% so even a full CDR-stacked build can't spam
+    // an 18s ultimate every couple seconds.
+    cdr: Math.min(0.4, cdr),
   };
 }
 
@@ -1366,10 +1382,16 @@ export function setBonuses(id: SetId): SetBonus[] {
     { count: 2, stats: { hp: 15 + t * 14 } },
     { count: 4, stats: { attack: 2 + Math.round(t * 2.2) } },
     { count: 6, stats: { speed: round3(0.02 + t * 0.004), atkSpeed: round3(0.02 + t * 0.004) } },
-    { count: 8, stats: {}, effect: { kind: "regen", value: 4 + t * 3 } },
+    // Sundered is the top rung of the ladder — its 8pc bonus grants
+    // Cooldown Reduction instead of Vitality, so the game's rarest full
+    // set has its own signature identity rather than just bigger numbers.
+    id === "sundered"
+      ? { count: 8, stats: {}, effect: { kind: "cdr", value: round3(0.05 + t * 0.015) } }
+      : { count: 8, stats: {}, effect: { kind: "regen", value: 4 + t * 3 } },
     // The full 11-slot match — every equip slot from the same rung. Pure
     // stats rather than another effect roll, so it can't push the
-    // lifesteal/negation caps (already shared with the 8pc bonus) any higher.
+    // lifesteal/negation/cdr caps (already shared with the 8pc bonus) any
+    // higher.
     { count: 11, stats: { attack: 10 + t * 4, hp: 60 + t * 30 } },
   ];
 }
@@ -1410,19 +1432,21 @@ export function equippedSetStats(
 /** Sum of every threshold-met set's magical affix (only the 8pc bonus rolls one). */
 export function equippedSetEffects(
   equipped: Partial<Record<EquipSlot, Item>>
-): { lifesteal: number; negation: number; regenHp: number } {
+): { lifesteal: number; negation: number; regenHp: number; cdr: number } {
   let lifesteal = 0;
   let negation = 0;
   let regenHp = 0;
+  let cdr = 0;
   for (const [id, n] of Object.entries(equippedSetCounts(equipped)) as [SetId, number][]) {
     for (const b of setBonuses(id)) {
       if (n < b.count || !b.effect) continue;
       if (b.effect.kind === "lifesteal") lifesteal += b.effect.value;
       else if (b.effect.kind === "negation") negation += b.effect.value;
       else if (b.effect.kind === "regen") regenHp += b.effect.value;
+      else if (b.effect.kind === "cdr") cdr += b.effect.value;
     }
   }
-  return { lifesteal, negation, regenHp };
+  return { lifesteal, negation, regenHp, cdr };
 }
 
 /** One row per set with at least one piece equipped, for the character sheet. */

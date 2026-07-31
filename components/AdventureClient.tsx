@@ -1149,6 +1149,7 @@ function buildHud(engine: AdventureEngine, input: ArenaInput): ArenaHudData {
     playerMaxHp: p.maxHp,
     playerMana: Math.round(p.mana),
     playerMaxMana: p.maxMana,
+    playerCdr: p.cdr,
     enemyName: hasFoe ? `${foe.name} Lv${foe.level}` : engine.stage.name,
     enemyClass: p.classId,
     enemyHp: hasFoe ? Math.round(foe.hp) : 0,

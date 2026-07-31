@@ -176,6 +176,7 @@ export interface DerivedArenaStats {
   negation: number;
   regenHp: number;
   regenMana: number;
+  cdr: number;
 }
 
 /** Permanent bonus per Ascension (see ascend()) — flat +5% to the three core
@@ -230,6 +231,7 @@ export function deriveArenaStats(
     negation: Math.min(0.6, fx.negation + fxSet.negation),
     regenHp,
     regenMana: Math.round(regenHp * 0.6),
+    cdr: Math.min(0.4, fx.cdr + fxSet.cdr),
   };
 }
 

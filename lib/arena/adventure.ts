@@ -1,4 +1,4 @@
-import { getClass } from "./classes";
+import { getClass, skillOf } from "./classes";
 import { DT, GRAVITY, MAX_FALL_SPEED, WALK_SPEED } from "./constants";
 import { ArenaEngine, emptyIntent, type ArenaCallbacks, type Intent } from "./engine";
 import { MOB_TYPES, getStage, mobAttackSpec, type MobType, type Stage } from "./mobs";
@@ -353,6 +353,7 @@ export class AdventureEngine extends ArenaEngine {
     p.negation = d.negation;
     p.regenHp = d.regenHp;
     p.regenMana = d.regenMana;
+    p.cdr = d.cdr;
     p.level = this.save.level;
     p.name = cls.name;
     p.hp = Math.min(p.maxHp, p.hp + Math.max(0, d.maxHp - prevMax));
@@ -554,6 +555,7 @@ export class AdventureEngine extends ArenaEngine {
       negation: 0,
       regenHp: eliteAffix === "regenerating" ? Math.round(type.level * ELITE_REGEN_PER_LEVEL) : 0,
       regenMana: 0,
+      cdr: 0,
       state: "idle",
       stateTime: 0,
       action: null,
@@ -1288,13 +1290,18 @@ class CombatBrain {
       const dir: 1 | -1 = dx >= 0 ? 1 : -1;
       if (dist <= cls.attackRange * 0.85) {
         self.facing = dir;
-        // Ask for everything at once — skills that aren't actually ready
-        // (cooldown or mana) just get rejected and it falls through to a
-        // basic swing instead, so this never wastes a tick doing nothing.
         i.lmb = true;
-        i.e = true;
-        i.r = true;
-        i.f = true;
+        // Only request skills that are actually ready — requesting one on
+        // cooldown or without enough mana just makes trySkill log a
+        // "not enough mana" spam every tick for no benefit.
+        for (const slot of ["e", "r", "f"] as const) {
+          const skill = skillOf(cls, slot.toUpperCase());
+          if (!skill) continue;
+          const ready =
+            (self.cooldowns[skill.id] ?? 0) <= 0 &&
+            (!skill.manaCost || self.mana >= skill.manaCost);
+          if (ready) i[slot] = true;
+        }
       } else {
         self.facing = dir;
         i.moveX = dir;

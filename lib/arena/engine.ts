@@ -238,6 +238,7 @@ export class ArenaEngine {
       negation: 0,
       regenHp: 0,
       regenMana: 0,
+      cdr: 0,
       state: "idle",
       stateTime: 0,
       action: null,
@@ -905,7 +906,7 @@ export class ArenaEngine {
     }
 
     if (skill.manaCost) f.mana -= skill.manaCost;
-    f.cooldowns[skill.id] = skill.cooldown;
+    f.cooldowns[skill.id] = skill.cooldown * (1 - f.cdr);
 
     if (skill.id === "reflect") {
       f.state = "reflect";
