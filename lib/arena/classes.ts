@@ -16,7 +16,7 @@ import {
   SHEDIM_LMB_CAST,
   SHEDIM_RMB_CAST,
 } from "./constants";
-import type { ClassDef } from "./types";
+import type { ClassDef, SkillSlot } from "./types";
 
 /**
  * Melee reach is a four-level ladder. Paragon's fists are level 1 (shortest),
@@ -479,4 +479,18 @@ export function getClass(id: string): ClassDef {
 
 export function skillOf(cls: ClassDef, slot: string) {
   return cls.skills.find((s) => s.slot === slot);
+}
+
+/**
+ * The fifth skill slot is still called "SHIFT" internally (renaming the
+ * SkillSlot union would ripple through engine.ts/ai.ts for no real benefit),
+ * but the key actually bound to it moved off Shift entirely — holding Shift
+ * while right-clicking is a browser-level escape hatch that ignores
+ * preventDefault(), so every Dash-into-Heavy-Attack combo risked kicking the
+ * native context menu open mid-fight. See input.ts's P1_BINDINGS. UI that
+ * shows a skill's key hint should go through this rather than printing
+ * `slot` directly.
+ */
+export function skillKeyLabel(slot: SkillSlot): string {
+  return slot === "SHIFT" ? "C" : slot;
 }

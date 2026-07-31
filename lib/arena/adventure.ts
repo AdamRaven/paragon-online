@@ -406,6 +406,12 @@ class MobBrain {
       return i;
     }
 
+    // Shielded mobs block anything landing on their facing side outright —
+    // refreshed every tick they have control, so it drops the instant a
+    // knockdown or stun actually interrupts them (see the early return just
+    // above), giving a real opening rather than an unbreakable wall.
+    if (this.type.shielded) self.frontGuard = Math.max(self.frontGuard, 0.2);
+
     this.attackCd -= DT;
     this.repathCd -= DT;
     if (this.type.isBoss) this.specialCd -= DT;
@@ -422,6 +428,19 @@ class MobBrain {
         // Long telegraph, so the cooldown is long too — this is meant to be
         // a rare "watch out" moment, not a constant threat.
         this.specialCd = 9 + Math.random() * 5;
+      } else if (this.type.ranged) {
+        // Kite instead of closing to melee: back off if the player gets too
+        // close, close the gap if they're out of range, and only fire from
+        // the sweet spot in between. `range` here means "preferred firing
+        // distance," not "melee reach."
+        if (dist < this.type.range * 0.6) {
+          i.moveX = -dir;
+        } else if (dist > this.type.range * 1.15) {
+          i.moveX = dir;
+        } else if (this.attackCd <= 0) {
+          i.lmb = true;
+          this.attackCd = this.type.windup + this.type.recover + 0.6;
+        }
       } else if (dist > this.type.range * 0.8) {
         i.moveX = dir;
       } else if (this.attackCd <= 0) {

@@ -1,23 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ItemIcon } from "@/components/ItemIcon";
 import {
   EFFECT_META,
   RARITY_META,
   base,
+  familySlots,
+  itemLore,
   itemName,
+  itemScore,
   itemStats,
   itemValue,
+  weakestInFamily,
   type EquipSlot,
   type Item,
+  type SlotFamily,
 } from "@/lib/arena/items";
 import type { AdventureSave } from "@/lib/arena/progression";
 
 const SLOT_META: Record<EquipSlot, { label: string; hint: string; glyph: string }> = {
   weapon: { label: "Weapon", hint: "Raises attack power", glyph: "⚔" },
-  armor: { label: "Armour", hint: "Raises health", glyph: "🛡" },
-  trinket: { label: "Trinket", hint: "Mana and speed", glyph: "◈" },
+  helmet: { label: "Helmet", hint: "Health and mana", glyph: "🪖" },
+  chest: { label: "Chest", hint: "Raises health", glyph: "🛡" },
+  legs: { label: "Boots", hint: "Health and speed", glyph: "👢" },
+  hands: { label: "Gloves", hint: "Health and attack speed", glyph: "🧤" },
+  necklace: { label: "Necklace", hint: "Mana and utility", glyph: "📿" },
+  belt: { label: "Belt", hint: "Health and attack", glyph: "🎗" },
+  earring1: { label: "Earring", hint: "Mana and attack speed", glyph: "◎" },
+  earring2: { label: "Earring", hint: "Mana and attack speed", glyph: "◎" },
+  ring1: { label: "Ring", hint: "Health, attack and speed", glyph: "◈" },
+  ring2: { label: "Ring", hint: "Health, attack and speed", glyph: "◈" },
+};
+
+/** Where each slot sits in the paper-doll grid — see .paper-doll in globals.css. */
+const SLOT_GRID_AREA: Record<EquipSlot, string> = {
+  helmet: "helmet",
+  necklace: "necklace",
+  earring1: "earring1",
+  earring2: "earring2",
+  weapon: "weapon",
+  chest: "chest",
+  ring1: "ring1",
+  belt: "belt",
+  ring2: "ring2",
+  hands: "hands",
+  legs: "legs",
 };
 
 /** "+8 ATK  +40 HP" — the stat contribution of one item. */
@@ -38,28 +67,27 @@ export function effectLine(item: Item): string | null {
   return EFFECT_META[item.effect.kind].describe(item.effect.value);
 }
 
-/** A single weighted number so items can be ranked, not just labelled. */
-function statScore(item: Item): number {
-  const s = itemStats(item);
-  // A legendary affix is worth chasing even over a plain stat upgrade; an
-  // epic's weaker "junior" version of one is still worth a solid nudge.
-  const effectBonus = item.effect ? (item.rarity === "legendary" ? 250 : 130) : 0;
-  return (
-    (s.attack ?? 0) * 4 +
-    (s.hp ?? 0) * 0.4 +
-    (s.mana ?? 0) * 0.2 +
-    (s.speed ?? 0) * 200 +
-    (s.atkSpeed ?? 0) * 200 +
-    effectBonus
-  );
-}
-
 /** Difference in attack/hp against whatever occupies the same slot. */
 export function compare(item: Item, equipped?: Item): { text: string; good: boolean } | null {
   if (!equipped) return null;
-  const d = statScore(item) - statScore(equipped);
+  const d = itemScore(item) - itemScore(equipped);
   if (Math.abs(d) < 0.5) return null;
   return { text: d > 0 ? "UPGRADE" : "worse", good: d > 0 };
+}
+
+/**
+ * Whichever currently-equipped item a candidate for this item's slot family
+ * should be judged against — `undefined` when the family (earrings, rings)
+ * still has an open slot, since there's nothing to compare against yet.
+ */
+export function referenceFor(save: AdventureSave, family: SlotFamily | undefined): Item | undefined {
+  if (!family) return undefined;
+  return weakestInFamily(save.equipped, family);
+}
+
+export function hasOpenSlot(save: AdventureSave, family: SlotFamily | undefined): boolean {
+  if (!family) return false;
+  return familySlots(family).some((s) => !save.equipped[s]);
 }
 
 /**
@@ -72,16 +100,77 @@ export function compare(item: Item, equipped?: Item): { text: string; good: bool
 function withUpgradesFirst(items: Item[], save: AdventureSave): Item[] {
   return items
     .map((item, idx) => {
-      const slot = base(item.baseId).slot;
-      const equipped = slot ? save.equipped[slot] : undefined;
-      const upgrade = !equipped || statScore(item) - statScore(equipped) > 0.5;
-      return { item, idx, upgrade, score: statScore(item) };
+      const family = base(item.baseId).slot;
+      const open = hasOpenSlot(save, family);
+      const ref = open ? undefined : referenceFor(save, family);
+      const upgrade = open || !ref || itemScore(item) - itemScore(ref) > 0.5;
+      return { item, idx, upgrade, score: itemScore(item) };
     })
     .sort((a, b) => {
       if (a.upgrade !== b.upgrade) return a.upgrade ? -1 : 1;
       return a.upgrade ? b.score - a.score : a.idx - b.idx;
     })
     .map((s) => s.item);
+}
+
+/**
+ * The rich hover card: full stats, the legendary affix if any, gold value
+ * and a one-line joke about the thing's history. Rendered through a portal
+ * straight onto `document.body` and positioned in fixed (viewport) space
+ * from the hovered element's own rect, so it can never get clipped by the
+ * inventory sheet's own scroll container the way an in-flow tooltip would.
+ */
+function ItemHoverCard({ item, rect }: { item: Item; rect: DOMRect }) {
+  const b = base(item.baseId);
+  const r = RARITY_META[item.rarity];
+  const fx = effectLine(item);
+  const width = 230;
+  const margin = 10;
+  const left = Math.max(
+    margin,
+    Math.min(window.innerWidth - width - margin, rect.left + rect.width / 2 - width / 2)
+  );
+  const top = Math.min(window.innerHeight - margin, rect.bottom + 8);
+  return createPortal(
+    <div className="item-hover-card" style={{ left, top, width }}>
+      <strong style={{ color: r.color }}>{itemName(item)}</strong>
+      <small className="item-hover-sub">
+        {r.label} · {b.kind}
+        {b.tier ? ` · tier ${b.tier}` : ""}
+      </small>
+      <div className="item-hover-stats">{statLine(item)}</div>
+      {fx && (
+        <div className="item-hover-effect" style={{ color: r.color }}>
+          {fx}
+        </div>
+      )}
+      <div className="item-hover-price">{itemValue(item)}g</div>
+      <p className="item-hover-lore">&ldquo;{itemLore(item)}&rdquo;</p>
+    </div>,
+    document.body
+  );
+}
+
+/**
+ * Wires up the show-on-hover behavior for the card above and hands back
+ * everything a plain `<div>` needs to opt in — no wrapper element, so it
+ * drops straight onto an existing row/card without disturbing whatever grid
+ * or flex layout it's already participating in. `item` can be undefined
+ * (an empty equip slot): the ref/handlers still attach, they just never
+ * produce a card, which is exactly "no popup on an empty slot".
+ */
+function useItemHoverCard(item: Item | undefined) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  return {
+    ref,
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+    card:
+      hovered && item && ref.current ? (
+        <ItemHoverCard item={item} rect={ref.current.getBoundingClientRect()} />
+      ) : null,
+  };
 }
 
 export function ItemRow({
@@ -100,8 +189,15 @@ export function ItemRow({
   const r = RARITY_META[item.rarity];
   const cmp = compare(item, compareTo);
   const fx = effectLine(item);
+  const hover = useItemHoverCard(item);
   return (
-    <div className="item-row" style={{ borderLeft: `4px solid ${r.color}` }}>
+    <div
+      className="item-row"
+      style={{ borderLeft: `4px solid ${r.color}` }}
+      ref={hover.ref}
+      onMouseEnter={hover.onMouseEnter}
+      onMouseLeave={hover.onMouseLeave}
+    >
       <ItemIcon icon={b.icon} color={r.color} />
       <span className="item-main">
         <strong style={{ color: r.color }}>{itemName(item)}</strong>
@@ -122,6 +218,58 @@ export function ItemRow({
       </span>
       <span className="item-value">{itemValue(item)}g</span>
       {actions}
+      {hover.card}
+    </div>
+  );
+}
+
+/** One paper-doll card. Its own component (not inlined in a `.map()`) purely
+ *  so each of the 11 slots gets its own hover-card hook instance. */
+function SlotCard({
+  slot,
+  item,
+  onUnequip,
+}: {
+  slot: EquipSlot;
+  item?: Item;
+  onUnequip: (slot: EquipSlot) => void;
+}) {
+  const meta = SLOT_META[slot];
+  const r = item ? RARITY_META[item.rarity] : null;
+  const hover = useItemHoverCard(item);
+  return (
+    <div
+      ref={hover.ref}
+      onMouseEnter={hover.onMouseEnter}
+      onMouseLeave={hover.onMouseLeave}
+      className={`slot-card${item ? "" : " empty"}`}
+      style={
+        {
+          ...(r ? { borderColor: r.color } : {}),
+          "--slot-area": SLOT_GRID_AREA[slot],
+        } as React.CSSProperties
+      }
+      title={item ? undefined : `${meta.label} — Empty · ${meta.hint}`}
+    >
+      {item ? (
+        <ItemIcon icon={base(item.baseId).icon} color={r!.color} size={28} />
+      ) : (
+        <span className="slot-glyph">{meta.glyph}</span>
+      )}
+      <span className="slot-body">
+        <span className="slot-name">{meta.label}</span>
+        {item ? (
+          <strong style={{ color: r!.color }}>{itemName(item)}</strong>
+        ) : (
+          <small className="slot-hint">Empty</small>
+        )}
+      </span>
+      {item && (
+        <button className="btn btn-ghost tiny" onClick={() => onUnequip(slot)}>
+          ✕
+        </button>
+      )}
+      {hover.card}
     </div>
   );
 }
@@ -165,51 +313,15 @@ export function InventoryPanel({
           {/* ---- equipment ------------------------------------------------ */}
           <section>
             <h3 className="section-title">Equipped</h3>
-            <div className="slot-column">
-              {(Object.keys(SLOT_META) as EquipSlot[]).map((slot) => {
-                const item = save.equipped[slot];
-                const meta = SLOT_META[slot];
-                const r = item ? RARITY_META[item.rarity] : null;
-                return (
-                  <div
-                    key={slot}
-                    className={`slot-card${item ? "" : " empty"}`}
-                    style={r ? { borderColor: r.color } : undefined}
-                  >
-                    {item ? (
-                      <ItemIcon icon={base(item.baseId).icon} color={r!.color} size={34} />
-                    ) : (
-                      <span className="slot-glyph">{meta.glyph}</span>
-                    )}
-                    <span className="slot-body">
-                      <span className="slot-name">{meta.label}</span>
-                      {item ? (
-                        <>
-                          <strong style={{ color: r!.color }}>{itemName(item)}</strong>
-                          <small className="item-stats">{statLine(item)}</small>
-                          {effectLine(item) && (
-                            <small className="item-effect" style={{ color: r!.color }}>
-                              {effectLine(item)}
-                            </small>
-                          )}
-                        </>
-                      ) : (
-                        <small className="slot-hint">Empty · {meta.hint}</small>
-                      )}
-                    </span>
-                    {item && (
-                      <button className="btn btn-ghost tiny" onClick={() => onUnequip(slot)}>
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="paper-doll">
+              {(Object.keys(SLOT_META) as EquipSlot[]).map((slot) => (
+                <SlotCard key={slot} slot={slot} item={save.equipped[slot]} onUnequip={onUnequip} />
+              ))}
             </div>
           </section>
 
           {/* ---- backpack -------------------------------------------------- */}
-          <section>
+          <section className="backpack-section">
             <h3 className="section-title">Backpack</h3>
             <div className="tab-row small">
               <button
@@ -235,15 +347,16 @@ export function InventoryPanel({
                 </p>
               )}
               {list.map((item) => {
-                const slot = base(item.baseId).slot;
+                const family = base(item.baseId).slot;
+                const open = hasOpenSlot(save, family);
                 return (
                   <ItemRow
                     key={item.uid}
                     item={item}
-                    compareTo={slot ? save.equipped[slot] : undefined}
-                    slotEmpty={!!slot && !save.equipped[slot]}
+                    compareTo={open ? undefined : referenceFor(save, family)}
+                    slotEmpty={open}
                     actions={
-                      slot ? (
+                      family ? (
                         <button className="btn tiny" onClick={() => onEquip(item)}>
                           Equip
                         </button>

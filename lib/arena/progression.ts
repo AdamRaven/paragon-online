@@ -188,6 +188,33 @@ export function createAdventureSave(classId: string): AdventureSave {
 
 const KEY = "paragon-arena:adventure:v1";
 
+/**
+ * Old saves equipped gear under slot keys from two earlier layouts: "armor"/
+ * "trinket" (the single body-armour and single-accessory slots from before
+ * helmet/legs/hands existed at all), then "accessory1"/"accessory2" (before
+ * those two split further into necklace/belt/2 earrings/2 rings). Without
+ * this, an existing player's already-equipped pieces would silently vanish
+ * on load: equipping removes an item from the backpack, so an old slot key
+ * nothing reads anymore just loses the gear entirely.
+ */
+function migrateEquipped(
+  equipped: Partial<Record<string, Item>> | undefined
+): Partial<Record<EquipSlot, Item>> {
+  if (!equipped) return {};
+  const migrated: Partial<Record<EquipSlot, Item>> = { ...equipped };
+  const legacy = equipped as Record<string, Item | undefined>;
+  if (legacy.armor && !migrated.chest) migrated.chest = legacy.armor;
+  // "trinket" only ever existed alongside "armor", one layout further back
+  // than "accessory1" — route it straight to its final home.
+  if (legacy.trinket && !migrated.necklace) migrated.necklace = legacy.trinket;
+  if (legacy.accessory1 && !migrated.necklace) migrated.necklace = legacy.accessory1;
+  if (legacy.accessory2 && !migrated.ring1) migrated.ring1 = legacy.accessory2;
+  for (const stale of ["armor", "trinket", "accessory1", "accessory2"]) {
+    delete (migrated as Record<string, Item | undefined>)[stale];
+  }
+  return migrated;
+}
+
 export function loadAdventure(): AdventureSave | null {
   if (typeof window === "undefined") return null;
   try {
@@ -200,7 +227,7 @@ export function loadAdventure(): AdventureSave | null {
       ...parsed,
       stats: { ...base.stats, ...(parsed.stats ?? {}) },
       inventory: parsed.inventory ?? [],
-      equipped: parsed.equipped ?? {},
+      equipped: migrateEquipped(parsed.equipped),
       storage: parsed.storage ?? [],
       gold: parsed.gold ?? 0,
       stones: parsed.stones ?? 0,

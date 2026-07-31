@@ -71,8 +71,37 @@ function cameraArt(engine: ArenaEngine) {
   };
 }
 
+/** The punch-in scale from a fresh big hit, shared by both canvases so the
+ *  crisp portrait overlay punches in exactly in step with the chunky world
+ *  instead of visibly lagging or missing the effect entirely. */
+function currentPunchScale(): number {
+  return 1 + (punchTimer / PUNCH_DURATION) * punchMag * 0.05;
+}
+
+/**
+ * Duels only: the camera otherwise just pans to the midpoint between the two
+ * fighters, which is fine while they're close but leaves both of them
+ * out of frame — staring at empty stage — the moment they're spread out
+ * (e.g. right after a knockback, or crossing the arena's gap). Pulling the
+ * camera back once their separation exceeds a comfortable fraction of the
+ * viewport keeps both fighters visible without the eye ever losing the
+ * fight, at the cost of everything reading a little smaller while it's
+ * zoomed out.
+ */
+function duelZoom(engine: ArenaEngine, viewportArtWidth: number): number {
+  if (engine.mode !== "duel" || !engine.enemy) return 1;
+  const sepArt = Math.abs(engine.player.x - engine.enemy.x) / S;
+  const comfortable = viewportArtWidth * 0.62;
+  if (sepArt <= comfortable) return 1;
+  return Math.max(0.55, comfortable / sepArt);
+}
+
 /** Previous per-fighter state, so dash/reflect play once on entry rather than every frame. */
 const prevFighterState = new Map<string, string>();
+/** Previous per-fighter action id, so a boss windup plays its warning once, not every frame. */
+const prevFighterAction = new Map<string, string>();
+let prevProjectileCount = 0;
+let prevHazardHits = 0;
 
 function trackStateSounds(engine: ArenaEngine) {
   const seen = new Set<string>();
@@ -84,11 +113,31 @@ function trackStateSounds(engine: ArenaEngine) {
       else if (f.state === "reflect") playSound("block");
       prevFighterState.set(f.id, f.state);
     }
+    const actionId = f.action?.spec.id ?? "";
+    if (actionId !== prevFighterAction.get(f.id)) {
+      if (actionId === "boss-special") playSound("bossTelegraph");
+      prevFighterAction.set(f.id, actionId);
+    }
   }
   // Mobs despawn/respawn with new ids over time; drop anything no longer present.
   for (const id of prevFighterState.keys()) {
-    if (!seen.has(id)) prevFighterState.delete(id);
+    if (!seen.has(id)) {
+      prevFighterState.delete(id);
+      prevFighterAction.delete(id);
+    }
   }
+
+  // A fresh projectile appeared this frame — cultists, sentinels and Shedim's
+  // Shadow Slash all funnel through the same engine.projectiles array, so one
+  // count comparison covers every ranged source instead of a sound hook per
+  // spec. A lower count than last frame means a brand new engine mounted
+  // (its own counter restarts at 0) rather than a projectile despawning
+  // silently, so that case just resyncs instead of firing a false cue.
+  if (engine.projectiles.length > prevProjectileCount) playSound("rangedShot");
+  prevProjectileCount = engine.projectiles.length;
+
+  if (engine.hazardHits > prevHazardHits) playSound("hazardBurn");
+  prevHazardHits = engine.hazardHits;
 }
 
 // -------------------------------------------------------------- portraits
@@ -437,6 +486,15 @@ export function renderFighterPortraits(
 ) {
   const fx = fxCtx;
   fx.clearRect(0, 0, fx.canvas.width, fx.canvas.height);
+
+  const scale = currentPunchScale() * duelZoom(engine, fx.canvas.width / physicalPerArtPixel);
+  fx.save();
+  if (scale !== 1) {
+    fx.translate(fx.canvas.width / 2, fx.canvas.height / 2);
+    fx.scale(scale, scale);
+    fx.translate(-fx.canvas.width / 2, -fx.canvas.height / 2);
+  }
+
   const { camX, camY } = cameraArt(engine);
   const px2 = (v: number) => (Math.round(v / S) - camX) * physicalPerArtPixel;
   const py2 = (v: number) => (Math.round(v / S) - camY) * physicalPerArtPixel;
@@ -533,6 +591,7 @@ export function renderFighterPortraits(
     }
     fx.restore();
   }
+  fx.restore();
 }
 
 export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) {
@@ -558,12 +617,12 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   prevShake = engine.shake;
   punchTimer = Math.max(0, punchTimer - dt);
   flashTimer = Math.max(0, flashTimer - dt);
-  const punchScale = 1 + (punchTimer / PUNCH_DURATION) * punchMag * 0.05;
+  const scale = currentPunchScale() * duelZoom(engine, vw);
 
   b.save();
-  if (punchTimer > 0) {
+  if (scale !== 1) {
     b.translate(vw / 2, vh / 2);
-    b.scale(punchScale, punchScale);
+    b.scale(scale, scale);
     b.translate(-vw / 2, -vh / 2);
   }
 
@@ -1187,6 +1246,39 @@ function drawTerrain(
     for (let bx = x; bx < x + w; bx += 6) px(b, bx, y + 1, 1, 4, PAL.rockBody);
     // Dashed underside: the drop-through tell.
     for (let bx = x; bx < x + w; bx += 4) px(b, bx, y + 6, 2, 1, PAL.rockDark);
+  }
+
+  // Environmental hazard patches — lava, spike pits, poison bogs.
+  for (const hz of map.hazards) {
+    const x = wx(hz.x);
+    const y = wy(hz.y);
+    const w = Math.round(hz.w / S);
+    if (x > vw || x + w < 0) continue;
+    const t = engine.time;
+    if (hz.kind === "lava") {
+      pxGlow(b, x + w / 2, y - 2, w * 0.35, "#f97316", 0.4);
+      px(b, x, y - 3, w, 4, "#7c2d12");
+      px(b, x, y - 2, w, 2, "#f97316");
+      for (let i = 0; i < w; i += 5) {
+        const flick = Math.sin(t * 4 + i) > 0.3;
+        px(b, x + i, y - 3 - (flick ? 1 : 0), 2, 1, flick ? "#fde68a" : "#fb923c");
+      }
+    } else if (hz.kind === "spikes") {
+      px(b, x, y - 2, w, 3, "#3f3f46");
+      for (let i = 0; i < w; i += 6) {
+        const h2 = 5 + (i % 12 === 0 ? 2 : 0);
+        for (let s = 0; s < h2; s++) {
+          px(b, x + i + Math.floor((h2 - s) / 2), y - 2 - s, Math.max(1, s < h2 - 1 ? 2 - Math.floor(s / 3) : 1), 1, "#cbd5e1");
+        }
+      }
+    } else {
+      px(b, x, y - 3, w, 4, "#3f6212");
+      px(b, x, y - 2, w, 2, "#84cc16");
+      for (let i = 0; i < w; i += 7) {
+        const bub = (t * 1.3 + i * 0.3) % 3;
+        if (bub < 1) px(b, x + i, y - 3 - bub * 2, 2, 2, "#bef264");
+      }
+    }
   }
 
   // Hazard stripes on the ledges either side of a pit.
@@ -1975,6 +2067,18 @@ function drawMobFlourish(
       px(b, x - half + 1, topY + 1, w - 2, 2, "#e8c9a0");
       break;
     }
+    case "rabid-cur": {
+      // Hunched and wiry, all coiled speed — bared teeth and a low, lean
+      // stance instead of the brawler's broad bulk, so it reads as fast and
+      // fragile rather than another slow bruiser.
+      px(b, x - half, torsoY + torsoH - 1, torsoW2(w), 2, col(m.accent));
+      px(b, x + dir * 3, topY + 2, 2, 1, "#fef2f2");
+      px(b, x + dir * 2, topY + 4, 1, 1, "#fecaca");
+      for (let i = 0; i < 2; i++) {
+        px(b, x - half + i * (w - 3), torsoY + torsoH, 2, 3, col(m.accent));
+      }
+      break;
+    }
     case "blade-wraith": {
       // Hovering cloak with a hood and a violet blade.
       pxGlow(b, x, y - h * 0.5, h * 0.5, "#8b5cf6", 0.5);
@@ -1986,6 +2090,25 @@ function drawMobFlourish(
       for (let i = 0; i < bl; i++) {
         px(b, x + dir * (half + 2 + Math.round(i * 0.25)), torsoY + 2 - i, 1, 1, "#c4b5fd");
       }
+      break;
+    }
+    case "cultist": {
+      // Hooded robe with a charged bolt glowing in its raised hand — reads
+      // as "ranged" at a glance rather than just another melee silhouette.
+      px(b, x - half, topY + 1, w, 3, col(m.color));
+      px(b, x - half + 1, torsoY, torsoW2(w) - 2, torsoH, col(m.accent));
+      pxGlow(b, x + dir * (half + 3), torsoY + 2, 4, "#22d3ee", 0.75);
+      px(b, x + dir * (half + 3), torsoY + 2, 1, 1, "#e0f7fa");
+      break;
+    }
+    case "shieldbearer": {
+      // A heavy tower shield planted on its facing side — reads as "block
+      // this side" at a glance, backing up the frontGuard mechanic that
+      // makes frontal hits do nothing until it's staggered or flanked.
+      px(b, x + dir * (half + 1), torsoY - 2, 4, torsoH + 4, col(m.accent));
+      px(b, x + dir * (half + 1), torsoY - 1, 4, torsoH + 2, "#78716c");
+      px(b, x + dir * (half + 2), torsoY + Math.round(torsoH * 0.4), 2, 2, "#d6d3d1");
+      px(b, x - half + 1, topY + 1, w - 2, 2, col(m.color));
       break;
     }
     case "colossus": {
@@ -2019,6 +2142,18 @@ function drawMobFlourish(
       }
       px(b, x + dir * 2, topY + 3, 1, 1, "#e9d5ff");
       px(b, x + dir * 4, topY + 3, 1, 1, "#e9d5ff");
+      break;
+    }
+    case "sentinel": {
+      // A planted turret of a mob: squared steel plating and a raised
+      // barrel-arm with a charged blue core — built to read as "stands its
+      // ground and shoots" rather than another melee silhouette, like the
+      // cultist's bolt but heavier and less mobile to match its bulk.
+      px(b, x - half - 1, torsoY - 1, torsoW2(w) + 2, torsoH + 2, col(m.accent));
+      px(b, x - half, torsoY, torsoW2(w), torsoH, col(m.color));
+      px(b, x + dir * (half + 2), torsoY + 1, 5, 2, col(m.accent));
+      pxGlow(b, x + dir * (half + 5), torsoY + 2, 3, "#38bdf8", 0.7);
+      px(b, x + dir * (half + 5), torsoY + 2, 1, 1, "#e0f2fe");
       break;
     }
     case "sovereign": {

@@ -41,6 +41,8 @@ export const STUNLOCK_DURATION = 0.25;
 export const STUNLOCK_WINDOW = 0.25;
 /** Hits landing inside this window still count as part of the same string. */
 export const MULTI_HIT_WINDOW = 0.4;
+/** How often standing in an environmental hazard deals another tick of damage. */
+export const HAZARD_TICK_INTERVAL = 0.5;
 
 // --- basic attack timings -------------------------------------------------
 export const PARAGON_LMB_CAST = 0.22;

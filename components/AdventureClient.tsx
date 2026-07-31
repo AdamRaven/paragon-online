@@ -19,7 +19,9 @@ import {
   STONE_PRICE,
   attemptEnhance,
   base,
+  familySlots,
   itemName,
+  itemScore,
   itemValue,
   makeItem,
   type EquipSlot,
@@ -45,7 +47,7 @@ import {
 } from "@/lib/arena/progression";
 import { PIXEL_SCALE, artSize, worldViewSize } from "@/lib/arena/pixel";
 import { renderArena, renderFighterPortraits } from "@/lib/arena/render";
-import { playSound } from "@/lib/arena/sound";
+import { playSound, startMusic, stopMusic } from "@/lib/arena/sound";
 import type { ClassId, CombatLogEntry } from "@/lib/arena/types";
 
 const MAX_LOGS = 6;
@@ -122,6 +124,7 @@ export function AdventureClient() {
       },
     });
     engineRef.current = engine;
+    startMusic(engine.stage.biome);
 
     let fxScale = PIXEL_SCALE;
 
@@ -199,10 +202,21 @@ export function AdventureClient() {
       input.dispose();
       inputRef.current = null;
       engineRef.current = null;
+      stopMusic();
     };
     // The engine owns the save object once created; re-running would reset it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started, pushLog]);
+
+  // Pointer lock only while actually walking/fighting in the world — every
+  // panel here (sheet, map, inventory, merchant/vendor/storage, pause, combo
+  // list, tutorial) is ordinary DOM buttons that need a real visible cursor.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    if (started && panel === "none") input.lockPointer();
+    else input.unlockPointer();
+  }, [started, panel]);
 
   // Panel hotkeys: C for the character sheet, M for stage travel.
   useEffect(() => {
@@ -274,12 +288,22 @@ export function AdventureClient() {
 
   const equip = (item: Item) =>
     mutate((e) => {
-      const slot = base(item.baseId).slot;
-      if (!slot) return;
-      const current = e.save.equipped[slot];
+      const family = base(item.baseId).slot;
+      if (!family) return;
+      // Earrings and rings share 2 physical slots — drop into whichever is
+      // empty, or bump the weaker of the two if both are already filled.
+      const slots = familySlots(family);
+      const target =
+        slots.find((s) => !e.save.equipped[s]) ??
+        slots.reduce((worst, s) => {
+          const w = e.save.equipped[worst];
+          const c = e.save.equipped[s];
+          return w && c && itemScore(c) < itemScore(w) ? s : worst;
+        }, slots[0]);
+      const current = e.save.equipped[target];
       e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
       if (current) e.save.inventory.push(current);
-      e.save.equipped[slot] = item;
+      e.save.equipped[target] = item;
       pushLog(`Equipped ${itemName(item)}.`, "good");
     });
 
@@ -417,6 +441,7 @@ export function AdventureClient() {
       setSave({ ...e.save });
       setPanel("none");
       playSound("travel");
+      startMusic(e.stage.biome);
     } else {
       playSound("uiError");
     }
@@ -628,29 +653,30 @@ function DerivedPanel({ save }: { save: AdventureSave }) {
 }
 
 function readIntent(input: ArenaInput): Intent {
+  const b = input.getBindings();
   const i = emptyIntent();
   i.moveX = input.moveX();
   i.sprint = input.isSprinting();
-  i.up = input.isDown("KeyW");
-  i.down = input.isDown("KeyS");
-  const spaceEdge = input.wasPressed("Space");
-  const wEdge = input.wasPressed("KeyW");
-  const sEdge = input.wasPressed("KeyS");
-  const space = input.isDown("Space");
-  i.jump = (spaceEdge && i.up) || (wEdge && space);
+  i.up = input.isDown(b.up);
+  i.down = input.isDown(b.down);
+  const modEdge = input.wasPressed(b.jumpMod);
+  const upEdge = input.wasPressed(b.up);
+  const downEdge = input.wasPressed(b.down);
+  const mod = input.isDown(b.jumpMod);
+  i.jump = (modEdge && i.up) || (upEdge && mod);
   // Holding EITHER key sustains the jump; only releasing both shortens it.
-  i.jumpHeld = space || i.up;
-  i.dropThrough = (spaceEdge && i.down) || (sEdge && space);
+  i.jumpHeld = mod || i.up;
+  i.dropThrough = (modEdge && i.down) || (downEdge && mod);
   i.lmb = input.consumeLmb();
   i.rmb = input.consumeRmb();
   i.lmbHeld = input.lmbDown();
   i.rmbHeld = input.rmbDown();
   i.bothHeldTime = input.bothButtonsHeld;
-  i.q = input.consume("KeyQ");
-  i.e = input.consume("KeyE");
-  i.r = input.consume("KeyR");
-  i.f = input.consume("KeyF");
-  i.shift = input.isDown("ShiftLeft") || input.isDown("ShiftRight");
+  i.q = input.consume(b.q);
+  i.e = input.consume(b.e);
+  i.r = input.consume(b.r);
+  i.f = input.consume(b.f);
+  i.shift = input.isDown(b.shift);
   return i;
 }
 

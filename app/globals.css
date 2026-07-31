@@ -1957,12 +1957,77 @@ body {
   display: grid;
   grid-template-columns: minmax(240px, 340px) 1fr;
   gap: 18px;
-  align-items: start;
+  /* Stretch (the default) rather than start: the paper-doll's own 6-row
+     grid decides the row's height, and the backpack column should fill
+     that same height instead of stopping at its own shorter content and
+     leaving a dead gap underneath — see .backpack-section below. */
+  align-items: stretch;
+}
+
+/**
+ * Lets the backpack's item list claim whatever vertical room the paper-doll
+ * establishes instead of stopping at a fixed px cap partway down — that cap
+ * used to leave a growing dead zone under the list as the paper-doll grew
+ * taller (6 rows of gear slots vs. the list's old fixed height).
+ */
+.backpack-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.backpack-section .item-list {
+  flex: 1;
+  min-height: 160px;
+  max-height: none;
 }
 
 /* --- equipment slots --- */
 
 .slot-column { display: grid; gap: 8px; }
+
+/**
+ * A real paper-doll: slots sit where they'd actually be worn (helmet up top,
+ * necklace/chest/belt/hands/legs stacked down the body's centre line,
+ * earrings flanking the head, weapon and the 2 rings out to the sides)
+ * instead of a flat alphabetical list — so equipping something is visibly
+ * "putting it on" in the right spot.
+ */
+.paper-doll {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  grid-template-areas:
+    ".        helmet   .       "
+    "earring1 necklace earring2"
+    "weapon   chest    ring1   "
+    ".        belt     ring2   "
+    ".        hands    .       "
+    ".        legs     .       ";
+  gap: 6px;
+}
+
+.paper-doll .slot-card {
+  grid-area: var(--slot-area);
+  flex-direction: column;
+  text-align: center;
+  gap: 3px;
+  min-height: 70px;
+  padding: 6px 4px 5px;
+}
+
+.paper-doll .slot-body { text-align: center; }
+.paper-doll .slot-name { font-size: 8px; }
+.paper-doll .slot-body strong {
+  font-size: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.paper-doll .slot-hint { display: none; }
+.paper-doll .item-stats,
+.paper-doll .item-effect { display: none; }
+.paper-doll .btn.tiny { font-size: 9px; padding: 3px 6px; }
+.paper-doll .slot-glyph { width: 28px; height: 28px; font-size: 12px; }
 
 .slot-card {
   display: flex;
@@ -2061,6 +2126,49 @@ body {
 .cmp-down { color: var(--danger); font-style: normal; }
 .item-value { font-size: 11px; color: var(--exp); white-space: nowrap; }
 .risk { color: var(--danger); font-style: normal; font-size: 9px; }
+
+/**
+ * Rendered through a portal straight onto <body> (see ItemHoverCard in
+ * InventoryPanel.tsx), positioned in fixed/viewport space from the hovered
+ * element's own rect — so it always floats above the sheet it's shown from,
+ * no matter that sheet's own scroll/overflow clipping.
+ */
+.item-hover-card {
+  position: fixed;
+  z-index: 999;
+  background: #0d1017;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  animation: hover-card-in 0.12s ease;
+}
+@keyframes hover-card-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.item-hover-card strong { font-size: 13px; }
+.item-hover-sub {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.item-hover-stats { color: var(--accent); font-size: 11px; letter-spacing: 0.03em; }
+.item-hover-effect { font-size: 11px; font-style: italic; font-weight: 600; }
+.item-hover-price { color: var(--exp); font-size: 11px; font-weight: 700; }
+.item-hover-lore {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.4;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
 
 .btn.tiny { padding: 5px 9px; font-size: 10px; }
 

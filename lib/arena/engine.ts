@@ -21,6 +21,7 @@ import {
   JUMP_CUT,
   GETUP_IMMUNITY,
   GRAVITY,
+  HAZARD_TICK_INTERVAL,
   HITSTUN_SINGLE,
   KACPER_BRACE_BURN_PER_SEC,
   KACPER_BRACE_THRESHOLD,
@@ -63,7 +64,7 @@ import {
   WALK_SPEED,
 } from "./constants";
 import { ARENA, groundAt } from "./map";
-import { MOB_TYPES, mobAttackSpec, mobBossSpecialSpec } from "./mobs";
+import { MOB_TYPES, mobAttackSpec, mobBossSpecialSpec, mobRangedAttackSpec } from "./mobs";
 import type {
   ActiveAction,
   AttackSpec,
@@ -73,6 +74,7 @@ import type {
   Facing,
   Fighter,
   FloatingText,
+  Hazard,
   HitEffect,
   Hitbox,
   Particle,
@@ -142,8 +144,18 @@ export class ArenaEngine {
   mode: "duel" | "adventure" = "duel";
   camera = { x: 0, y: 0 };
   shake = 0;
+  /**
+   * Seconds of "hitstop" remaining: a brief freeze-frame on a heavy hit,
+   * classic fighting-game juice that sells impact by holding the moment
+   * before the knockback plays out. Consumed once per real-time frame in
+   * ArenaClient's loop rather than here, so it freezes presentation (the
+   * physics/AI tick) without the engine needing its own clock concept.
+   */
+  hitstop = 0;
   time = 0;
   over = false;
+  /** Bumped every hazard damage tick — render.ts diffs it to fire a distinct sizzle cue. */
+  hazardHits = 0;
 
   private nextId = 1;
   private cb: ArenaCallbacks;
@@ -257,6 +269,7 @@ export class ArenaEngine {
       cooldowns: {},
       sprinting: false,
       wantsUp: false,
+      hazardTick: 0,
     };
   }
 
@@ -285,6 +298,10 @@ export class ArenaEngine {
    */
   stepAll(playerIntent: Intent, intentFor: (f: Fighter) => Intent) {
     if (this.over) return;
+    if (this.hitstop > 0) {
+      this.hitstop = Math.max(0, this.hitstop - DT);
+      return;
+    }
     this.time += DT;
 
     for (const f of this.fighters) {
@@ -292,6 +309,7 @@ export class ArenaEngine {
       this.updateFighter(f, intent, this.nearestFoe(f));
     }
 
+    this.applyHazards();
     this.updateProjectiles();
     this.updateBlackHoles();
     this.resolveHits();
@@ -492,7 +510,12 @@ export class ArenaEngine {
       const type = MOB_TYPES[f.mobTypeId!];
       if (type) {
         const useSpecial = input.special && type.isBoss;
-        this.startAttack(f, useSpecial ? mobBossSpecialSpec(type) : mobAttackSpec(type));
+        const spec = useSpecial
+          ? mobBossSpecialSpec(type)
+          : type.ranged
+            ? mobRangedAttackSpec(type)
+            : mobAttackSpec(type);
+        this.startAttack(f, spec);
         this.advanceAction(f, opponent);
         this.physics(f);
         return;
@@ -710,6 +733,28 @@ export class ArenaEngine {
         life: 1.2,
         label: spec.label,
         color: cls.colors.trim,
+      });
+      return;
+    }
+
+    if (spec.id === "mob-ranged" && f.isMob) {
+      const type = MOB_TYPES[f.mobTypeId!];
+      this.projectiles.push({
+        id: `pr${this.nextId++}`,
+        ownerId: f.id,
+        x: f.x + f.facing * 20,
+        y: f.y - f.h * 0.55,
+        vx: f.facing * 7,
+        vy: 0,
+        w: 14,
+        h: 14,
+        damage: this.computeDamage(f, spec),
+        knockback: spec.knockback,
+        effect: "none",
+        effectDuration: 0,
+        life: 1.6,
+        label: spec.label,
+        color: type?.accent ?? "#0e7490",
       });
       return;
     }
@@ -958,6 +1003,11 @@ export class ArenaEngine {
         this.spawnText(target.x, target.y - target.h - 6, "GUARD", "#93c5fd", 13);
         this.spawnImpactAt(target.x + target.facing * 12, target.y - target.h * 0.6, "#93c5fd");
         attacker.hitStreak = 0;
+        // Guarding hits used to be silent — a real hit lands but nothing
+        // audible marks it, which reads as the game dropping the input
+        // rather than the block actually working. Piggybacking on the same
+        // shake→sound path every other impact uses keeps it consistent.
+        this.shake = Math.max(this.shake, 5);
         return;
       }
     }
@@ -1021,16 +1071,24 @@ export class ArenaEngine {
       return;
     }
 
+    // Tracks how heavy this specific hit was, independent of this.shake
+    // (which ratchets across overlapping hits and decays over several
+    // frames) — hitstop needs "how big was *this* impact", not the
+    // currently-elevated shake level from a moment ago.
+    let impactWeight = hb.kind === "rmb" ? 6 : 3;
+
     switch (hb.effect) {
       case "knockdown":
         this.knockDown(target, false);
         this.cb.onLog(`${attacker.name} knocks ${target.name} down!`, "big");
-        this.shake = Math.max(this.shake, 12);
+        impactWeight = 12;
+        this.shake = Math.max(this.shake, impactWeight);
         break;
       case "launch":
         this.launch(target, hb.effectDuration || 0.6);
         this.cb.onLog(`${target.name} is launched into the air!`, "big");
-        this.shake = Math.max(this.shake, 9);
+        impactWeight = 9;
+        this.shake = Math.max(this.shake, impactWeight);
         break;
       case "stun":
         target.stunTimer = hb.effectDuration || SHEDIM_STUN_DURATION;
@@ -1040,6 +1098,7 @@ export class ArenaEngine {
           `${attacker.name} stuns ${target.name} for ${hb.effectDuration.toFixed(1)}s!`,
           "big"
         );
+        impactWeight = 10;
         break;
       default:
         target.hitstun = wasStunned ? STUNLOCK_DURATION : HITSTUN_SINGLE;
@@ -1052,7 +1111,11 @@ export class ArenaEngine {
     }
 
     target.hitFlash = 0.1;
-    this.shake = Math.max(this.shake, hb.kind === "rmb" ? 6 : 3);
+    this.shake = Math.max(this.shake, impactWeight);
+    // A light tap barely registers, but a knockdown-tier impact holds for a
+    // handful of frames — enough to read as "that landed" without the game
+    // ever feeling like it stutters.
+    this.hitstop = Math.max(this.hitstop, impactWeight * 0.006);
     const impactColor = hb.kind === "skill" ? "#fbbf24" : "#f87171";
     this.burst(
       target.x + hb.facing * 10,
@@ -1198,6 +1261,53 @@ export class ArenaEngine {
       f.hitstun = 0;
       this.cb.onLog(`${f.name} fell into the gap and respawned.`, "bad");
       this.spawnText(spawn.x, spawn.y - 70, "RESPAWN", "#93c5fd", 17);
+    }
+  }
+
+  // =================================================================== hazards
+
+  private static readonly HAZARD_FX: Record<Hazard["kind"], string> = {
+    lava: "#f97316",
+    spikes: "#cbd5e1",
+    poison: "#84cc16",
+  };
+
+  /**
+   * Ground-level damage patches (lava, spike pits, poison bogs) tick anyone
+   * standing in them every HAZARD_TICK_INTERVAL — a fixed pace regardless of
+   * how long they linger, rather than one lump sum on entry, so stepping out
+   * mid-tick always saves the next hit. Reuses the existing shake→sound path
+   * (see render.ts's trackStateSounds) instead of a bespoke audio hook.
+   */
+  private applyHazards() {
+    if (!this.map.hazards.length) return;
+    for (const f of this.fighters) {
+      if (f.state === "dead" || !f.onGround || this.isImmune(f)) {
+        f.hazardTick = 0;
+        continue;
+      }
+      const hz = this.map.hazards.find(
+        (h) => f.x >= h.x && f.x <= h.x + h.w && Math.abs(f.y - h.y) <= 8
+      );
+      if (!hz) {
+        f.hazardTick = 0;
+        continue;
+      }
+      f.hazardTick -= DT;
+      if (f.hazardTick > 0) continue;
+      f.hazardTick = HAZARD_TICK_INTERVAL;
+      const dmg = Math.max(1, Math.round(hz.dps * HAZARD_TICK_INTERVAL));
+      f.hp = Math.max(0, f.hp - dmg);
+      this.spawnText(
+        f.x + (Math.random() - 0.5) * 12,
+        f.y - f.h - 4,
+        `${dmg}`,
+        ArenaEngine.HAZARD_FX[hz.kind],
+        14
+      );
+      this.burst(f.x, f.y - 3, ArenaEngine.HAZARD_FX[hz.kind], 5);
+      this.shake = Math.max(this.shake, 6);
+      this.hazardHits += 1;
     }
   }
 

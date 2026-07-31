@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ClassPortrait } from "@/components/ClassPortrait";
-import { getClass } from "@/lib/arena/classes";
+import { getClass, skillKeyLabel } from "@/lib/arena/classes";
 import {
   COMBOKILLER_MAX_STACKS,
   COMBOKILLER_PER_STACK,
@@ -177,7 +177,7 @@ export function ArenaHud({
                   }`}
                   title={`${s.label} — ${s.description}`}
                 >
-                  <span className="skill-key">{s.slot}</span>
+                  <span className="skill-key">{skillKeyLabel(s.slot)}</span>
                   <span className="skill-name">{s.label}</span>
                   {s.manaCost ? (
                     <span className="skill-cost">{s.manaCost}</span>

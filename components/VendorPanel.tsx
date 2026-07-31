@@ -1,7 +1,7 @@
 "use client";
 
 import { ItemIcon } from "@/components/ItemIcon";
-import { compare, statLine } from "@/components/InventoryPanel";
+import { compare, hasOpenSlot, referenceFor, statLine } from "@/components/InventoryPanel";
 import {
   ITEM_BASES,
   RARITY_META,
@@ -60,9 +60,10 @@ export function VendorPanel({
             const item = preview(b.id);
             const price = itemValue(item);
             const afford = save.gold >= price;
-            const equipped = b.slot ? save.equipped[b.slot] : undefined;
+            const open = hasOpenSlot(save, b.slot);
+            const equipped = open ? undefined : referenceFor(save, b.slot);
             const cmp = compare(item, equipped);
-            const slotEmpty = !!b.slot && !equipped;
+            const slotEmpty = open;
             return (
               <div className="item-row" key={b.id} style={{ borderLeft: `4px solid ${RARITY_META.common.color}` }}>
                 <ItemIcon icon={b.icon} color={RARITY_META.common.color} />

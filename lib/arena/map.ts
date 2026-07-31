@@ -25,6 +25,7 @@ export const ARENA: ArenaMap = {
   spawnA: { x: 150, y: GROUND_Y - 60 },
   spawnB: { x: 1830, y: GROUND_Y - 60 },
   killY: 760,
+  hazards: [],
 };
 
 /** Ground height at x, or null when x is over the gap. */

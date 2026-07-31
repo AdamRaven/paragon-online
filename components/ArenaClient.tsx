@@ -10,14 +10,14 @@ import { EscapeMenu } from "@/components/EscapeMenu";
 import { Keycap, KeyList } from "@/components/KeyList";
 import { hasSeenTutorial, markTutorialSeen, TutorialOverlay } from "@/components/TutorialOverlay";
 import { ArenaAI, type Difficulty } from "@/lib/arena/ai";
-import { CLASSES, getClass } from "@/lib/arena/classes";
+import { CLASSES, getClass, skillKeyLabel } from "@/lib/arena/classes";
 import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
 import { loadDuelStats, rankForStreak, recordDuelResult, type DuelStats } from "@/lib/arena/duelStats";
 import { ArenaEngine, emptyIntent, type Intent } from "@/lib/arena/engine";
-import { ArenaInput } from "@/lib/arena/input";
+import { ArenaInput, P1_BINDINGS, P2_BINDINGS } from "@/lib/arena/input";
 import { PIXEL_SCALE, artSize, worldViewSize } from "@/lib/arena/pixel";
 import { renderArena, renderFighterPortraits } from "@/lib/arena/render";
-import { playSound } from "@/lib/arena/sound";
+import { playSound, startMusic, stopMusic } from "@/lib/arena/sound";
 import type { ClassId, CombatLogEntry } from "@/lib/arena/types";
 
 const MAX_LOGS = 6;
@@ -27,6 +27,7 @@ export function ArenaClient() {
   const fxCanvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<ArenaEngine | null>(null);
   const inputRef = useRef<ArenaInput | null>(null);
+  const input2Ref = useRef<ArenaInput | null>(null);
   const aiRef = useRef<ArenaAI | null>(null);
   const rafRef = useRef(0);
   const logIdRef = useRef(0);
@@ -35,6 +36,11 @@ export function ArenaClient() {
   const [playerClass, setPlayerClass] = useState<ClassId>("paragon");
   const [enemyClass, setEnemyClass] = useState<ClassId>("shedim");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
+  // Local 2-player: the "enemy" fighter is driven by a second keyboard-only
+  // ArenaInput instead of ArenaAI. Everything downstream (physics, hitboxes,
+  // win condition) already treats "enemy" as just the second fighter, so
+  // this only has to swap who supplies its Intent each tick.
+  const [vsPlayer, setVsPlayer] = useState(false);
   const [hud, setHud] = useState<ArenaHudData | null>(null);
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [winner, setWinner] = useState<{ name: string; you: boolean; bestCombo: number } | null>(
@@ -56,6 +62,8 @@ export function ArenaClient() {
     cancelAnimationFrame(rafRef.current);
     inputRef.current?.dispose();
     inputRef.current = null;
+    input2Ref.current?.dispose();
+    input2Ref.current = null;
     engineRef.current = null;
     aiRef.current = null;
   }, []);
@@ -114,12 +122,20 @@ export function ArenaClient() {
     const fxCanvas = fxCanvasRef.current;
     const fxCtx = fxCanvas?.getContext("2d") ?? null;
 
-    const input = new ArenaInput();
+    const input = new ArenaInput(P1_BINDINGS, true);
     input.attach(canvas);
     inputRef.current = input;
 
-    const ai = new ArenaAI(difficulty);
-    aiRef.current = ai;
+    let input2: ArenaInput | null = null;
+    let ai: ArenaAI | null = null;
+    if (vsPlayer) {
+      input2 = new ArenaInput(P2_BINDINGS, false);
+      input2.attach(canvas);
+      input2Ref.current = input2;
+    } else {
+      ai = new ArenaAI(difficulty);
+      aiRef.current = ai;
+    }
 
     const engine = new ArenaEngine(playerClass, enemyClass, {
       onLog: pushLog,
@@ -130,6 +146,9 @@ export function ArenaClient() {
       },
     });
     engineRef.current = engine;
+    // A duel has no biome of its own; "keep" reads as a neutral arena drone
+    // rather than any specific campaign stage's mood.
+    startMusic("keep");
 
     let fxScale = PIXEL_SCALE;
 
@@ -178,9 +197,10 @@ export function ArenaClient() {
         let guard = 0;
         while (acc >= DT * 1000 && guard++ < 8) {
           const intent = readIntent(input);
-          const aiIntent = ai.think(engine.enemy, engine.player);
-          engine.step(intent, aiIntent);
+          const enemyIntent = input2 ? readIntent(input2) : ai!.think(engine.enemy, engine.player);
+          engine.step(intent, enemyIntent);
           input.step(DT);
+          input2?.step(DT);
           acc -= DT * 1000;
         }
       }
@@ -202,8 +222,19 @@ export function ArenaClient() {
       input.dispose();
       inputRef.current = null;
       engineRef.current = null;
+      stopMusic();
     };
-  }, [started, playerClass, enemyClass, difficulty, pushLog]);
+  }, [started, playerClass, enemyClass, difficulty, vsPlayer, pushLog]);
+
+  // Pointer lock only during live combat — every other screen (pause,
+  // combo list, tutorial, the victory/defeat card) is ordinary DOM buttons
+  // that need a real visible cursor to click.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    if (started && !winner && panel === "none") input.lockPointer();
+    else input.unlockPointer();
+  }, [started, winner, panel]);
 
   useEffect(() => () => stop(), [stop]);
 
@@ -218,6 +249,8 @@ export function ArenaClient() {
         setDifficulty={setDifficulty}
         onStart={begin}
         duelStats={duelStats}
+        vsPlayer={vsPlayer}
+        setVsPlayer={setVsPlayer}
       />
     );
   }
@@ -304,21 +337,22 @@ export function ArenaClient() {
 
 /** Translates raw device state into the engine's normalised commands. */
 function readIntent(input: ArenaInput): Intent {
+  const b = input.getBindings();
   const i = emptyIntent();
   i.moveX = input.moveX();
   i.sprint = input.isSprinting();
-  i.up = input.isDown("KeyW");
-  i.down = input.isDown("KeyS");
+  i.up = input.isDown(b.up);
+  i.down = input.isDown(b.down);
 
-  // Jump needs Space AND W; dropping through needs Space AND S.
-  const spaceEdge = input.wasPressed("Space");
-  const wEdge = input.wasPressed("KeyW");
-  const sEdge = input.wasPressed("KeyS");
-  const space = input.isDown("Space");
-  i.jump = (spaceEdge && i.up) || (wEdge && space);
+  // Jump needs the modifier AND up; dropping through needs it AND down.
+  const modEdge = input.wasPressed(b.jumpMod);
+  const upEdge = input.wasPressed(b.up);
+  const downEdge = input.wasPressed(b.down);
+  const mod = input.isDown(b.jumpMod);
+  i.jump = (modEdge && i.up) || (upEdge && mod);
   // Holding EITHER key sustains the jump; only releasing both shortens it.
-  i.jumpHeld = space || i.up;
-  i.dropThrough = (spaceEdge && i.down) || (sEdge && space);
+  i.jumpHeld = mod || i.up;
+  i.dropThrough = (modEdge && i.down) || (downEdge && mod);
 
   i.lmb = input.consumeLmb();
   i.rmb = input.consumeRmb();
@@ -326,11 +360,11 @@ function readIntent(input: ArenaInput): Intent {
   i.rmbHeld = input.rmbDown();
   i.bothHeldTime = input.bothButtonsHeld;
 
-  i.q = input.consume("KeyQ");
-  i.e = input.consume("KeyE");
-  i.r = input.consume("KeyR");
-  i.f = input.consume("KeyF");
-  i.shift = input.isDown("ShiftLeft") || input.isDown("ShiftRight");
+  i.q = input.consume(b.q);
+  i.e = input.consume(b.e);
+  i.r = input.consume(b.r);
+  i.f = input.consume(b.f);
+  i.shift = input.isDown(b.shift);
   return i;
 }
 
@@ -371,6 +405,8 @@ function ClassSelect({
   setDifficulty,
   onStart,
   duelStats,
+  vsPlayer,
+  setVsPlayer,
 }: {
   playerClass: ClassId;
   enemyClass: ClassId;
@@ -380,6 +416,8 @@ function ClassSelect({
   setDifficulty: (d: Difficulty) => void;
   onStart: () => void;
   duelStats: DuelStats | null;
+  vsPlayer: boolean;
+  setVsPlayer: (v: boolean) => void;
 }) {
   const ids = Object.keys(CLASSES) as ClassId[];
   const cls = getClass(playerClass);
@@ -437,8 +475,12 @@ function ClassSelect({
                     onClick={() => {
                       playSound("uiClick");
                       setPlayerClass(id);
-                      const others = ids.filter((o) => o !== id);
-                      setEnemyClass(others[Math.floor(Math.random() * others.length)]);
+                      // Player 2 picks their own class in vsPlayer mode — don't
+                      // stomp on it just because Player 1 changed theirs.
+                      if (!vsPlayer) {
+                        const others = ids.filter((o) => o !== id);
+                        setEnemyClass(others[Math.floor(Math.random() * others.length)]);
+                      }
                     }}
                   >
                     <ClassPortrait classId={id} aura={c.colors.aura} size={52} />
@@ -490,7 +532,7 @@ function ClassSelect({
                     </>
                   ),
                 },
-                { label: "Special", content: <Keycap>Shift</Keycap> },
+                { label: "Special", content: <Keycap>C</Keycap> },
                 {
                   label: "Manastop (70 mana)",
                   content: <>hold <Keycap wide>LMB</Keycap>+<Keycap wide>RMB</Keycap> 0.5s</>,
@@ -513,7 +555,7 @@ function ClassSelect({
                   className="flex justify-between items-center border-b border-outline-variant/20 pb-2 text-sm"
                 >
                   <span className="text-on-surface">
-                    <Keycap>{s.slot}</Keycap> <span className="ml-2">{s.label}</span>
+                    <Keycap>{skillKeyLabel(s.slot)}</Keycap> <span className="ml-2">{s.label}</span>
                     {s.invented && <em className="opacity-60 not-italic"> *</em>}
                   </span>
                   <span className="text-on-surface-variant">
@@ -532,37 +574,125 @@ function ClassSelect({
             <h2 className="font-section-label text-section-label uppercase tracking-[0.2em] text-mana-glow mb-4">
               Opponent
             </h2>
-            <p className="text-on-surface-variant text-sm mb-4">
-              You face a <strong className="text-on-surface">{getClass(enemyClass).name}</strong>.
-            </p>
-            <div className="space-y-3">
-              {(["calm", "normal", "brutal"] as Difficulty[]).map((d) => {
-                const on = difficulty === d;
-                return (
-                  <button
-                    key={d}
-                    className={`w-full flex items-center justify-between p-3 border transition-colors ${
-                      on
-                        ? "border-mana-glow bg-mana-glow/10"
-                        : "border-outline-variant/30 hover:border-primary/40"
-                    }`}
-                    onClick={() => {
-                      playSound("uiClick");
-                      setDifficulty(d);
-                    }}
-                  >
-                    <strong className="capitalize text-on-surface">{d}</strong>
-                    <span
-                      className={`font-section-label text-[10px] uppercase tracking-widest px-2 py-1 ${
-                        on ? "bg-mana-glow text-on-primary" : "text-outline"
-                      }`}
-                    >
-                      {on ? "ON" : "SET"}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="flex border border-outline-variant/30 mb-4">
+              <button
+                className={`flex-1 py-2 font-section-label text-[11px] uppercase tracking-widest transition-colors ${
+                  !vsPlayer ? "bg-mana-glow/20 text-mana-glow" : "text-on-surface-variant"
+                }`}
+                onClick={() => {
+                  playSound("uiClick");
+                  setVsPlayer(false);
+                }}
+              >
+                vs AI
+              </button>
+              <button
+                className={`flex-1 py-2 font-section-label text-[11px] uppercase tracking-widest transition-colors ${
+                  vsPlayer ? "bg-mana-glow/20 text-mana-glow" : "text-on-surface-variant"
+                }`}
+                onClick={() => {
+                  playSound("uiClick");
+                  setVsPlayer(true);
+                }}
+              >
+                vs Player 2
+              </button>
             </div>
+
+            {!vsPlayer ? (
+              <>
+                <p className="text-on-surface-variant text-sm mb-4">
+                  You face a <strong className="text-on-surface">{getClass(enemyClass).name}</strong>.
+                </p>
+                <div className="space-y-3">
+                  {(["calm", "normal", "brutal"] as Difficulty[]).map((d) => {
+                    const on = difficulty === d;
+                    return (
+                      <button
+                        key={d}
+                        className={`w-full flex items-center justify-between p-3 border transition-colors ${
+                          on
+                            ? "border-mana-glow bg-mana-glow/10"
+                            : "border-outline-variant/30 hover:border-primary/40"
+                        }`}
+                        onClick={() => {
+                          playSound("uiClick");
+                          setDifficulty(d);
+                        }}
+                      >
+                        <strong className="capitalize text-on-surface">{d}</strong>
+                        <span
+                          className={`font-section-label text-[10px] uppercase tracking-widest px-2 py-1 ${
+                            on ? "bg-mana-glow text-on-primary" : "text-outline"
+                          }`}
+                        >
+                          {on ? "ON" : "SET"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-on-surface-variant text-sm mb-4">
+                  Same keyboard, second controller. Player 2 picks a class below;
+                  their full control layout is listed here too.
+                </p>
+                <div className="space-y-3 mb-5">
+                  {ids.map((id) => {
+                    const picked = enemyClass === id;
+                    const c = getClass(id);
+                    return (
+                      <button
+                        key={id}
+                        className={`w-full flex items-center gap-3 p-3 border transition-colors text-left ${
+                          picked
+                            ? "border-mana-glow bg-mana-glow/10"
+                            : "border-outline-variant/30 hover:border-primary/40"
+                        }`}
+                        onClick={() => {
+                          playSound("uiClick");
+                          setEnemyClass(id);
+                        }}
+                      >
+                        <ClassPortrait classId={id} aura={c.colors.aura} size={36} />
+                        <span className="flex-1 min-w-0">
+                          <strong className="block text-on-surface text-sm">{c.name}</strong>
+                        </span>
+                        <span
+                          className={`font-section-label text-[10px] uppercase tracking-widest px-2 py-1 ${
+                            picked ? "bg-mana-glow text-on-primary" : "text-outline"
+                          }`}
+                        >
+                          {picked ? "PICKED" : "PICK"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <KeyList
+                  rows={[
+                    { label: "Move", content: <><Keycap>←</Keycap> <Keycap>→</Keycap></> },
+                    { label: "Up / down", content: <><Keycap>↑</Keycap> <Keycap>↓</Keycap></> },
+                    { label: "Jump", content: <><Keycap>/</Keycap> + <Keycap>↑</Keycap></> },
+                    { label: "Normal attack", content: <Keycap wide>,</Keycap> },
+                    { label: "Heavy attack", content: <Keycap wide>.</Keycap> },
+                    {
+                      label: "Skills",
+                      content: (
+                        <>
+                          <Keycap>N1</Keycap> <Keycap>N2</Keycap> <Keycap>N3</Keycap>{" "}
+                          <Keycap>N4</Keycap>
+                        </>
+                      ),
+                    },
+                    { label: "Special", content: <Keycap>N0</Keycap> },
+                  ]}
+                />
+              </>
+            )}
+
             <button
               className="w-full mt-6 bg-paragon-gold text-void-black py-4 font-section-label text-section-label uppercase tracking-widest font-bold glow-border-gold transition-all hover:scale-105"
               onClick={() => {
@@ -570,7 +700,7 @@ function ClassSelect({
                 onStart();
               }}
             >
-              Enter the Arena
+              {vsPlayer ? "Start Local Duel" : "Enter the Arena"}
             </button>
           </section>
         </div>

@@ -53,7 +53,7 @@ const STEPS: Step[] = [
       <>
         <p>
           <Keycap>Q</Keycap> <Keycap>E</Keycap> <Keycap>R</Keycap> <Keycap>F</Keycap>{" "}
-          and <Keycap>Shift</Keycap> are your class's five skills, shown along the
+          and <Keycap>C</Keycap> are your class's five skills, shown along the
           bottom of the screen with their cooldowns. Every class plays differently —
           press <Keycap>Tab</Keycap> any time during a fight to see the full move list
           for whoever you're playing.

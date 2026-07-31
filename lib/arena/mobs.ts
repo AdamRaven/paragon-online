@@ -1,4 +1,4 @@
-import type { AttackSpec, ArenaMap } from "./types";
+import type { AttackSpec, ArenaMap, Hazard } from "./types";
 
 export interface MobType {
   id: string;
@@ -19,6 +19,12 @@ export interface MobType {
   color: string;
   accent: string;
   isBoss?: boolean;
+  /** Kites and fires a projectile instead of closing to melee — `range` is
+   *  read as its preferred firing distance rather than melee reach. */
+  ranged?: boolean;
+  /** Blocks any hit landing on its facing side entirely — approach from
+   *  behind, or knock it around, or it just won't take frontal damage. */
+  shielded?: boolean;
 }
 
 export const MOB_TYPES: Record<string, MobType> = {
@@ -56,6 +62,23 @@ export const MOB_TYPES: Record<string, MobType> = {
     color: "#b45309",
     accent: "#78350f",
   },
+  "rabid-cur": {
+    id: "rabid-cur",
+    name: "Rabid Cur",
+    level: 4,
+    maxHp: 85,
+    damage: 17,
+    speed: 3.6,
+    expValue: 70,
+    range: 44,
+    windup: 0.16,
+    recover: 0.5,
+    aggro: 520,
+    w: 22,
+    h: 46,
+    color: "#dc2626",
+    accent: "#7f1d1d",
+  },
   "blade-wraith": {
     id: "blade-wraith",
     name: "Blade Wraith",
@@ -72,6 +95,42 @@ export const MOB_TYPES: Record<string, MobType> = {
     h: 60,
     color: "#6d28d9",
     accent: "#3b0764",
+  },
+  cultist: {
+    id: "cultist",
+    name: "Cultist",
+    level: 6,
+    maxHp: 110,
+    damage: 16,
+    speed: 1.6,
+    expValue: 95,
+    range: 240,
+    windup: 0.5,
+    recover: 0.4,
+    aggro: 420,
+    w: 24,
+    h: 56,
+    color: "#0e7490",
+    accent: "#164e63",
+    ranged: true,
+  },
+  shieldbearer: {
+    id: "shieldbearer",
+    name: "Shieldbearer",
+    level: 8,
+    maxHp: 320,
+    damage: 18,
+    speed: 1.1,
+    expValue: 140,
+    range: 56,
+    windup: 0.4,
+    recover: 0.42,
+    aggro: 320,
+    w: 30,
+    h: 62,
+    color: "#57534e",
+    accent: "#292524",
+    shielded: true,
   },
   colossus: {
     id: "colossus",
@@ -124,6 +183,24 @@ export const MOB_TYPES: Record<string, MobType> = {
     h: 80,
     color: "#7c3aed",
     accent: "#3b0a6b",
+  },
+  sentinel: {
+    id: "sentinel",
+    name: "Sentinel",
+    level: 22,
+    maxHp: 1500,
+    damage: 40,
+    speed: 1.0,
+    expValue: 700,
+    range: 320,
+    windup: 0.55,
+    recover: 0.45,
+    aggro: 550,
+    w: 36,
+    h: 78,
+    color: "#1e3a5f",
+    accent: "#0f1f33",
+    ranged: true,
   },
   sovereign: {
     id: "sovereign",
@@ -361,6 +438,27 @@ export function mobBossSpecialSpec(type: MobType): AttackSpec {
   };
 }
 
+/**
+ * Ranged mobs fire a bolt instead of swinging — the `id` is what tells
+ * spawnAttack() to push a projectile onto engine.projectiles rather than the
+ * usual melee hitbox, the same mechanism Shedim's Shadow Slash already uses.
+ */
+export function mobRangedAttackSpec(type: MobType): AttackSpec {
+  return {
+    id: "mob-ranged",
+    label: type.name,
+    kind: "lmb",
+    castTime: type.windup + type.recover,
+    activeAt: type.windup,
+    activeDuration: 0.08,
+    damageMult: 1,
+    rangeMult: 1,
+    height: type.h * 0.6,
+    knockback: 2,
+    effect: "none",
+  };
+}
+
 export interface MobSpawn {
   typeId: string;
   x: number;
@@ -404,11 +502,13 @@ const GROUND_Y = 560;
 /**
  * Builds a side-scrolling level with a single continuous floor — no chasms
  * to fall through and respawn from — plus one-way platforms floating above
- * it for verticality.
+ * it for verticality. `hazards` are floor-level damage patches — [x, w, dps,
+ * kind] — that tick anyone standing in them; omit for a plain floor.
  */
 function makeMap(
   width: number,
-  platforms: Array<[number, number, number]>
+  platforms: Array<[number, number, number]>,
+  hazards: Array<[number, number, number, Hazard["kind"]]> = []
 ): ArenaMap {
   return {
     width,
@@ -418,6 +518,7 @@ function makeMap(
     spawnA: { x: 120, y: GROUND_Y - 60 },
     spawnB: { x: width - 120, y: GROUND_Y - 60 },
     killY: 760,
+    hazards: hazards.map(([x, w, dps, kind]) => ({ x, w, y: GROUND_Y, dps, kind })),
   };
 }
 
@@ -551,6 +652,8 @@ export const STAGES: Stage[] = [
       { typeId: "brawler", x: 1500 },
       { typeId: "brawler", x: 2250 },
       { typeId: "husk", x: 2400 },
+      { typeId: "rabid-cur", x: 1150 },
+      { typeId: "rabid-cur", x: 1850 },
       // Same wandering husks/brawlers, up on the new terraces.
       { typeId: "husk", x: 400, y: 410 },
       { typeId: "brawler", x: 940, y: 400 },
@@ -562,7 +665,7 @@ export const STAGES: Stage[] = [
     id: "undercity",
     biome: "undercity",
     name: "The Undercity",
-    subtitle: "Brawlers and wraiths in the dark",
+    subtitle: "Brawlers, wraiths and cultists in the dark",
     requiredLevel: 5,
     map: makeMap(
       3000,
@@ -571,20 +674,27 @@ export const STAGES: Stage[] = [
         [800, 400, 220],
         [1740, 390, 200],
         [2580, 400, 200],
-      ])
+      ]),
+      [
+        [1000, 140, 18, "spikes"],
+        [2250, 140, 18, "spikes"],
+      ]
     ),
     spawns: [
       { typeId: "brawler", x: 420 },
+      { typeId: "rabid-cur", x: 560 },
       { typeId: "brawler", x: 640 },
       { typeId: "blade-wraith", x: 1200 },
-      { typeId: "blade-wraith", x: 1450 },
+      { typeId: "cultist", x: 1450 },
+      { typeId: "shieldbearer", x: 1900 },
       { typeId: "brawler", x: 2100 },
       { typeId: "blade-wraith", x: 2300 },
       { typeId: "colossus", x: 2450 },
-      { typeId: "blade-wraith", x: 2820 },
+      { typeId: "cultist", x: 2820 },
+      { typeId: "shieldbearer", x: 2980 },
       { typeId: "brawler", x: 300, y: 400 },
       { typeId: "blade-wraith", x: 800, y: 400 },
-      { typeId: "brawler", x: 1740, y: 390 },
+      { typeId: "cultist", x: 1740, y: 390 },
       { typeId: "blade-wraith", x: 2580, y: 400 },
     ],
   },
@@ -605,8 +715,10 @@ export const STAGES: Stage[] = [
     spawns: [
       { typeId: "colossus", x: 480 },
       { typeId: "blade-wraith", x: 660 },
+      { typeId: "shieldbearer", x: 1050 },
       { typeId: "colossus", x: 1300 },
       { typeId: "blade-wraith", x: 1500 },
+      { typeId: "shieldbearer", x: 1900 },
       { typeId: "colossus", x: 2200 },
       { typeId: "blade-wraith", x: 2400 },
       { typeId: "warden", x: 2950 },
@@ -625,9 +737,11 @@ export const STAGES: Stage[] = [
     spawns: [
       { typeId: "revenant", x: 480 },
       { typeId: "colossus", x: 700 },
+      { typeId: "sentinel", x: 1050 },
       { typeId: "revenant", x: 1300 },
       { typeId: "blade-wraith", x: 1520 },
       { typeId: "revenant", x: 2100 },
+      { typeId: "sentinel", x: 2300 },
       { typeId: "revenant", x: 2420 },
       { typeId: "colossus", x: 2700 },
       { typeId: "sovereign", x: 3300 },
@@ -647,6 +761,7 @@ export const STAGES: Stage[] = [
       { typeId: "frostfang", x: 500 },
       { typeId: "frostfang", x: 740 },
       { typeId: "revenant", x: 1300 },
+      { typeId: "sentinel", x: 1750 },
       { typeId: "frostfang", x: 1540 },
       { typeId: "frostfang", x: 2150 },
       { typeId: "sovereign", x: 2450 },
@@ -665,7 +780,11 @@ export const STAGES: Stage[] = [
     name: "The Sundered Forge",
     subtitle: "Beyond the Reach — the Forgeheart burns at the far end",
     requiredLevel: 36,
-    map: makeMap(3600, FORGE_TERRAIN.platforms),
+    map: makeMap(3600, FORGE_TERRAIN.platforms, [
+      [900, 180, 26, "lava"],
+      [2000, 180, 26, "lava"],
+      [3050, 160, 26, "lava"],
+    ]),
     spawns: [
       { typeId: "cinderwraith", x: 500 },
       { typeId: "cinderwraith", x: 740 },
@@ -709,7 +828,11 @@ export const STAGES: Stage[] = [
     name: "The Blighted Hollow",
     subtitle: "Beyond the Spire — a poisoned grove where nothing living remains",
     requiredLevel: 46,
-    map: makeMap(3600, BLIGHT_TERRAIN.platforms),
+    map: makeMap(3600, BLIGHT_TERRAIN.platforms, [
+      [850, 220, 14, "poison"],
+      [1900, 220, 14, "poison"],
+      [2950, 220, 14, "poison"],
+    ]),
     spawns: [
       { typeId: "plaguebound", x: 500 },
       { typeId: "plaguebound", x: 740 },

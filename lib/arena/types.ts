@@ -264,6 +264,9 @@ export interface Fighter {
   // --- input-derived ------------------------------------------------------
   sprinting: boolean;
   wantsUp: boolean;
+
+  /** Seconds until standing in a hazard zone deals its next tick of damage. */
+  hazardTick: number;
 }
 
 export interface FloatingText {
@@ -297,6 +300,20 @@ export interface Platform {
   oneWay: boolean;
 }
 
+/**
+ * A standing patch of environmental damage laid over a ground segment or
+ * platform — walk in and take a DPS tick every HAZARD_TICK_INTERVAL, walk
+ * (or jump) out and it stops. `y` must match the surface it sits on so only
+ * a fighter actually standing there triggers it.
+ */
+export interface Hazard {
+  x: number;
+  w: number;
+  y: number;
+  dps: number;
+  kind: "lava" | "spikes" | "poison";
+}
+
 export interface ArenaMap {
   width: number;
   height: number;
@@ -307,6 +324,7 @@ export interface ArenaMap {
   spawnB: { x: number; y: number };
   /** Falling past this Y counts as falling into the gap. */
   killY: number;
+  hazards: Hazard[];
 }
 
 export interface CombatLogEntry {
