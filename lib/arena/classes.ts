@@ -95,9 +95,9 @@ export const PARAGON: ClassDef = {
       kind: "skill",
       description:
         "Overloads his own ki and erupts, blasting everything around him in every direction and hurling it away.",
-      castTime: 0.45,
-      activeAt: 0.26,
-      activeDuration: 0.12,
+      castTime: 0.9,
+      activeAt: 0.52,
+      activeDuration: 0.24,
       damageMult: 2.2,
       rangeMult: 2.6,
       height: 84,

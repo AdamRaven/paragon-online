@@ -1566,14 +1566,14 @@ export class ArenaEngine {
           vy: Math.sin(a) * speed * 0.6,
           life: 0.34 + ring * 0.1,
           maxLife: 0.55,
-          color: ring === 0 ? "#fff4d6" : ring === 1 ? "#f9a03c" : "#c9432a",
+          color: ring === 0 ? "#eafcff" : ring === 1 ? "#22d3ee" : "#0891b2",
           size: 4 - ring,
           gravity: 0.05,
         });
       }
     }
     this.shake = Math.max(this.shake, 18);
-    this.spawnText(f.x, f.y - f.h - 12, "DETONATE", "#f9a03c", 20);
+    this.spawnText(f.x, f.y - f.h - 12, "DETONATE", "#7dd3fc", 20);
   }
 
   private spawnImpactAt(x: number, y: number, color: string) {

@@ -526,14 +526,34 @@ function getBlockSprite(): HTMLImageElement | null {
   return blockSprite.complete && blockSprite.naturalWidth > 0 ? blockSprite : null;
 }
 
-/** Paragon's Detonate: crouching charge-up into an outward ki blast. */
+/**
+ * Paragon's Detonate: crouching charge-up building through a full aura,
+ * into a released burst, the actual explosion, and a smoking recovery — 8
+ * frames on a 4x2 sheet. Like the RMB high kick, this sheet wasn't a clean
+ * hand-aligned strip: the source came with an opaque grey/white
+ * transparency-preview checkerboard baked into every pixel instead of a
+ * real alpha channel, so every frame rect here was recovered by masking
+ * out that exact checkerboard's two grey bands and despeckling the
+ * leftover noise (connected-component filtering).
+ *
+ * Every frame shares one fixed height (290px, the tallest pose — the
+ * explosion) anchored to each row's own consistent feet line, not each
+ * pose's own tight bounding box — the draw call always scales `h` to the
+ * same on-screen height (see paragonActionSprite's caller), so per-frame
+ * bounding boxes of differing heights made the character visibly grow and
+ * shrink frame to frame instead of animating at a fixed scale. Width still
+ * varies per frame (arms/effects extending sideways), same as every other
+ * hand-authored sheet here.
+ */
 const DETONATE_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 10, y: 197, w: 81, h: 125 },
-  { x: 91, y: 197, w: 75, h: 125 },
-  { x: 166, y: 197, w: 73, h: 125 },
-  { x: 239, y: 197, w: 63, h: 125 },
-  { x: 302, y: 197, w: 71, h: 125 },
-  { x: 373, y: 197, w: 119, h: 125 },
+  { x: 71, y: 44, w: 147, h: 290 },
+  { x: 306, y: 44, w: 151, h: 290 },
+  { x: 544, y: 44, w: 170, h: 290 },
+  { x: 791, y: 44, w: 192, h: 290 },
+  { x: 15, y: 364, w: 216, h: 290 },
+  { x: 258, y: 364, w: 300, h: 290 },
+  { x: 561, y: 364, w: 181, h: 290 },
+  { x: 814, y: 364, w: 171, h: 290 },
 ];
 let detonateSprite: HTMLImageElement | null = null;
 
@@ -910,6 +930,23 @@ const BIOMES: Record<string, {
  */
 const CAM_REF_Y = 120;
 
+/** Emberhold's painted street backdrop — real art, seamless left-to-right,
+ *  replacing the procedural sun/hills/skyline/lanterns for the town biome
+ *  only (see the early return in drawSky). */
+let townBgImage: HTMLImageElement | null = null;
+function getTownBgImage(): HTMLImageElement | null {
+  if (!townBgImage) {
+    if (typeof Image === "undefined") return null;
+    townBgImage = new Image();
+    townBgImage.src = "/art/town.png";
+  }
+  return townBgImage.complete && townBgImage.naturalWidth > 0 ? townBgImage : null;
+}
+/** Fraction down the source image where the street/sidewalk curb sits —
+ *  measured directly off the art — so the painted ground lines up with the
+ *  game's actual ground plane instead of characters floating over it. */
+const TOWN_BG_GROUND_FRAC = 0.846;
+
 function drawSky(
   b: CanvasRenderingContext2D,
   vw: number,
@@ -919,6 +956,26 @@ function drawSky(
   biomeId: string,
   groundWy: number
 ) {
+  if (biomeId === "town") {
+    const img = getTownBgImage();
+    if (img) {
+      // Flat sky fill first — the buildings are drawn at half their naive
+      // fit size (see scale below), so there's real sky above the rooftops
+      // to fill rather than leaving the top of the screen blank.
+      px(b, 0, 0, vw, vh, BIOMES.town.sky[0]);
+      const scale = (vh * 0.6) / img.naturalHeight;
+      const scaledW = img.naturalWidth * scale;
+      const scaledH = img.naturalHeight * scale;
+      const drawY = Math.round(groundWy - TOWN_BG_GROUND_FRAC * scaledH);
+      const shift = Math.round(camX * 0.35);
+      const off = -shift % scaledW;
+      for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {
+        b.drawImage(img, Math.round(x), drawY, Math.ceil(scaledW) + 1, Math.ceil(scaledH));
+      }
+      return;
+    }
+  }
+
   /** Screen offset for a layer moving at `speed` relative to the world. */
   const vshift = (speed: number) => Math.round((CAM_REF_Y - camY) * speed);
   const B = BIOMES[biomeId] ?? BIOMES.keep;

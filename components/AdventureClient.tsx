@@ -10,7 +10,6 @@ import { DevLevelTools } from "@/components/DevTools";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { MapPanel } from "@/components/MapPanel";
-import { StageMinimap, type MinimapData } from "@/components/StageMinimap";
 import { BestiaryPanel } from "@/components/BestiaryPanel";
 import { BlacksmithPanel } from "@/components/BlacksmithPanel";
 import { BountyBoard } from "@/components/BountyBoard";
@@ -29,7 +28,6 @@ import {
 } from "@/components/TutorialOverlay";
 import {
   MAX_PLUS,
-  RARITY_META,
   STONE_PRICE,
   STORAGE_BASE_CAP,
   STORAGE_EXPANSION_SIZE,
@@ -55,7 +53,6 @@ import {
   ACHIEVEMENTS,
   checkNewAchievements,
   getAchievement,
-  nearestAchievement,
   unlockedAuras,
 } from "@/lib/arena/achievements";
 import { CLASSES, getClass } from "@/lib/arena/classes";
@@ -66,7 +63,7 @@ import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
 import { emptyIntent, type Intent } from "@/lib/arena/engine";
 import { ArenaInput } from "@/lib/arena/input";
 import { loadCustomBindings } from "@/lib/arena/keybinds";
-import { MOB_TYPES, STAGES } from "@/lib/arena/mobs";
+import { STAGES } from "@/lib/arena/mobs";
 import {
   BASE_STAT,
   DIFFICULTY_META,
@@ -117,10 +114,6 @@ export function AdventureClient() {
   const [dailyChallenge, setDailyChallenge] = useState({ time: 0, cleared: false });
   /** Sundered Crucible only — this run's rolled modifiers. */
   const [crucibleAffixes, setCrucibleAffixes] = useState<CrucibleAffix[]>([]);
-  /** Every non-town stage — player/mob positions along the stage, for the
-   *  progress bar under the camp HUD. Null in town, where there's nothing
-   *  to show. */
-  const [minimap, setMinimap] = useState<MinimapData | null>(null);
   /** First-run quest banner: sticky once true, never reset by leaving town. */
   const [visitedTown, setVisitedTown] = useState(false);
   const [showRunComplete, setShowRunComplete] = useState(false);
@@ -267,27 +260,6 @@ export function AdventureClient() {
           setDailyChallenge({
             time: engine.dailyChallengeTime,
             cleared: engine.dailyChallengeCleared,
-          });
-        }
-        if (engine.stage.isTown) {
-          setMinimap(null);
-        } else {
-          setMinimap({
-            mapWidth: engine.map.width,
-            playerX: engine.player.x,
-            mobs: engine.fighters
-              .filter((f) => f.isMob)
-              .map((f) => ({
-                x: f.x,
-                boss: !!MOB_TYPES[f.mobTypeId ?? ""]?.isBoss,
-                elite: !!f.elite,
-                dead: f.state === "dead",
-              })),
-            loot: engine.lootDrops.map((d) => ({
-              x: d.x,
-              label: itemName(d.item),
-              color: RARITY_META[d.item.rarity].color,
-            })),
           });
         }
         const newAchievements = checkNewAchievements(engine.save);
@@ -810,27 +782,9 @@ export function AdventureClient() {
       )}
 
       {/* Grouped so a wrapped camp-bar (many buttons, narrow window) pushes
-          the minimap/achievement banner up instead of sliding underneath
-          them — see the .campaign-bottom-stack comment in globals.css. */}
+          the console up instead of sliding underneath it — see the
+          .campaign-bottom-stack comment in globals.css. */}
       <div className="campaign-bottom-stack">
-        {(() => {
-          const nearest = nearestAchievement(live);
-          if (!nearest) return null;
-          return (
-            <div className="almost-there">
-              <span>Almost there: {nearest.achievement.name}</span>
-              <div className="bar hpbar">
-                <div className="bar-fill" style={{ width: `${Math.min(100, nearest.pct * 100)}%` }} />
-                <div className="bar-text">
-                  {Math.min(nearest.current, nearest.goal)} / {nearest.goal}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {minimap && <StageMinimap data={minimap} />}
-
         {/* One console: skills stacked directly above the XP/gold/nav row,
             inside a single bordered window instead of two stacked panels. */}
         <div className="camp-console">

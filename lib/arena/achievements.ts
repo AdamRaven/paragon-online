@@ -182,20 +182,3 @@ export function unlockedAuras(save: AdventureSave): typeof AURA_UNLOCKS {
   return AURA_UNLOCKS.filter((a) => unlocked.has(a.achievementId));
 }
 
-/** The not-yet-unlocked achievement closest to completion, for the
- *  "almost there" widget — only considers achievements with a meaningful
- *  numeric progress, so a binary one (Ascend once) never crowds it out. */
-export function nearestAchievement(
-  save: AdventureSave
-): { achievement: Achievement; current: number; goal: number; pct: number } | null {
-  const already = new Set(save.achievements ?? []);
-  let best: { achievement: Achievement; current: number; goal: number; pct: number } | null = null;
-  for (const a of ACHIEVEMENTS) {
-    if (already.has(a.id) || !a.progress) continue;
-    const { current, goal } = a.progress(save);
-    if (current >= goal) continue; // completes next tick's checkNewAchievements pass
-    const pct = goal > 0 ? current / goal : 0;
-    if (!best || pct > best.pct) best = { achievement: a, current, goal, pct };
-  }
-  return best;
-}
