@@ -162,10 +162,6 @@ export interface Fighter {
   /** Cosmetic-only rim-glow override, unlocked via achievements and set from
    *  AdventureSave.auraColor in applyProgression — never touches combat. */
   auraOverride?: string;
-  /** Mirrors AdventureSave.fishing on the player's own fighter, set directly
-   *  by toggleFishing — purely cosmetic (draws the rod/line), never touches
-   *  combat or movement. */
-  fishing?: boolean;
   level: number;
   expValue: number;
   spawnX: number;

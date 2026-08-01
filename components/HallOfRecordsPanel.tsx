@@ -38,7 +38,6 @@ function rowsFor(save: AdventureSave): Array<{ label: string; value: number; dis
       display: `${(save.achievements ?? []).length} / ${ACHIEVEMENTS.length}`,
     },
     { label: "Gold on hand", value: save.gold, display: `${save.gold}` },
-    { label: "Fish caught", value: save.fishCaught ?? 0, display: `${save.fishCaught ?? 0}` },
   ];
 }
 

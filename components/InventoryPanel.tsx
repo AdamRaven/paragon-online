@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ItemIcon } from "@/components/ItemIcon";
 import {
@@ -318,24 +318,37 @@ function SlotCard({
   );
 }
 
-export function InventoryPanel({
+export const InventoryPanel = memo(function InventoryPanel({
   save,
   onEquip,
   onUnequip,
   onClose,
 }: {
   save: AdventureSave;
+  /** Bumped on every mutation (see AdventureClient's `mutate`) — `save` is
+   *  the engine's live object and never changes reference on its own, so
+   *  this is what lets React.memo know real data changed vs. an unrelated
+   *  parent re-render (e.g. the ~15Hz combat HUD tick). */
+  rev: number;
   onEquip: (item: Item) => void;
   onUnequip: (slot: EquipSlot) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"gear" | "trash">("gear");
-  const gear = withUpgradesFirst(
-    save.inventory.filter((i) => base(i.baseId).kind !== "trash"),
-    save
+  const gear = useMemo(
+    () =>
+      withUpgradesFirst(
+        save.inventory.filter((i) => base(i.baseId).kind !== "trash"),
+        save
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [save.inventory, save.equipped]
   );
-  const trash = save.inventory.filter((i) => base(i.baseId).kind === "trash");
-  const trashWorth = trash.reduce((n, i) => n + itemValue(i), 0);
+  const trash = useMemo(
+    () => save.inventory.filter((i) => base(i.baseId).kind === "trash"),
+    [save.inventory]
+  );
+  const trashWorth = useMemo(() => trash.reduce((n, i) => n + itemValue(i), 0), [trash]);
   const list = tab === "gear" ? gear : trash;
 
   return (
@@ -422,4 +435,4 @@ export function InventoryPanel({
       </div>
     </div>
   );
-}
+});

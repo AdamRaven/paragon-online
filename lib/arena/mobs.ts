@@ -557,10 +557,10 @@ export interface Stage {
   vendorX?: number;
   /** The bank keeper: stores items outside the backpack. */
   bankX?: number;
-  /** Center of the fishing lake — stand near it and press E to fish for a
-   *  slow, passive trickle of gold. See AdventureEngine.nearLake/toggleFishing. */
+  /** Center of the town's decorative lake — purely ambient scenery, see
+   *  render.ts. */
   lakeX?: number;
-  /** Half-width of the lake's water rendering and its interaction zone. */
+  /** Half-width of the lake's water rendering. */
   lakeWidth?: number;
   /** Drives the backdrop the renderer paints for this stage. */
   biome: Biome;

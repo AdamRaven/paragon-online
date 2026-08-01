@@ -2,7 +2,7 @@ import { getClass, skillOf } from "./classes";
 import { DT, GRAVITY, MAX_FALL_SPEED, WALK_SPEED } from "./constants";
 import { ArenaEngine, emptyIntent, type ArenaCallbacks, type Intent } from "./engine";
 import { MOB_TYPES, getStage, mobAttackSpec, type MobType, type Stage } from "./mobs";
-import { base, itemName, itemValue, makeItem, RARITY_META, rollDrops, type Item, type Rarity } from "./items";
+import { base, itemName, itemValue, RARITY_META, rollDrops, type Item } from "./items";
 import { bountyComplete, bountyReward, ensureDailyBounty } from "./bounties";
 import { claimDailyLogin } from "./streak";
 import { ensureWeeklyTrack } from "./weekly";
@@ -111,27 +111,6 @@ const DIFFICULTY_MULT: Record<Difficulty, { hp: number; damage: number; loot: nu
 const IDLE_CAP_MS = 8 * 60 * 60 * 1000;
 const IDLE_GOLD_PER_MINUTE = 2;
 
-/** The town lake: an explicit, opt-in version of the same idea, toggled at
- *  a fixed spot rather than automatic — see AdventureEngine.toggleFishing.
- *  Wider than the lake's own half-width (130) so the whole visible pool is
- *  interactive with a little margin, rather than only its exact center. */
-const FISH_INTERACT_RADIUS = 150;
-const FISH_CAP_MS = 10 * 60 * 60 * 1000;
-/** One catch a minute, no more, no less — a fixed cadence rather than a
- *  probability roll, so "leave it running for an hour" has a predictable
- *  payout to plan around. Only the *type* of fish is random. */
-const FISH_CATCH_INTERVAL_MS = 60 * 1000;
-/** Each species is always caught at the same fixed rarity, so its value
- *  (see items.ts) gets the same multiplier a rolled weapon of that rarity
- *  would — an Ancient Leviathan is legendary-tier money on purpose, the
- *  rare "worth actually leaving this running for" payout. */
-const FISH_POOL: Array<{ id: string; rarity: Rarity; weight: number }> = [
-  { id: "minnow", rarity: "common", weight: 65 },
-  { id: "river-trout", rarity: "uncommon", weight: 22 },
-  { id: "golden-carp", rarity: "rare", weight: 9 },
-  { id: "storm-pike", rarity: "epic", weight: 3 },
-  { id: "ancient-leviathan", rarity: "legendary", weight: 1 },
-];
 
 /** The Sundered Crucible's rotating modifiers — two rolled at random on
  *  every entry (and every death), layered on top of Survival's wave engine
@@ -359,7 +338,6 @@ export class AdventureEngine extends ArenaEngine {
     p.hp = Math.min(p.maxHp, p.hp + Math.max(0, d.maxHp - prevMax));
     p.mana = Math.min(p.mana, p.maxMana);
     p.auraOverride = this.save.auraColor;
-    p.fishing = this.save.fishing;
   }
 
   /** True when the player is close enough to the blacksmith to trade. */
@@ -380,12 +358,6 @@ export class AdventureEngine extends ArenaEngine {
     return Math.abs(this.player.x - this.stage.bankX) < 90;
   }
 
-  /** True when standing close enough to the lake to start fishing. */
-  get nearLake(): boolean {
-    if (!this.stage.isTown || this.stage.lakeX === undefined) return false;
-    return Math.abs(this.player.x - this.stage.lakeX) < FISH_INTERACT_RADIUS;
-  }
-
   get inTown(): boolean {
     return !!this.stage.isTown;
   }
@@ -401,72 +373,6 @@ export class AdventureEngine extends ArenaEngine {
     this.save.autoGrind = !this.save.autoGrind;
     this.autoGrindBrain = this.save.autoGrind ? new CombatBrain() : null;
     this.acb.onLog(this.save.autoGrind ? "Auto-Grind engaged." : "Auto-Grind stopped.", "info");
-  }
-
-  /**
-   * Starting requires standing at the lake; stopping always works from
-   * anywhere. While fishing, a fish lands in the backpack about once a
-   * minute of real elapsed time — see collectFishing — so it keeps paying
-   * out whether the tab is foregrounded, backgrounded, or the player's just
-   * stepped away, right up to FISH_CAP_MS.
-   */
-  toggleFishing() {
-    if (this.save.fishing) {
-      this.collectFishing();
-      this.save.fishing = false;
-      this.player.fishing = false;
-      this.acb.onLog("You stop fishing.", "info");
-      return;
-    }
-    if (!this.nearLake) return;
-    this.save.fishing = true;
-    this.player.fishing = true;
-    this.save.lastFishTick = Date.now();
-    this.acb.onLog(
-      "You settle in to fish. About one catch a minute, even away from the keyboard — sell them at the blacksmith.",
-      "good"
-    );
-  }
-
-  /** Picks a fish species — common minnows most of the time, a genuinely
-   *  valuable golden carp rarely, so there's still a "nice" moment to an
-   *  otherwise predictable background activity. */
-  private catchFish(): Item {
-    const total = FISH_POOL.reduce((n, f) => n + f.weight, 0);
-    let r = Math.random() * total;
-    for (const f of FISH_POOL) {
-      if (r < f.weight) return makeItem(f.id, f.rarity);
-      r -= f.weight;
-    }
-    return makeItem(FISH_POOL[0].id, FISH_POOL[0].rarity);
-  }
-
-  /** Grants one fish per full minute of real time elapsed since the last
-   *  collection, capped at FISH_CAP_MS worth at once. Cheap no-op when not
-   *  fishing; called every tick so it self-corrects regardless of how
-   *  sparsely the tab actually runs frames while backgrounded. Anchors
-   *  lastFishTick to `now` (minus whatever fractional minute is still
-   *  owed) rather than advancing it step by step, so a days-long gap can't
-   *  re-trigger the same capped payout on every subsequent tick. */
-  private collectFishing() {
-    if (!this.save.fishing || !this.save.lastFishTick) return;
-    const now = Date.now();
-    const elapsed = Math.min(now - this.save.lastFishTick, FISH_CAP_MS);
-    const catches = Math.floor(elapsed / FISH_CATCH_INTERVAL_MS);
-    if (catches <= 0) return;
-    this.save.lastFishTick = now - (elapsed % FISH_CATCH_INTERVAL_MS);
-    const caught: Item[] = [];
-    for (let i = 0; i < catches; i++) caught.push(this.catchFish());
-    this.save.inventory.push(...caught);
-    this.save.fishCaught = (this.save.fishCaught ?? 0) + catches;
-    this.acb.onLoot(caught);
-    // The jackpot catch gets its own moment instead of blending into the
-    // usual loot-pickup log line.
-    if (caught.some((i) => i.rarity === "legendary")) {
-      this.acb.onLog("The line goes taut — you've hooked an Ancient Leviathan!", "big");
-      this.burstAt(this.player.x, this.player.y - this.player.h * 0.6, "#ff8a3d", 26);
-      this.shake = Math.max(this.shake, 8);
-    }
   }
 
   private spawnStageMobs() {
@@ -582,7 +488,8 @@ export class AdventureEngine extends ArenaEngine {
     for (const mob of this.fighters) {
       if (!mob.isMob) continue;
       const brain = this.mobBrains.get(mob.id);
-      if (brain) brain.cache = brain.think(mob, this.player, this);
+      // think() mutates brain.cache in place and returns the same reference.
+      if (brain) brain.think(mob, this.player, this);
     }
 
     this.stepAll(effectivePlayerIntent, (f) => this.mobBrains.get(f.id)?.cache ?? emptyIntent());
@@ -592,7 +499,6 @@ export class AdventureEngine extends ArenaEngine {
     if (this.stage.survival) this.updateSurvival();
     if (this.stage.bossRush) this.updateBossRush();
     this.updateRifts();
-    this.collectFishing();
   }
 
   /** Spawns the next boss in BOSS_RUSH_ORDER once the arena is clear, healing
@@ -741,13 +647,19 @@ export class AdventureEngine extends ArenaEngine {
   private updateLootDrops() {
     if (!this.lootDrops.length) return;
     const player = this.player;
-    const remaining: LootDrop[] = [];
-    for (const drop of this.lootDrops) {
+    // Reverse-iterate and splice in place — same pattern as
+    // hitboxes/projectiles/particles below, rather than rebuilding the whole
+    // array every tick for the drop's entire 90s lifetime.
+    for (let i = this.lootDrops.length - 1; i >= 0; i--) {
+      const drop = this.lootDrops[i];
       drop.age += DT;
       // Plenty of time to walk back for anything you want, but a long
       // session of farming without ever backtracking for junk shouldn't
       // leave an ever-growing pile of drops to simulate and draw forever.
-      if (drop.age > LOOT_DESPAWN_TIME) continue;
+      if (drop.age > LOOT_DESPAWN_TIME) {
+        this.lootDrops.splice(i, 1);
+        continue;
+      }
       if (!drop.onGround) {
         drop.vy = Math.min(MAX_FALL_SPEED, drop.vy + GRAVITY);
         drop.x += drop.vx;
@@ -773,12 +685,9 @@ export class AdventureEngine extends ArenaEngine {
             this.save.uniquesFound.push(drop.item.baseId);
           }
         }
-        continue; // picked up — don't keep it
+        this.lootDrops.splice(i, 1); // picked up — don't keep it
       }
-
-      remaining.push(drop);
     }
-    this.lootDrops = remaining;
   }
 
   private handleDeaths() {
@@ -913,8 +822,9 @@ export class AdventureEngine extends ArenaEngine {
       }
     }
     if (toRemove.length) {
+      const removeIds = new Set(toRemove.map((f) => f.id));
       for (const f of toRemove) this.mobBrains.delete(f.id);
-      this.fighters = this.fighters.filter((f) => !toRemove.includes(f));
+      this.fighters = this.fighters.filter((f) => !removeIds.has(f.id));
     }
   }
 
@@ -963,14 +873,6 @@ export class AdventureEngine extends ArenaEngine {
       );
       return false;
     }
-    // Leaving town (or just leaving the lake) ends the fishing session —
-    // collect whatever's owed first so nothing's lost.
-    if (this.save.fishing) {
-      this.collectFishing();
-      this.save.fishing = false;
-      this.player.fishing = false;
-    }
-
     // Auto-Grind has nothing to fight in town — turn it off on arrival.
     if (stage.isTown && this.save.autoGrind) {
       this.save.autoGrind = false;
@@ -1135,7 +1037,9 @@ class MobBrain {
   }
 
   think(self: Fighter, player: Fighter, engine: AdventureEngine): Intent {
-    const i = emptyIntent();
+    // Reuse this brain's own scratch Intent instead of allocating a new
+    // object every tick for every mob.
+    const i = emptyIntent(this.cache);
     if (self.state === "dead" || player.state === "dead") return i;
     if (
       self.knockdownTimer > 0 ||
@@ -1258,9 +1162,12 @@ class MobBrain {
  */
 class CombatBrain {
   private patrolDir: 1 | -1 = 1;
+  private cache: Intent = emptyIntent();
 
   think(engine: AdventureEngine): Intent {
-    const i = emptyIntent();
+    // Reuse the same scratch Intent every tick instead of allocating a new
+    // object — there's only ever one CombatBrain active at a time.
+    const i = emptyIntent(this.cache);
     const self = engine.player;
     if (
       self.state === "dead" ||

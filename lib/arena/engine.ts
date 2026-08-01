@@ -114,28 +114,31 @@ export interface Intent {
   special2: boolean;
 }
 
-export function emptyIntent(): Intent {
-  return {
-    moveX: 0,
-    sprint: false,
-    up: false,
-    down: false,
-    jump: false,
-    jumpHeld: false,
-    dropThrough: false,
-    lmb: false,
-    rmb: false,
-    lmbHeld: false,
-    rmbHeld: false,
-    bothHeldTime: 0,
-    q: false,
-    e: false,
-    r: false,
-    f: false,
-    shift: false,
-    special: false,
-    special2: false,
-  };
+/** Resets every field to its neutral value. Pass an existing `Intent` to
+ *  reuse it as scratch space instead of allocating a new object — brains
+ *  that run every tick for every mob do this to avoid GC churn. */
+export function emptyIntent(target?: Intent): Intent {
+  const i = target ?? ({} as Intent);
+  i.moveX = 0;
+  i.sprint = false;
+  i.up = false;
+  i.down = false;
+  i.jump = false;
+  i.jumpHeld = false;
+  i.dropThrough = false;
+  i.lmb = false;
+  i.rmb = false;
+  i.lmbHeld = false;
+  i.rmbHeld = false;
+  i.bothHeldTime = 0;
+  i.q = false;
+  i.e = false;
+  i.r = false;
+  i.f = false;
+  i.shift = false;
+  i.special = false;
+  i.special2 = false;
+  return i;
 }
 
 export interface ArenaCallbacks {
@@ -321,7 +324,7 @@ export class ArenaEngine {
 
     for (const f of this.fighters) {
       const intent = f.isPlayer ? playerIntent : intentFor(f);
-      this.updateFighter(f, intent, this.nearestFoe(f));
+      this.updateFighter(f, intent);
     }
 
     this.applyHazards();
@@ -360,7 +363,7 @@ export class ArenaEngine {
 
   // =================================================================== fighter
 
-  private updateFighter(f: Fighter, input: Intent, opponent: Fighter) {
+  private updateFighter(f: Fighter, input: Intent) {
     if (f.state === "dead") return;
 
     this.tickTimers(f);
@@ -506,18 +509,18 @@ export class ArenaEngine {
 
     // --- an attack is already running -------------------------------------
     if (f.action) {
-      this.advanceAction(f, opponent);
+      this.advanceAction(f);
       f.vx *= ATTACK_DRIFT;
       this.physics(f);
       return;
     }
 
     // --- skills ------------------------------------------------------------
-    if (input.shift && this.trySkill(f, "SHIFT", opponent)) return;
-    if (input.q && this.trySkill(f, "Q", opponent)) return;
-    if (input.e && this.trySkill(f, "E", opponent)) return;
-    if (input.r && this.trySkill(f, "R", opponent)) return;
-    if (input.f && this.trySkill(f, "F", opponent)) return;
+    if (input.shift && this.trySkill(f, "SHIFT")) return;
+    if (input.q && this.trySkill(f, "Q")) return;
+    if (input.e && this.trySkill(f, "E")) return;
+    if (input.r && this.trySkill(f, "R")) return;
+    if (input.f && this.trySkill(f, "F")) return;
 
     // --- basic attacks -----------------------------------------------------
     const cls = getClass(f.classId);
@@ -534,7 +537,7 @@ export class ArenaEngine {
               ? mobRangedAttackSpec(type)
               : mobAttackSpec(type);
         this.startAttack(f, spec);
-        this.advanceAction(f, opponent);
+        this.advanceAction(f);
         this.physics(f);
         return;
       }
@@ -553,13 +556,13 @@ export class ArenaEngine {
 
     if (input.lmb) {
       if (!this.pushComboInput(f, "lmb")) this.startAttack(f, cls.lmb);
-      this.advanceAction(f, opponent);
+      this.advanceAction(f);
       this.physics(f);
       return;
     }
     if (input.rmb) {
       if (!this.pushComboInput(f, "rmb")) this.startAttack(f, cls.rmb);
-      this.advanceAction(f, opponent);
+      this.advanceAction(f);
       this.physics(f);
       return;
     }
@@ -713,7 +716,7 @@ export class ArenaEngine {
     f.stateTime = 0;
   }
 
-  private advanceAction(f: Fighter, opponent: Fighter) {
+  private advanceAction(f: Fighter) {
     // A combo can consume the input and clear the action outright.
     if (!f.action) return;
     const a = f.action;
@@ -721,7 +724,7 @@ export class ArenaEngine {
 
     if (!a.spawned && a.elapsed >= a.spec.activeAt) {
       a.spawned = true;
-      this.spawnAttack(f, a, opponent);
+      this.spawnAttack(f, a);
     }
     if (a.elapsed >= a.spec.castTime) {
       f.action = null;
@@ -730,7 +733,7 @@ export class ArenaEngine {
   }
 
   /** Turns an action into a hitbox (or projectile) with its combo effect. */
-  private spawnAttack(f: Fighter, a: ActiveAction, opponent: Fighter) {
+  private spawnAttack(f: Fighter, a: ActiveAction) {
     const cls = getClass(f.classId);
     const spec = a.spec;
 
@@ -880,8 +883,6 @@ export class ArenaEngine {
       this.cb.onLog(`${f.name}'s Void Blast detonates!`, "big");
       this.shake = Math.max(this.shake, 10);
     }
-
-    void opponent;
   }
 
   private computeDamage(f: Fighter, spec: AttackSpec): number {
@@ -893,7 +894,7 @@ export class ArenaEngine {
     return dmg;
   }
 
-  private trySkill(f: Fighter, slot: string, opponent: Fighter): boolean {
+  private trySkill(f: Fighter, slot: string): boolean {
     const cls = getClass(f.classId);
     const skill = skillOf(cls, slot);
     if (!skill) return false;
@@ -963,7 +964,7 @@ export class ArenaEngine {
     };
     f.state = "attack";
     f.stateTime = 0;
-    this.advanceAction(f, opponent);
+    this.advanceAction(f);
     if (f.isPlayer) this.cb.onLog(`${skill.label}!`, "good");
     return true;
   }
@@ -982,15 +983,15 @@ export class ArenaEngine {
         if (owner && owner.team === target.team) continue;
         if (!overlapsFighter(hb, target)) continue;
         hb.hit.add(target.id);
-        this.applyHit(hb, target);
+        this.applyHit(hb, target, owner);
       }
 
       if (hb.life <= 0) this.hitboxes.splice(i, 1);
     }
   }
 
-  private applyHit(hb: Hitbox, target: Fighter) {
-    const attacker = this.fighters.find((f) => f.id === hb.ownerId);
+  private applyHit(hb: Hitbox, target: Fighter, resolvedAttacker?: Fighter) {
+    const attacker = resolvedAttacker ?? this.fighters.find((f) => f.id === hb.ownerId);
     if (!attacker) return;
 
     // Knockdown, get-up grace, dash and respawn all grant full immunity.
@@ -1348,14 +1349,20 @@ export class ArenaEngine {
       p.life -= DT;
 
       let consumed = false;
+      const bx = p.x - p.w / 2;
+      const by = p.y - p.h / 2;
       for (const target of this.fighters) {
         if (target.id === p.ownerId || target.state === "dead") continue;
+        // Cheap plain-number overlap check first — only allocate the actual
+        // Hitbox (and its `hit` Set) once we know this projectile connects,
+        // instead of building one per candidate fighter every tick.
+        if (!aabbOverlapsFighter(bx, by, p.w, p.h, target)) continue;
         const box: Hitbox = {
           ownerId: p.ownerId,
           sourceId: p.label,
           kind: "skill",
-          x: p.x - p.w / 2,
-          y: p.y - p.h / 2,
+          x: bx,
+          y: by,
           w: p.w,
           h: p.h,
           damage: p.damage,
@@ -1367,11 +1374,9 @@ export class ArenaEngine {
           label: p.label,
           facing: p.vx >= 0 ? 1 : -1,
         };
-        if (overlapsFighter(box, target)) {
-          this.applyHit(box, target);
-          consumed = true;
-          break;
-        }
+        this.applyHit(box, target, this.fighters.find((f) => f.id === p.ownerId));
+        consumed = true;
+        break;
       }
 
       if (consumed || p.life <= 0 || p.x < 0 || p.x > this.map.width) {
@@ -1810,10 +1815,14 @@ function clamp(v: number, min: number, max: number) {
 }
 
 /** Hitboxes are axis-aligned; fighters are a box around (x, y=feet). */
-function overlapsFighter(hb: Hitbox, f: Fighter): boolean {
+/** Plain-number AABB check, shared by overlapsFighter and any caller that
+ *  wants to test a hit before actually constructing a Hitbox object. */
+function aabbOverlapsFighter(x: number, y: number, w: number, h: number, f: Fighter): boolean {
   const fx = f.x - f.w / 2;
   const fy = f.y - f.h;
-  return (
-    hb.x < fx + f.w && hb.x + hb.w > fx && hb.y < fy + f.h && hb.y + hb.h > fy
-  );
+  return x < fx + f.w && x + w > fx && y < fy + f.h && y + h > fy;
+}
+
+function overlapsFighter(hb: Hitbox, f: Fighter): boolean {
+  return aabbOverlapsFighter(hb.x, hb.y, hb.w, hb.h, f);
 }

@@ -119,7 +119,6 @@ export function AdventureClient() {
   const [visitedTown, setVisitedTown] = useState(false);
   const [showRunComplete, setShowRunComplete] = useState(false);
   /** True while standing near the town lake — drives the "Press E to fish" prompt. */
-  const [nearLake, setNearLake] = useState(false);
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [panel, setPanel] = useState<
     | "none"
@@ -257,12 +256,6 @@ export function AdventureClient() {
           });
         }
         if (engine.stage.crucible) setCrucibleAffixes(engine.crucibleAffixes);
-        // Fishing earnings tick up silently on the engine's own save object —
-        // nothing else re-renders while it's happening, so force a refresh
-        // here or the gold counter would only ever catch up after some
-        // unrelated action.
-        if (engine.save.fishing) setSave({ ...engine.save });
-        setNearLake(engine.nearLake);
         if (engine.stage.isTown) {
           setMinimap(null);
         } else {
@@ -363,8 +356,6 @@ export function AdventureClient() {
         } else if (eng.nearBank) {
           setRev((r) => r + 1);
           setPanel((p) => (p === "storage" ? "none" : "storage"));
-        } else if (eng.nearLake || eng.save.fishing) {
-          toggleFishing();
         }
       } else if (e.code === "Escape") {
         setPanel((p) => {
@@ -391,7 +382,11 @@ export function AdventureClient() {
     setExp((p) => ({ ...p, points: e.save.statPoints }));
   };
 
-  const mutate = (fn: (e: AdventureEngine) => void) => {
+  // Stable identity (empty deps — engineRef is a ref, setSave/setRev are
+  // setters) so handlers built on top of it via useCallback stay stable
+  // too, which lets memoized panels (Inventory/Blacksmith/Vendor/Storage)
+  // actually skip re-rendering on the ~15Hz hud tick instead of every time.
+  const mutate = useCallback((fn: (e: AdventureEngine) => void) => {
     const e = engineRef.current;
     if (!e) return;
     fn(e);
@@ -399,7 +394,7 @@ export function AdventureClient() {
     saveAdventure(e.save);
     setSave({ ...e.save });
     setRev((r) => r + 1);
-  };
+  }, []);
 
   const ascendNow = () => {
     const e = engineRef.current;
@@ -429,8 +424,9 @@ export function AdventureClient() {
       e.save.auraColor = color;
     });
 
+  const closePanel = useCallback(() => setPanel("none"), []);
+
   const claimBounty = () => mutate((e) => e.claimBounty());
-  const toggleFishing = () => mutate((e) => e.toggleFishing());
   const toggleAutoGrind = () => mutate((e) => e.toggleAutoGrind());
   const claimWeekly = (index: number) => mutate((e) => claimWeeklyMilestone(e.save, index));
 
@@ -457,206 +453,248 @@ export function AdventureClient() {
       e.save.exp = 0;
     });
 
-  const equip = (item: Item) =>
-    mutate((e) => {
-      const family = base(item.baseId).slot;
-      if (!family) return;
-      // Earrings and rings share 2 physical slots — drop into whichever is
-      // empty, or bump the weaker of the two if both are already filled.
-      const slots = familySlots(family);
-      const target =
-        slots.find((s) => !e.save.equipped[s]) ??
-        slots.reduce((worst, s) => {
-          const w = e.save.equipped[worst];
-          const c = e.save.equipped[s];
-          return w && c && itemScore(c) < itemScore(w) ? s : worst;
-        }, slots[0]);
-      const current = e.save.equipped[target];
-      e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
-      if (current) e.save.inventory.push(current);
-      e.save.equipped[target] = item;
-      pushLog(`Equipped ${itemName(item)}.`, "good");
-    });
+  const equip = useCallback(
+    (item: Item) =>
+      mutate((e) => {
+        const family = base(item.baseId).slot;
+        if (!family) return;
+        // Earrings and rings share 2 physical slots — drop into whichever is
+        // empty, or bump the weaker of the two if both are already filled.
+        const slots = familySlots(family);
+        const target =
+          slots.find((s) => !e.save.equipped[s]) ??
+          slots.reduce((worst, s) => {
+            const w = e.save.equipped[worst];
+            const c = e.save.equipped[s];
+            return w && c && itemScore(c) < itemScore(w) ? s : worst;
+          }, slots[0]);
+        const current = e.save.equipped[target];
+        e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
+        if (current) e.save.inventory.push(current);
+        e.save.equipped[target] = item;
+        pushLog(`Equipped ${itemName(item)}.`, "good");
+      }),
+    [mutate, pushLog]
+  );
 
-  const unequip = (slot: EquipSlot) =>
-    mutate((e) => {
-      const item = e.save.equipped[slot];
-      if (!item) return;
-      e.save.inventory.push(item);
-      delete e.save.equipped[slot];
-    });
+  const unequip = useCallback(
+    (slot: EquipSlot) =>
+      mutate((e) => {
+        const item = e.save.equipped[slot];
+        if (!item) return;
+        e.save.inventory.push(item);
+        delete e.save.equipped[slot];
+      }),
+    [mutate]
+  );
 
-  const sellOne = (item: Item) =>
-    mutate((e) => {
-      const worth = itemValue(item);
-      e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
-      e.save.gold += worth;
-      setShopMsg(`Sold ${itemName(item)} for ${worth}g.`);
-      playSound("loot");
-    });
+  const sellOne = useCallback(
+    (item: Item) =>
+      mutate((e) => {
+        const worth = itemValue(item);
+        e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
+        e.save.gold += worth;
+        setShopMsg(`Sold ${itemName(item)} for ${worth}g.`);
+        playSound("loot");
+      }),
+    [mutate]
+  );
 
-  const sellAllTrash = () =>
-    mutate((e) => {
-      const trash = e.save.inventory.filter((i) => base(i.baseId).kind === "trash");
-      const worth = trash.reduce((n, i) => n + itemValue(i), 0);
-      e.save.inventory = e.save.inventory.filter((i) => base(i.baseId).kind !== "trash");
-      e.save.gold += worth;
-      setShopMsg(`Sold ${trash.length} trash items for ${worth}g.`);
-      playSound("loot");
-    });
+  const sellAllTrash = useCallback(
+    () =>
+      mutate((e) => {
+        const trash = e.save.inventory.filter((i) => base(i.baseId).kind === "trash");
+        const worth = trash.reduce((n, i) => n + itemValue(i), 0);
+        e.save.inventory = e.save.inventory.filter((i) => base(i.baseId).kind !== "trash");
+        e.save.gold += worth;
+        setShopMsg(`Sold ${trash.length} trash items for ${worth}g.`);
+        playSound("loot");
+      }),
+    [mutate]
+  );
 
   // Only unequipped gear in the backpack — equipped items live in
   // save.equipped and are never touched here, so nothing worn is at risk.
-  const sellAllGear = () =>
-    mutate((e) => {
-      const gear = e.save.inventory.filter((i) => base(i.baseId).kind !== "trash");
-      const worth = gear.reduce((n, i) => n + itemValue(i), 0);
-      e.save.inventory = e.save.inventory.filter((i) => base(i.baseId).kind === "trash");
-      e.save.gold += worth;
-      setShopMsg(`Sold ${gear.length} gear items for ${worth}g.`);
-      playSound("loot");
-    });
+  const sellAllGear = useCallback(
+    () =>
+      mutate((e) => {
+        const gear = e.save.inventory.filter((i) => base(i.baseId).kind !== "trash");
+        const worth = gear.reduce((n, i) => n + itemValue(i), 0);
+        e.save.inventory = e.save.inventory.filter((i) => base(i.baseId).kind === "trash");
+        e.save.gold += worth;
+        setShopMsg(`Sold ${gear.length} gear items for ${worth}g.`);
+        playSound("loot");
+      }),
+    [mutate]
+  );
 
-  const buyStones = (n: number) =>
-    mutate((e) => {
-      const cost = STONE_PRICE * n;
-      if (e.save.gold < cost) return;
-      e.save.gold -= cost;
-      e.save.stones += n;
-      setShopMsg(`Bought ${n} stone${n > 1 ? "s" : ""} for ${cost}g.`);
-      playSound("uiClick");
-    });
+  const buyStones = useCallback(
+    (n: number) =>
+      mutate((e) => {
+        const cost = STONE_PRICE * n;
+        if (e.save.gold < cost) return;
+        e.save.gold -= cost;
+        e.save.stones += n;
+        setShopMsg(`Bought ${n} stone${n > 1 ? "s" : ""} for ${cost}g.`);
+        playSound("uiClick");
+      }),
+    [mutate]
+  );
 
   /** Gold sink: refund every spent stat point at a per-point cost, so a
    *  respec is a real decision instead of a free do-over. */
   const RESPEC_COST_PER_POINT = 25;
-  const respec = () =>
-    mutate((e) => {
-      const s = e.save.stats;
-      const spent = s.str + s.agi + s.vit + s.foc - BASE_STAT * 4;
-      if (spent <= 0) {
-        setShopMsg("Nothing to respec.");
-        return;
-      }
-      const cost = spent * RESPEC_COST_PER_POINT;
-      if (e.save.gold < cost) {
-        setShopMsg(`Respec costs ${cost}g for ${spent} points — you don't have enough.`);
-        return;
-      }
-      e.save.gold -= cost;
-      e.save.statPoints += spent;
-      e.save.stats = { str: BASE_STAT, agi: BASE_STAT, vit: BASE_STAT, foc: BASE_STAT };
-      setShopMsg(`Respec complete — ${spent} points refunded for ${cost}g.`);
-      playSound("uiClick");
-    });
+  const respec = useCallback(
+    () =>
+      mutate((e) => {
+        const s = e.save.stats;
+        const spent = s.str + s.agi + s.vit + s.foc - BASE_STAT * 4;
+        if (spent <= 0) {
+          setShopMsg("Nothing to respec.");
+          return;
+        }
+        const cost = spent * RESPEC_COST_PER_POINT;
+        if (e.save.gold < cost) {
+          setShopMsg(`Respec costs ${cost}g for ${spent} points — you don't have enough.`);
+          return;
+        }
+        e.save.gold -= cost;
+        e.save.statPoints += spent;
+        e.save.stats = { str: BASE_STAT, agi: BASE_STAT, vit: BASE_STAT, foc: BASE_STAT };
+        setShopMsg(`Respec complete — ${spent} points refunded for ${cost}g.`);
+        playSound("uiClick");
+      }),
+    [mutate]
+  );
 
-  const buyGear = (baseId: string) =>
-    mutate((e) => {
-      const item = makeItem(baseId, "common");
-      const price = itemValue(item);
-      if (e.save.gold < price) return;
-      e.save.gold -= price;
-      e.save.inventory.push(item);
-      setShopMsg(`Bought ${itemName(item)} for ${price}g.`);
-      pushLog(`Bought ${itemName(item)}.`, "good");
-      playSound("uiClick");
-    });
+  const buyGear = useCallback(
+    (baseId: string) =>
+      mutate((e) => {
+        const item = makeItem(baseId, "common");
+        const price = itemValue(item);
+        if (e.save.gold < price) return;
+        e.save.gold -= price;
+        e.save.inventory.push(item);
+        setShopMsg(`Bought ${itemName(item)} for ${price}g.`);
+        pushLog(`Bought ${itemName(item)}.`, "good");
+        playSound("uiClick");
+      }),
+    [mutate, pushLog]
+  );
 
-  const buyFeaturedGear = () =>
-    mutate((e) => {
-      const item = makeItem(featuredBaseId(), "epic");
-      const price = itemValue(item);
-      if (e.save.gold < price) return;
-      e.save.gold -= price;
-      e.save.inventory.push(item);
-      setShopMsg(`Bought ${itemName(item)} for ${price}g.`);
-      pushLog(`Bought this week's featured ${itemName(item)}.`, "good");
-      playSound("uiClick");
-    });
+  const buyFeaturedGear = useCallback(
+    () =>
+      mutate((e) => {
+        const item = makeItem(featuredBaseId(), "epic");
+        const price = itemValue(item);
+        if (e.save.gold < price) return;
+        e.save.gold -= price;
+        e.save.inventory.push(item);
+        setShopMsg(`Bought ${itemName(item)} for ${price}g.`);
+        pushLog(`Bought this week's featured ${itemName(item)}.`, "good");
+        playSound("uiClick");
+      }),
+    [mutate, pushLog]
+  );
 
-  const storeItem = (item: Item) =>
-    mutate((e) => {
-      const cap = e.save.storageCap ?? STORAGE_BASE_CAP;
-      if (e.save.storage.length >= cap) {
-        setShopMsg(`Storage is full (${cap}). Buy more room from the bank keeper.`);
-        return;
-      }
-      e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
-      e.save.storage.push(item);
-    });
+  const storeItem = useCallback(
+    (item: Item) =>
+      mutate((e) => {
+        const cap = e.save.storageCap ?? STORAGE_BASE_CAP;
+        if (e.save.storage.length >= cap) {
+          setShopMsg(`Storage is full (${cap}). Buy more room from the bank keeper.`);
+          return;
+        }
+        e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);
+        e.save.storage.push(item);
+      }),
+    [mutate]
+  );
 
-  const expandStorage = () =>
-    mutate((e) => {
-      const cap = e.save.storageCap ?? STORAGE_BASE_CAP;
-      const cost = storageExpansionCost(cap);
-      if (e.save.gold < cost) {
-        setShopMsg(`Expanding storage costs ${cost}g — you don't have enough.`);
-        return;
-      }
-      e.save.gold -= cost;
-      e.save.storageCap = cap + STORAGE_EXPANSION_SIZE;
-      setShopMsg(`Storage expanded to ${e.save.storageCap} slots.`);
-      playSound("uiClick");
-    });
+  const expandStorage = useCallback(
+    () =>
+      mutate((e) => {
+        const cap = e.save.storageCap ?? STORAGE_BASE_CAP;
+        const cost = storageExpansionCost(cap);
+        if (e.save.gold < cost) {
+          setShopMsg(`Expanding storage costs ${cost}g — you don't have enough.`);
+          return;
+        }
+        e.save.gold -= cost;
+        e.save.storageCap = cap + STORAGE_EXPANSION_SIZE;
+        setShopMsg(`Storage expanded to ${e.save.storageCap} slots.`);
+        playSound("uiClick");
+      }),
+    [mutate]
+  );
 
-  const retrieveItem = (item: Item) =>
-    mutate((e) => {
-      e.save.storage = e.save.storage.filter((i) => i.uid !== item.uid);
-      e.save.inventory.push(item);
-    });
+  const retrieveItem = useCallback(
+    (item: Item) =>
+      mutate((e) => {
+        e.save.storage = e.save.storage.filter((i) => i.uid !== item.uid);
+        e.save.inventory.push(item);
+      }),
+    [mutate]
+  );
 
-  const enhance = (item: Item) =>
-    mutate((e) => {
-      if (e.save.stones <= 0) {
-        setShopMsg("You have no enhancement stones.");
-        return;
-      }
-      e.save.stones -= 1;
-      const r = attemptEnhance(item);
-      if (r.ok) {
-        setShopMsg(`Success! ${base(item.baseId).name} is now +${r.to}.`);
-        pushLog(`${base(item.baseId).name} enhanced to +${r.to}!`, "big");
-        playSound("enhanceSuccess");
-      } else if (r.downgraded) {
-        setShopMsg(`Failed — it dropped to +${r.to}.`);
-        pushLog(`Enhancement failed: down to +${r.to}.`, "bad");
-        playSound("enhanceFail");
-      } else {
-        setShopMsg(`Failed, but it held at +${r.to}.`);
-        playSound("enhanceFail");
-      }
-    });
+  const enhance = useCallback(
+    (item: Item) =>
+      mutate((e) => {
+        if (e.save.stones <= 0) {
+          setShopMsg("You have no enhancement stones.");
+          return;
+        }
+        e.save.stones -= 1;
+        const r = attemptEnhance(item);
+        if (r.ok) {
+          setShopMsg(`Success! ${base(item.baseId).name} is now +${r.to}.`);
+          pushLog(`${base(item.baseId).name} enhanced to +${r.to}!`, "big");
+          playSound("enhanceSuccess");
+        } else if (r.downgraded) {
+          setShopMsg(`Failed — it dropped to +${r.to}.`);
+          pushLog(`Enhancement failed: down to +${r.to}.`, "bad");
+          playSound("enhanceFail");
+        } else {
+          setShopMsg(`Failed, but it held at +${r.to}.`);
+          playSound("enhanceFail");
+        }
+      }),
+    [mutate, pushLog]
+  );
 
   /** Fires up to `times` attempts back to back, stopping early if it maxes
    * out or runs out of stones, and reports one rolled-up summary instead of
    * spamming a log line per swing. */
-  const enhanceMany = (item: Item, times: number) =>
-    mutate((e) => {
-      let attempts = 0;
-      let successes = 0;
-      let downgrades = 0;
-      while (attempts < times && e.save.stones > 0 && item.plus < MAX_PLUS) {
-        e.save.stones -= 1;
-        attempts += 1;
-        const r = attemptEnhance(item);
-        if (r.ok) successes += 1;
-        else if (r.downgraded) downgrades += 1;
-      }
-      if (attempts === 0) {
-        setShopMsg(
-          item.plus >= MAX_PLUS
-            ? `${base(item.baseId).name} is already maxed.`
-            : "You have no enhancement stones."
-        );
-        return;
-      }
-      const summary = `${successes}/${attempts} succeeded — ${base(item.baseId).name} is now +${item.plus}${
-        downgrades ? ` (${downgrades} downgrade${downgrades > 1 ? "s" : ""})` : ""
-      }.`;
-      setShopMsg(summary);
-      pushLog(summary, successes > 0 ? "big" : "bad");
-      playSound(successes > 0 ? "enhanceSuccess" : "enhanceFail");
-    });
+  const enhanceMany = useCallback(
+    (item: Item, times: number) =>
+      mutate((e) => {
+        let attempts = 0;
+        let successes = 0;
+        let downgrades = 0;
+        while (attempts < times && e.save.stones > 0 && item.plus < MAX_PLUS) {
+          e.save.stones -= 1;
+          attempts += 1;
+          const r = attemptEnhance(item);
+          if (r.ok) successes += 1;
+          else if (r.downgraded) downgrades += 1;
+        }
+        if (attempts === 0) {
+          setShopMsg(
+            item.plus >= MAX_PLUS
+              ? `${base(item.baseId).name} is already maxed.`
+              : "You have no enhancement stones."
+          );
+          return;
+        }
+        const summary = `${successes}/${attempts} succeeded — ${base(item.baseId).name} is now +${item.plus}${
+          downgrades ? ` (${downgrades} downgrade${downgrades > 1 ? "s" : ""})` : ""
+        }.`;
+        setShopMsg(summary);
+        pushLog(summary, successes > 0 ? "big" : "bad");
+        playSound(successes > 0 ? "enhanceSuccess" : "enhanceFail");
+      }),
+    [mutate, pushLog]
+  );
 
   const travel = (index: number) => {
     const e = engineRef.current;
@@ -750,12 +788,6 @@ export function AdventureClient() {
             </small>
           </div>
         )}
-        {live.fishing && (
-          <div className="camp-wave" title="About one catch a minute, even while the tab is in the background.">
-            🎣 Fishing…
-            <small>{live.fishCaught ?? 0} caught lifetime</small>
-          </div>
-        )}
         {live.autoGrind && (
           <div className="camp-wave" title="Manual input is ignored while this is on — toggle it off to take back control.">
             ⚔️ Auto-Grinding…
@@ -796,12 +828,6 @@ export function AdventureClient() {
       </div>
 
       {minimap && <StageMinimap data={minimap} />}
-
-      {nearLake && (
-        <div className="interact-hint">
-          {live.fishing ? "Press E to stop fishing" : "Press E to fish"}
-        </div>
-      )}
 
       {(() => {
         const nearest = nearestAchievement(live);
@@ -908,15 +934,17 @@ export function AdventureClient() {
       {panel === "inventory" && (
         <InventoryPanel
           save={live}
+          rev={rev}
           onEquip={equip}
           onUnequip={unequip}
-          onClose={() => setPanel("none")}
+          onClose={closePanel}
         />
       )}
 
       {panel === "blacksmith" && (
         <BlacksmithPanel
           save={live}
+          rev={rev}
           onSellAll={sellAllTrash}
           onSellAllGear={sellAllGear}
           onSellOne={sellOne}
@@ -925,27 +953,29 @@ export function AdventureClient() {
           onEnhanceMany={enhanceMany}
           onRespec={respec}
           lastResult={shopMsg}
-          onClose={() => setPanel("none")}
+          onClose={closePanel}
         />
       )}
 
       {panel === "vendor" && (
         <VendorPanel
           save={live}
+          rev={rev}
           onBuy={buyGear}
           onBuyFeatured={buyFeaturedGear}
           lastResult={shopMsg}
-          onClose={() => setPanel("none")}
+          onClose={closePanel}
         />
       )}
 
       {panel === "storage" && (
         <StoragePanel
           save={live}
+          rev={rev}
           onStore={storeItem}
           onRetrieve={retrieveItem}
           onExpand={expandStorage}
-          onClose={() => setPanel("none")}
+          onClose={closePanel}
         />
       )}
 

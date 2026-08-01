@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { ItemRow } from "@/components/InventoryPanel";
 import {
   STORAGE_BASE_CAP,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/arena/items";
 import type { AdventureSave } from "@/lib/arena/progression";
 
-export function StoragePanel({
+export const StoragePanel = memo(function StoragePanel({
   save,
   onStore,
   onRetrieve,
@@ -17,6 +18,10 @@ export function StoragePanel({
   onClose,
 }: {
   save: AdventureSave;
+  /** See InventoryPanel — bumped on every mutation so memo doesn't hold
+   *  onto a stale backpack/storage view while `save`'s reference stays
+   *  fixed. */
+  rev: number;
   onStore: (item: Item) => void;
   onRetrieve: (item: Item) => void;
   onExpand: () => void;
@@ -94,4 +99,4 @@ export function StoragePanel({
       </div>
     </div>
   );
-}
+});

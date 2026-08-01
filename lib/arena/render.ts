@@ -17,6 +17,15 @@ import { playSound } from "./sound";
 import { getColorblindMode, getScreenShakeEnabled } from "./settings";
 import type { Fighter } from "./types";
 
+/** Cheap screen-space visibility check — skips drawing (and whatever
+ *  gradients/glows/text/particle work that entails) for anything fully
+ *  outside the viewport, the same way drawTerrain already culls ground
+ *  segments. `margin` covers glow radii/sprite size so things don't pop
+ *  in/out right at the edge. */
+function onScreen(x: number, y: number, vw: number, vh: number, margin = 60): boolean {
+  return x > -margin && x < vw + margin && y > -margin && y < vh + margin;
+}
+
 /** Mirrors BOSS_PHASE2 in adventure.ts — this file can't import the campaign
  *  layer, so the HP fractions that flip a boss's rim-glow hot red are kept
  *  here too. Update both if a phase threshold ever changes. */
@@ -106,15 +115,30 @@ const FLASH_DURATION = 0.1;
  * possibly against a different canvas) land on exactly the same offset
  * every frame instead of jittering independently of each other.
  */
+// renderArena and renderFighterPortraits both call this for the same frame,
+// back to back with no simulation step in between — camera/shake can't have
+// changed, so the second call reuses the first's result instead of redoing
+// the sin/cos work.
+let cameraArtCacheTime = -1;
+let cameraArtCacheX = 0;
+let cameraArtCacheY = 0;
+
 function cameraArt(engine: ArenaEngine) {
-  const t = engine.time * 43;
+  if (engine.time === cameraArtCacheTime) {
+    return { camX: cameraArtCacheX, camY: cameraArtCacheY };
+  }
   const shakeAmt = getScreenShakeEnabled() ? engine.shake : 0;
-  const shakeX = Math.sin(t) * shakeAmt * 0.5;
-  const shakeY = Math.cos(t * 1.3) * shakeAmt * 0.5;
-  return {
-    camX: Math.round((engine.camera.x + shakeX) / S),
-    camY: Math.round((engine.camera.y + shakeY) / S),
-  };
+  let shakeX = 0;
+  let shakeY = 0;
+  if (shakeAmt !== 0) {
+    const t = engine.time * 43;
+    shakeX = Math.sin(t) * shakeAmt * 0.5;
+    shakeY = Math.cos(t * 1.3) * shakeAmt * 0.5;
+  }
+  cameraArtCacheTime = engine.time;
+  cameraArtCacheX = Math.round((engine.camera.x + shakeX) / S);
+  cameraArtCacheY = Math.round((engine.camera.y + shakeY) / S);
+  return { camX: cameraArtCacheX, camY: cameraArtCacheY };
 }
 
 /** The punch-in scale from a fresh big hit, shared by both canvases so the
@@ -149,8 +173,11 @@ const prevFighterAction = new Map<string, string>();
 let prevProjectileCount = 0;
 let prevHazardHits = 0;
 
+const seenFighterIds = new Set<string>();
+
 function trackStateSounds(engine: ArenaEngine) {
-  const seen = new Set<string>();
+  const seen = seenFighterIds;
+  seen.clear();
   for (const f of engine.fighters) {
     seen.add(f.id);
     const prev = prevFighterState.get(f.id);
@@ -790,14 +817,21 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   drawBlacksmith(b, engine, wx, wy, engine.time);
   drawVendor(b, engine, wx, wy, engine.time);
   drawBank(b, engine, wx, wy, engine.time);
-  drawLootDrops(b, engine, wx, wy);
-  for (const f of engine.fighters) drawFighter(b, f, wx, wy, engine.time);
-  drawHitboxes(b, engine, wx, wy);
-  for (const p of engine.projectiles) {
-    drawProjectile(b, wx(p.x), wy(p.y), p.w / S, p.color);
+  drawLootDrops(b, engine, wx, wy, vw, vh);
+  for (const f of engine.fighters) {
+    // Every fighter still ticks off-screen (Survival waves, big maps), but
+    // there's no reason to pay for its gradients/glyphs/nameplate/flourish
+    // when it's nowhere near the viewport this frame.
+    if (onScreen(wx(f.x), wy(f.y), vw, vh, 100)) drawFighter(b, f, wx, wy, engine.time);
   }
-  drawParticles(b, engine, wx, wy);
-  drawTexts(b, engine, wx, wy);
+  drawHitboxes(b, engine, wx, wy, vw, vh);
+  for (const p of engine.projectiles) {
+    const pjx = wx(p.x);
+    const pjy = wy(p.y);
+    if (onScreen(pjx, pjy, vw, vh)) drawProjectile(b, pjx, pjy, p.w / S, p.color);
+  }
+  drawParticles(b, engine, wx, wy, vw, vh);
+  drawTexts(b, engine, wx, wy, vw, vh);
   drawVignette(b, vw, vh);
   b.restore();
 
@@ -1458,11 +1492,11 @@ function drawTerrain(
     }
   }
 
-  // The town's fishing lake — a real basin dropping below the ground line
-  // (there's no physics pit, same "decoration, not terrain" deal as the
-  // hazard patches above, just painted deep enough to read as a lake
+  // The town's decorative lake — a real basin dropping below the ground
+  // line (there's no physics pit, same "decoration, not terrain" deal as
+  // the hazard patches above, just painted deep enough to read as a lake
   // instead of a puddle) with a two-layer drifting shimmer for a bit of
-  // parallax on the surface.
+  // parallax on the surface. Purely ambient scenery, no gameplay tied to it.
   if (biomeId === "town") {
     const stage = (engine as ArenaEngine & { stage?: { lakeX?: number; lakeWidth?: number } })
       .stage;
@@ -1746,13 +1780,16 @@ function drawLootDrops(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
   wx: (v: number) => number,
-  wy: (v: number) => number
+  wy: (v: number) => number,
+  vw: number,
+  vh: number
 ) {
   const drops = (engine as ArenaEngine & { lootDrops?: LootDrop[] }).lootDrops;
   if (!drops || !drops.length) return;
   for (const d of drops) {
     const x = wx(d.x);
     const y = wy(d.y);
+    if (!onScreen(x, y, vw, vh, 20)) continue;
     const rarity = RARITY_META[d.item.rarity];
     const bob = d.onGround ? Math.round(Math.sin(d.age * 3) * 1) : 0;
     const flicker = 0.5 + 0.5 * Math.sin(d.age * 4);
@@ -1930,36 +1967,6 @@ function drawFighter(
   // player until they've actually earned and picked one.
   if (!f.isMob && f.auraOverride) {
     pxGlow(b, x, y - h * 0.5, h * 0.55, f.auraOverride, 0.4);
-  }
-
-  // A procedural fishing rod while parked at the lake — a held rod with a
-  // gentle idle sway, a line dropping to a bobber that bobs on the water.
-  // Purely cosmetic (see Fighter.fishing), same "simple canvas primitives,
-  // no new art" approach as the birds/lantern-strings elsewhere in this file.
-  if (!f.isMob && f.fishing) {
-    // Waist/forearm height, not shoulder — a held rod hangs from the hands,
-    // arms bent in front of the body, not up near the neck.
-    const handX = x + dir * Math.round(w * 0.3);
-    const handY = y - Math.round(h * 0.36);
-    const sway = Math.sin(time * 1.4) * 4;
-    const tipX = handX + dir * (26 + sway);
-    const tipY = handY - 16 - sway * 0.5;
-    b.strokeStyle = "#6b4a2a";
-    b.lineWidth = 1.5;
-    b.beginPath();
-    b.moveTo(handX, handY);
-    b.lineTo(tipX, tipY);
-    b.stroke();
-
-    const bobX = tipX + dir * 4;
-    const bobY = y - 2 + Math.sin(time * 3 + 1) * 1.5;
-    b.strokeStyle = "#e2c98f";
-    b.lineWidth = 1;
-    b.beginPath();
-    b.moveTo(tipX, tipY);
-    b.lineTo(bobX, bobY);
-    b.stroke();
-    pxCircle(b, bobX, bobY, 1, "#ff6b4a");
   }
 
   // Immunity halo.
@@ -2319,7 +2326,7 @@ function drawFighter(
   px(b, headX + headW, topY, 1, headH, ink);
   px(b, headX, topY + headH, headW, 1, ink);
 
-  if (f.isMob) drawMobFlourish(b, f, x, y, w, h, topY, torsoY, torsoH, dir, col);
+  if (f.isMob) drawMobFlourish(b, f, x, y, w, h, topY, torsoY, torsoH, dir, col, time);
 
   drawNameplate(b, f, x, topY - 3);
 }
@@ -2339,8 +2346,14 @@ function drawMobFlourish(
   torsoY: number,
   torsoH: number,
   dir: number,
-  col: (c: string) => string
+  col: (c: string) => string,
+  time: number
 ) {
+  // Wall-clock ms, kept only so the existing `Date.now()`-tuned magnitudes
+  // below don't need re-tuning — driven by the frame's own clock (engine.time)
+  // instead of the system clock, so halo animation stays in lockstep with
+  // everything else (pause, slow-mo, hitstop) rather than drifting on its own.
+  const now = time * 1000;
   const m = MOB_TYPES[f.mobTypeId!];
   if (!m) return;
   const half = Math.floor(Math.max(5, w - 2) / 2);
@@ -2464,7 +2477,7 @@ function drawMobFlourish(
       px(b, x + half - 2, torsoY - 2, 5, 8, col(m.accent));
       const haloY = topY - 6;
       for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2 + Date.now() * 0.0015;
+        const a = (i / 7) * Math.PI * 2 + now * 0.0015;
         px(b, x + Math.round(Math.cos(a) * (half + 6)), haloY + Math.round(Math.sin(a) * 3), 2, 2, "#f0abfc");
       }
       px(b, x - half, topY + 3, w, 1, "#e9d5ff");
@@ -2523,7 +2536,7 @@ function drawMobFlourish(
       // and a flickering white-blue afterimage instead of a solid cloak.
       pxGlow(b, x, y - h * 0.45, h * 0.4, "#bfdbfe", 0.5);
       for (let i = 0; i < 4; i++) {
-        const flick = Math.floor(Date.now() * 0.02 + i) % 3 === 0;
+        const flick = Math.floor(now * 0.02 + i) % 3 === 0;
         px(b, x - half + i * 3, torsoY + 1 + (i % 2) * 3, 2, 2, flick ? "#ffffff" : col(m.accent));
       }
       px(b, x + dir * (half + 3), topY + 2, 1, 6, "#eff6ff");
@@ -2538,8 +2551,8 @@ function drawMobFlourish(
       px(b, x + half - 2, torsoY - 2, 5, 8, col(m.accent));
       const haloY = topY - 6;
       for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2 + Date.now() * 0.002;
-        if (Math.floor(Date.now() * 0.015 + i) % 2 === 0) {
+        const a = (i / 6) * Math.PI * 2 + now * 0.002;
+        if (Math.floor(now * 0.015 + i) % 2 === 0) {
           px(b, x + Math.round(Math.cos(a) * (half + 6)), haloY + Math.round(Math.sin(a) * 3), 2, 2, "#ffffff");
         }
       }
@@ -2747,11 +2760,14 @@ function drawHitboxes(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
   wx: (v: number) => number,
-  wy: (v: number) => number
+  wy: (v: number) => number,
+  vw: number,
+  vh: number
 ) {
   for (const hb of engine.hitboxes) {
     const x = wx(hb.x);
     const y = wy(hb.y);
+    if (!onScreen(x, y, vw, vh)) continue;
     const w = Math.round(hb.w / S);
     const h = Math.round(hb.h / S);
     const colour =
@@ -2826,11 +2842,16 @@ function drawParticles(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
   wx: (v: number) => number,
-  wy: (v: number) => number
+  wy: (v: number) => number,
+  vw: number,
+  vh: number
 ) {
   for (const p of engine.particles) {
     const a = Math.max(0, p.life / p.maxLife);
     if (a < 0.15) continue;
+    const x = wx(p.x);
+    const y = wy(p.y);
+    if (!onScreen(x, y, vw, vh, 10)) continue;
     const size = Math.max(1, Math.round((p.size / S) * a));
     // A particle flashes hot-white right as it spawns and cools into its
     // real colour over its first moment alive — sells "spark thrown off
@@ -2838,7 +2859,7 @@ function drawParticles(
     // (no extra draw calls, so it's free at any particle count).
     const hot = Math.max(0, (a - 0.65) / 0.35);
     const color = hot > 0.05 ? mixWhite(p.color, hot) : p.color;
-    px(b, wx(p.x), wy(p.y), size, size, color);
+    px(b, x, y, size, size, color);
   }
 }
 
@@ -2846,18 +2867,33 @@ function drawTexts(
   b: CanvasRenderingContext2D,
   engine: ArenaEngine,
   wx: (v: number) => number,
-  wy: (v: number) => number
+  wy: (v: number) => number,
+  vw: number,
+  vh: number
 ) {
   for (const t of engine.texts) {
     const a = Math.min(1, t.life / (t.maxLife * 0.5));
     if (a <= 0.1) continue;
+    const x = wx(t.x);
+    const y = wy(t.y);
+    if (!onScreen(x, y, vw, vh, 40)) continue;
     b.globalAlpha = a;
-    pxText(b, t.text, wx(t.x), wy(t.y), t.color, Math.max(5, Math.round(t.size / 2)));
+    pxText(b, t.text, x, y, t.color, Math.max(5, Math.round(t.size / 2)));
     b.globalAlpha = 1;
   }
 }
 
-function drawVignette(b: CanvasRenderingContext2D, vw: number, vh: number) {
+// The vignette (gradient + dithered rim) is static for a given viewport
+// size — everything about it depends only on vw/vh, never on game state —
+// so it's painted once to an offscreen canvas and just blitted every frame
+// instead of re-running a radial-gradient allocation and 4 per-pixel dither
+// passes at 60fps. Repainted only when the viewport size actually changes.
+let vignetteCanvas: HTMLCanvasElement | null = null;
+let vignetteCtx: CanvasRenderingContext2D | null = null;
+let vignetteW = -1;
+let vignetteH = -1;
+
+function paintVignette(b: CanvasRenderingContext2D, vw: number, vh: number) {
   // A soft radial falloff toward the corners — the cheap trick that makes a
   // flat screenshot read as a framed shot instead of a security-camera feed.
   const cx = vw / 2;
@@ -2879,4 +2915,17 @@ function drawVignette(b: CanvasRenderingContext2D, vw: number, vh: number) {
   pxDither(b, 0, 0, edge, vh, PAL.ink);
   pxDither(b, vw - edge, 0, edge, vh, PAL.ink);
   b.globalAlpha = 1;
+}
+
+function drawVignette(b: CanvasRenderingContext2D, vw: number, vh: number) {
+  if (!vignetteCanvas || vignetteW !== vw || vignetteH !== vh) {
+    vignetteCanvas = document.createElement("canvas");
+    vignetteCanvas.width = vw;
+    vignetteCanvas.height = vh;
+    vignetteCtx = vignetteCanvas.getContext("2d");
+    vignetteW = vw;
+    vignetteH = vh;
+    if (vignetteCtx) paintVignette(vignetteCtx, vw, vh);
+  }
+  if (vignetteCanvas) b.drawImage(vignetteCanvas, 0, 0);
 }

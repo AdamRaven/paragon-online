@@ -140,16 +140,6 @@ export interface AdventureSave {
   weeklyKey?: string;
   weeklyBaseline?: number;
   weeklyClaimed?: number[];
-  /** Whether the player is currently parked at the town lake fishing — real
-   *  time, not play time, so it keeps paying out while the tab just sits
-   *  open (or even closed, up to FISH_CAP_MS) rather than requiring active
-   *  input. See AdventureEngine.toggleFishing/collectFishing. */
-  fishing?: boolean;
-  /** Wall-clock timestamp fish catches were last collected up to. */
-  lastFishTick?: number;
-  /** Lifetime fish caught, just for the character sheet — the fish
-   *  themselves land in `inventory` as regular sellable trash items. */
-  fishCaught?: number;
   /** When on, an AI brain drives the player instead of manual input — see
    *  AdventureEngine.toggleAutoGrind. Deliberately dumb: no skills, no
    *  jumping, just walk to the nearest mob and swing. */
@@ -315,9 +305,6 @@ export function createAdventureSave(
     dailyBounty: undefined,
     uniquesFound: [],
     seenRunComplete: false,
-    fishing: false,
-    lastFishTick: undefined,
-    fishCaught: 0,
     autoGrind: false,
   };
 }

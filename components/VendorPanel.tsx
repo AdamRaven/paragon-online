@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { ItemIcon } from "@/components/ItemIcon";
 import { compare, effectLine, hasOpenSlot, referenceFor, statLine } from "@/components/InventoryPanel";
 import { featuredBaseId } from "@/lib/arena/featuredItem";
@@ -23,7 +24,7 @@ function stock(level: number): ItemBase[] {
     .sort((a, b) => a.tier - b.tier);
 }
 
-export function VendorPanel({
+export const VendorPanel = memo(function VendorPanel({
   save,
   onBuy,
   onBuyFeatured,
@@ -31,17 +32,24 @@ export function VendorPanel({
   onClose,
 }: {
   save: AdventureSave;
+  /** See InventoryPanel — bumped on every mutation so memo doesn't hold
+   *  onto a stale gold/stock view while `save`'s reference stays fixed. */
+  rev: number;
   onBuy: (baseId: string) => void;
   onBuyFeatured: () => void;
   lastResult: string | null;
   onClose: () => void;
 }) {
-  const items = stock(save.level);
+  // stock() scans every item base — memoized so it only reruns when the
+  // player actually levels up, not on every re-render.
+  const items = useMemo(() => stock(save.level), [save.level]);
   const preview = (baseId: string): Item => makeItem(baseId, "common");
 
-  const featuredBase = base(featuredBaseId());
-  const featured = makeItem(featuredBase.id, "epic");
-  const featuredPrice = itemValue(featured);
+  const featuredBase = useMemo(() => base(featuredBaseId()), []);
+  // makeItem rolls a random affix for epics — memoized so the featured
+  // item's affix doesn't reroll (and visibly flicker) on every re-render.
+  const featured = useMemo(() => makeItem(featuredBase.id, "epic"), [featuredBase.id]);
+  const featuredPrice = useMemo(() => itemValue(featured), [featured]);
   const featuredOpen = hasOpenSlot(save, featuredBase.slot);
   const featuredCmp = featuredOpen ? undefined : compare(featured, referenceFor(save, featuredBase.slot));
 
@@ -130,4 +138,4 @@ export function VendorPanel({
       </div>
     </div>
   );
-}
+});

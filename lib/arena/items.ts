@@ -821,33 +821,6 @@ export const ITEM_BASES: Record<string, ItemBase> = {
     id: "sundered-regalia", name: "Sundered Regalia", kind: "trash",
     tier: 54, stats: {}, value: 11000, icon: "warden-sigil",
   },
-
-  // --- fishing: caught at the town lake, not dropped by mobs. Each species
-  // is always caught at the same fixed rarity (see FISH_POOL in
-  // adventure.ts), so `value` here is the *pre-rarity-multiplier* base —
-  // the same way a plain weapon base's value gets multiplied up when it
-  // rolls epic or legendary. A caught Ancient Leviathan (legendary, 18x)
-  // is worth as much as a top-tier legendary weapon roll.
-  minnow: {
-    id: "minnow", name: "Minnow", kind: "trash",
-    tier: 1, stats: {}, value: 50, icon: "fish",
-  },
-  "river-trout": {
-    id: "river-trout", name: "River Trout", kind: "trash",
-    tier: 1, stats: {}, value: 150, icon: "fish",
-  },
-  "golden-carp": {
-    id: "golden-carp", name: "Golden Carp", kind: "trash",
-    tier: 1, stats: {}, value: 400, icon: "fish",
-  },
-  "storm-pike": {
-    id: "storm-pike", name: "Storm Pike", kind: "trash",
-    tier: 1, stats: {}, value: 900, icon: "fish",
-  },
-  "ancient-leviathan": {
-    id: "ancient-leviathan", name: "Ancient Leviathan", kind: "trash",
-    tier: 1, stats: {}, value: 1800, icon: "fish",
-  },
 };
 
 export function base(id: string): ItemBase {

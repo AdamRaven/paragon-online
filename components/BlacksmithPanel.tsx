@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ItemIcon } from "@/components/ItemIcon";
 import { ItemRow, effectLine, statLine } from "@/components/InventoryPanel";
 import {
@@ -20,7 +20,7 @@ const RESPEC_COST_PER_POINT = 25;
 
 type Tab = "sell" | "buy" | "enhance";
 
-export function BlacksmithPanel({
+export const BlacksmithPanel = memo(function BlacksmithPanel({
   save,
   onSellAll,
   onSellAllGear,
@@ -33,6 +33,9 @@ export function BlacksmithPanel({
   onClose,
 }: {
   save: AdventureSave;
+  /** See InventoryPanel — bumped on every mutation so memo doesn't hold
+   *  onto stale sell/enhance lists while `save`'s reference stays fixed. */
+  rev: number;
   onSellAll: () => void;
   onSellAllGear: () => void;
   onSellOne: (item: Item) => void;
@@ -44,17 +47,27 @@ export function BlacksmithPanel({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("sell");
-  const trash = save.inventory.filter((i) => base(i.baseId).kind === "trash");
-  const trashWorth = trash.reduce((n, i) => n + itemValue(i), 0);
+  const trash = useMemo(
+    () => save.inventory.filter((i) => base(i.baseId).kind === "trash"),
+    [save.inventory]
+  );
+  const trashWorth = useMemo(() => trash.reduce((n, i) => n + itemValue(i), 0), [trash]);
   // Gear you're not wearing can be sold too; equip/unequip happens in the bag.
-  const gear = save.inventory.filter((i) => base(i.baseId).kind !== "trash");
-  const gearWorth = gear.reduce((n, i) => n + itemValue(i), 0);
+  const gear = useMemo(
+    () => save.inventory.filter((i) => base(i.baseId).kind !== "trash"),
+    [save.inventory]
+  );
+  const gearWorth = useMemo(() => gear.reduce((n, i) => n + itemValue(i), 0), [gear]);
 
   // Anything enhanceable: equipped gear plus weapons in the bag.
-  const enhanceable: Item[] = [
-    ...Object.values(save.equipped).filter(Boolean),
-    ...save.inventory.filter((i) => base(i.baseId).kind === "weapon"),
-  ] as Item[];
+  const enhanceable: Item[] = useMemo(
+    () =>
+      [
+        ...Object.values(save.equipped).filter(Boolean),
+        ...save.inventory.filter((i) => base(i.baseId).kind === "weapon"),
+      ] as Item[],
+    [save.equipped, save.inventory]
+  );
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -316,4 +329,4 @@ export function BlacksmithPanel({
       </div>
     </div>
   );
-}
+});
