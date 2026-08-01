@@ -353,7 +353,7 @@ export const InventoryPanel = memo(function InventoryPanel({
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet wide" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet wide bag-v2" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <h2>Inventory</h2>

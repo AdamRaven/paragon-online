@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArenaHud, type ArenaHudData } from "@/components/ArenaHud";
+import { ArenaHud, SkillBar, type ArenaHudData } from "@/components/ArenaHud";
 import { BackToHome } from "@/components/BackToHome";
 import { ClassPortrait } from "@/components/ClassPortrait";
 import { ComboMenu } from "@/components/ComboMenu";
@@ -59,6 +59,9 @@ import {
   unlockedAuras,
 } from "@/lib/arena/achievements";
 import { CLASSES, getClass } from "@/lib/arena/classes";
+import { MAX_TALENTS, talentsFor } from "@/lib/arena/talents";
+import { unlockedPrestigeTiers } from "@/lib/arena/prestige";
+import { todayKey } from "@/lib/arena/bounties";
 import { DT, MANASTOP_HOLD } from "@/lib/arena/constants";
 import { emptyIntent, type Intent } from "@/lib/arena/engine";
 import { ArenaInput } from "@/lib/arena/input";
@@ -69,6 +72,7 @@ import {
   DIFFICULTY_META,
   MAX_LEVEL,
   STAT_META,
+  TOWN_TIER_COST,
   ascend,
   clearAdventure,
   createAdventureSave,
@@ -109,6 +113,8 @@ export function AdventureClient() {
   const [wave, setWave] = useState(0);
   /** Boss Rush only — live off the engine each HUD tick. */
   const [bossRush, setBossRush] = useState({ index: -1, time: 0, cleared: false });
+  /** Daily Rift only — live off the engine each HUD tick. */
+  const [dailyChallenge, setDailyChallenge] = useState({ time: 0, cleared: false });
   /** Sundered Crucible only — this run's rolled modifiers. */
   const [crucibleAffixes, setCrucibleAffixes] = useState<CrucibleAffix[]>([]);
   /** Every non-town stage — player/mob positions along the stage, for the
@@ -118,7 +124,6 @@ export function AdventureClient() {
   /** First-run quest banner: sticky once true, never reset by leaving town. */
   const [visitedTown, setVisitedTown] = useState(false);
   const [showRunComplete, setShowRunComplete] = useState(false);
-  /** True while standing near the town lake — drives the "Press E to fish" prompt. */
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
   const [panel, setPanel] = useState<
     | "none"
@@ -255,7 +260,15 @@ export function AdventureClient() {
             cleared: engine.bossRushCleared,
           });
         }
-        if (engine.stage.crucible) setCrucibleAffixes(engine.crucibleAffixes);
+        if (engine.stage.crucible || engine.stage.dailyChallenge) {
+          setCrucibleAffixes(engine.crucibleAffixes);
+        }
+        if (engine.stage.dailyChallenge) {
+          setDailyChallenge({
+            time: engine.dailyChallengeTime,
+            cleared: engine.dailyChallengeCleared,
+          });
+        }
         if (engine.stage.isTown) {
           setMinimap(null);
         } else {
@@ -321,9 +334,9 @@ export function AdventureClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started, pushLog]);
 
-  // Deliberately never pointer-locked: the HUD (Auto-Grind toggle, fish
-  // prompt, etc.) sits directly over the canvas even with no panel open, so
-  // the cursor needs to stay visible and clickable at all times rather than
+  // Deliberately never pointer-locked: the HUD (Auto-Grind toggle, etc.)
+  // sits directly over the canvas even with no panel open, so the cursor
+  // needs to stay visible and clickable at all times rather than
   // requiring Esc first. This trades away the pointer-lock trick that used
   // to swallow the rare Shift+RMB "Inspect Element" browser escape hatch
   // during a heavy-attack combo — contextmenu is still preventDefault()'d
@@ -425,6 +438,22 @@ export function AdventureClient() {
   const setAura = (color: string | undefined) =>
     mutate((e) => {
       e.save.auraColor = color;
+    });
+
+  const setWeaponSkin = (color: string | undefined) =>
+    mutate((e) => {
+      e.save.weaponSkin = color;
+    });
+
+  const pickTalent = (id: string) =>
+    mutate((e) => {
+      const chosen = e.save.talents ?? [];
+      if (chosen.includes(id) || chosen.length >= MAX_TALENTS || (e.save.talentPoints ?? 0) <= 0) {
+        return;
+      }
+      e.save.talentPoints = (e.save.talentPoints ?? 0) - 1;
+      e.save.talents = [...chosen, id];
+      playSound("uiClick");
     });
 
   const closePanel = useCallback(() => setPanel("none"), []);
@@ -544,14 +573,17 @@ export function AdventureClient() {
     [mutate]
   );
 
-  /** Gold sink: refund every spent stat point at a per-point cost, so a
-   *  respec is a real decision instead of a free do-over. */
+  /** Gold sink: refund every spent stat point (and chosen talent) at a
+   *  per-point cost, so a respec is a real decision instead of a free
+   *  do-over. One combined flow rather than a separate talent respec. */
   const RESPEC_COST_PER_POINT = 25;
   const respec = useCallback(
     () =>
       mutate((e) => {
         const s = e.save.stats;
-        const spent = s.str + s.agi + s.vit + s.foc - BASE_STAT * 4;
+        const statsSpent = s.str + s.agi + s.vit + s.foc - BASE_STAT * 4;
+        const talentsSpent = (e.save.talents ?? []).length;
+        const spent = statsSpent + talentsSpent;
         if (spent <= 0) {
           setShopMsg("Nothing to respec.");
           return;
@@ -562,8 +594,10 @@ export function AdventureClient() {
           return;
         }
         e.save.gold -= cost;
-        e.save.statPoints += spent;
+        e.save.statPoints += statsSpent;
         e.save.stats = { str: BASE_STAT, agi: BASE_STAT, vit: BASE_STAT, foc: BASE_STAT };
+        e.save.talentPoints = (e.save.talentPoints ?? 0) + talentsSpent;
+        e.save.talents = [];
         setShopMsg(`Respec complete — ${spent} points refunded for ${cost}g.`);
         playSound("uiClick");
       }),
@@ -626,6 +660,27 @@ export function AdventureClient() {
         e.save.gold -= cost;
         e.save.storageCap = cap + STORAGE_EXPANSION_SIZE;
         setShopMsg(`Storage expanded to ${e.save.storageCap} slots.`);
+        playSound("uiClick");
+      }),
+    [mutate]
+  );
+
+  const buyTownTier = useCallback(
+    () =>
+      mutate((e) => {
+        const tier = e.save.townTier ?? 0;
+        const cost = TOWN_TIER_COST[tier];
+        if (cost === undefined) {
+          setShopMsg("Emberhold is already fully decorated.");
+          return;
+        }
+        if (e.save.gold < cost) {
+          setShopMsg(`Decorating Emberhold costs ${cost}g — you don't have enough.`);
+          return;
+        }
+        e.save.gold -= cost;
+        e.save.townTier = tier + 1;
+        setShopMsg(`Emberhold decorated — tier ${e.save.townTier}.`);
         playSound("uiClick");
       }),
     [mutate]
@@ -741,7 +796,7 @@ export function AdventureClient() {
     <div className="arena-stage campaign">
       <canvas ref={canvasRef} tabIndex={0} />
       <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
-      {hud && <ArenaHud hud={hud} logs={logs} />}
+      {hud && <ArenaHud hud={hud} logs={logs} hideSkills />}
       {!hasFinishedTutorialQuest() && (
         <TutorialQuestBanner state={{ kills: live.kills, level: live.level, visitedTown }} />
       )}
@@ -776,8 +831,13 @@ export function AdventureClient() {
 
         {minimap && <StageMinimap data={minimap} />}
 
-        {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
-        <div className="camp-bar">
+        {/* One console: skills stacked directly above the XP/gold/nav row,
+            inside a single bordered window instead of two stacked panels. */}
+        <div className="camp-console">
+          {hud && <SkillBar hud={hud} />}
+
+          {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
+          <div className="camp-bar">
           <div className="camp-level">
             LV {exp.level}
             {exp.points > 0 && <span className="pip">+{exp.points}</span>}
@@ -795,7 +855,8 @@ export function AdventureClient() {
               </div>
             )
           )}
-          {STAGES[live.stage]?.crucible && crucibleAffixes.length > 0 && (
+          {(STAGES[live.stage]?.crucible || STAGES[live.stage]?.dailyChallenge) &&
+            crucibleAffixes.length > 0 && (
             <div className="camp-affixes" title={crucibleAffixes.map((a) => CRUCIBLE_AFFIX_META[a].blurb).join(" · ")}>
               {crucibleAffixes.map((a) => (
                 <span key={a} className="camp-affix-pip">{CRUCIBLE_AFFIX_META[a].label}</span>
@@ -810,6 +871,17 @@ export function AdventureClient() {
               <small>
                 {bossRush.time.toFixed(1)}s
                 {live.bestBossRushTime !== undefined && ` · best ${live.bestBossRushTime.toFixed(1)}s`}
+              </small>
+            </div>
+          )}
+          {STAGES[live.stage]?.dailyChallenge && (
+            <div className="camp-wave">
+              {dailyChallenge.cleared ? "Cleared!" : "Daily Rift"}
+              <small>
+                {dailyChallenge.time.toFixed(1)}s
+                {live.dailyChallengeRecord?.date === todayKey() &&
+                  live.dailyChallengeRecord?.bestTime !== undefined &&
+                  ` · best today ${live.dailyChallengeRecord.bestTime.toFixed(1)}s`}
               </small>
             </div>
           )}
@@ -843,13 +915,16 @@ export function AdventureClient() {
           <button className="btn btn-ghost camp-btn" onClick={() => setPanel("records")}>
             Records
           </button>
-          <button
-            className={`btn camp-btn ${live.autoGrind ? "" : "btn-ghost"}`}
-            title="AI-driven: walks to the nearest mob, uses E/R/F whenever they're off cooldown, and collects loot. No jumping, no Q/Shift — manual input is ignored while it's on."
-            onClick={toggleAutoGrind}
-          >
-            {live.autoGrind ? "Auto-Grind: On" : "Auto-Grind"}
-          </button>
+          {!STAGES[live.stage]?.isTown && (
+            <button
+              className={`btn camp-btn ${live.autoGrind ? "" : "btn-ghost"}`}
+              title="AI-driven: walks to the nearest mob, uses E/R/F whenever they're off cooldown, and collects loot. No jumping, no Q/Shift — manual input is ignored while it's on."
+              onClick={toggleAutoGrind}
+            >
+              {live.autoGrind ? "Auto-Grind: On" : "Auto-Grind"}
+            </button>
+          )}
+          </div>
         </div>
       </div>
 
@@ -912,6 +987,36 @@ export function AdventureClient() {
               </div>
             ))}
             <DerivedPanel save={live} />
+            <div className="talent-picker">
+              <h3 className="section-title">
+                Talents
+                <span style={{ color: "var(--muted)", fontWeight: 400, marginLeft: 6 }}>
+                  {(live.talents ?? []).length} / {MAX_TALENTS} chosen
+                  {(live.talentPoints ?? 0) > 0 && ` · ${live.talentPoints} point${live.talentPoints === 1 ? "" : "s"} to spend`}
+                </span>
+              </h3>
+              <div className="talent-list">
+                {talentsFor(live.classId as ClassId).map((t) => {
+                  const chosen = (live.talents ?? []).includes(t.id);
+                  const full = (live.talents ?? []).length >= MAX_TALENTS;
+                  return (
+                    <div className={`talent-row${chosen ? " chosen" : ""}`} key={t.id}>
+                      <div className="talent-info">
+                        <strong>{t.name}</strong>
+                        <small>{t.description}</small>
+                      </div>
+                      <button
+                        className={`btn tiny ${chosen ? "" : "btn-ghost"}`}
+                        disabled={chosen || full || (live.talentPoints ?? 0) <= 0}
+                        onClick={() => pickTalent(t.id)}
+                      >
+                        {chosen ? "Chosen" : "Select"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             {unlockedAuras(live).length > 0 && (
               <div className="aura-picker">
                 <h3 className="section-title">Aura</h3>
@@ -931,6 +1036,51 @@ export function AdventureClient() {
                       title={a.label}
                     />
                   ))}
+                </div>
+              </div>
+            )}
+            {unlockedPrestigeTiers(live).length > 0 && (
+              <div className="aura-picker">
+                <h3 className="section-title">Prestige</h3>
+                <p className="hint" style={{ marginBottom: 8 }}>
+                  Cosmetic-only rewards for your Ascension rank — no stat effect.
+                </p>
+                <div className="aura-swatches">
+                  <button
+                    className={`aura-swatch${!live.weaponSkin ? " active" : ""}`}
+                    style={{ background: "transparent", border: "2px dashed var(--border)" }}
+                    onClick={() => setWeaponSkin(undefined)}
+                    title="None"
+                  />
+                  {unlockedPrestigeTiers(live).map((t) => (
+                    <button
+                      key={t.rank}
+                      className={`aura-swatch${live.weaponSkin === t.weaponSkin ? " active" : ""}`}
+                      style={{ background: t.weaponSkin }}
+                      onClick={() => setWeaponSkin(t.weaponSkin)}
+                      title={`${t.label} (rank ${t.rank})`}
+                    />
+                  ))}
+                </div>
+                <div className="talent-list" style={{ marginTop: 8 }}>
+                  {unlockedPrestigeTiers(live).map((t) => {
+                    const active = live.title === t.title;
+                    return (
+                      <div className={`talent-row${active ? " chosen" : ""}`} key={t.rank}>
+                        <div className="talent-info">
+                          <strong>{t.label}</strong>
+                          <small>&ldquo;{t.title}&rdquo; · rank {t.rank}</small>
+                        </div>
+                        <button
+                          className={`btn tiny ${active ? "" : "btn-ghost"}`}
+                          disabled={active}
+                          onClick={() => setTitle(active ? undefined : t.title)}
+                        >
+                          {active ? "Equipped" : "Equip"}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -960,6 +1110,7 @@ export function AdventureClient() {
           onEnhance={enhance}
           onEnhanceMany={enhanceMany}
           onRespec={respec}
+          onBuyTownTier={buyTownTier}
           lastResult={shopMsg}
           onClose={closePanel}
         />
@@ -1092,7 +1243,8 @@ function DerivedPanel({ save }: { save: AdventureSave }) {
     save.level,
     save.stats,
     save.equipped,
-    save.ascension ?? 0
+    save.ascension ?? 0,
+    save.talents ?? []
   );
   const cls = getClass(save.classId);
   const sets = activeSetProgress(save.equipped);
@@ -1203,6 +1355,10 @@ function buildHud(engine: AdventureEngine, input: ArenaInput): ArenaHudData {
     manaflowCharge: input.bothButtonsHeld / MANASTOP_HOLD,
     sprinting: p.sprinting,
     stoic: p.stoicTimer,
+    burn: p.burnTimer,
+    poison: p.poisonTimer,
+    freeze: p.freezeTimer,
+    shock: p.shockTimer,
     state: p.state,
   };
 }
@@ -1263,7 +1419,14 @@ function CharacterGate({
 
   if (save) {
     const cls = getClass(save.classId);
-    const d = deriveArenaStats(cls, save.level, save.stats, save.equipped, save.ascension ?? 0);
+    const d = deriveArenaStats(
+      cls,
+      save.level,
+      save.stats,
+      save.equipped,
+      save.ascension ?? 0,
+      save.talents ?? []
+    );
     return (
       <main className="landing-page font-body-md text-body-md min-h-screen bg-void-black text-on-surface px-margin-mobile py-12 md:py-16">
         <div className="max-w-2xl mx-auto space-y-stack-lg">

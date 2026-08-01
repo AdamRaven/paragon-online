@@ -16,7 +16,7 @@ const BOUNTY_POOL = [
   "frostfang",
 ];
 
-function todayKey(): string {
+export function todayKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }

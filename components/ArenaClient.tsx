@@ -394,6 +394,10 @@ function buildHud(engine: ArenaEngine, input: ArenaInput): ArenaHudData {
     manaflowCharge: input.bothButtonsHeld / MANASTOP_HOLD,
     sprinting: p.sprinting,
     stoic: p.stoicTimer,
+    burn: p.burnTimer,
+    poison: p.poisonTimer,
+    freeze: p.freezeTimer,
+    shock: p.shockTimer,
     state: p.state,
   };
 }

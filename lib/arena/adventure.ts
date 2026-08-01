@@ -1,9 +1,9 @@
 import { getClass, skillOf } from "./classes";
 import { DT, GRAVITY, MAX_FALL_SPEED, WALK_SPEED } from "./constants";
 import { ArenaEngine, emptyIntent, type ArenaCallbacks, type Intent } from "./engine";
-import { MOB_TYPES, getStage, mobAttackSpec, type MobType, type Stage } from "./mobs";
-import { base, itemName, itemValue, RARITY_META, rollDrops, type Item } from "./items";
-import { bountyComplete, bountyReward, ensureDailyBounty } from "./bounties";
+import { MOB_TYPES, getStage, hashSeed, mobAttackSpec, mulberry32, type MobType, type Stage } from "./mobs";
+import { base, ITEM_BASES, itemName, itemValue, makeItem, RARITY_META, rollDrops, type Item } from "./items";
+import { bountyComplete, bountyReward, ensureDailyBounty, todayKey } from "./bounties";
 import { claimDailyLogin } from "./streak";
 import { ensureWeeklyTrack } from "./weekly";
 import {
@@ -94,6 +94,9 @@ const SURVIVAL_POOL = [
   "revenant",
   "frostfang",
 ];
+/** How many trash mobs (plus one boss) the Daily Rift's seeded roster spawns —
+ *  sized similarly to a single Boss Rush leg, not a full stage clear. */
+const DAILY_CHALLENGE_MOB_COUNT = 6;
 /** Stat multipliers applied to every mob spawned, on top of any Elite
  *  multiplier — chosen once at character creation and fixed for the save's
  *  life (see AdventureSave.difficulty). Loot bonus feeds rollDrops' rarity
@@ -208,6 +211,10 @@ export class AdventureEngine extends ArenaEngine {
   private bossRushCooldown = 0;
   /** Crucible stage only — not private, so MobBrain can read it directly. */
   crucibleAffixes: CrucibleAffix[] = [];
+  /** Daily Rift stage only — elapsed time on the current attempt and
+   *  whether it's already been recorded, mirroring bossRushTime/Cleared. */
+  dailyChallengeTime = 0;
+  dailyChallengeCleared = false;
   private autoGrindBrain: CombatBrain | null = null;
   /** World Rifts — id of the currently-open Rift Warden, if any. */
   private riftMobId: string | null = null;
@@ -237,6 +244,10 @@ export class AdventureEngine extends ArenaEngine {
     this.spawnStageMobs();
     if (this.stage.crucible) this.rollCrucibleAffixes();
     if (this.stage.survival) this.startNextWave();
+    if (this.stage.dailyChallenge) {
+      this.spawnDailyChallengeMobs();
+      this.rollDailyChallengeAffix();
+    }
     if (this.save.autoGrind) this.autoGrindBrain = new CombatBrain();
     ensureDailyBounty(this.save);
     ensureWeeklyTrack(this.save);
@@ -319,7 +330,8 @@ export class AdventureEngine extends ArenaEngine {
       this.save.level,
       this.save.stats,
       this.save.equipped,
-      this.save.ascension ?? 0
+      this.save.ascension ?? 0,
+      this.save.talents ?? []
     );
     const p = this.fighters[0];
     const prevMax = p.maxHp;
@@ -338,6 +350,7 @@ export class AdventureEngine extends ArenaEngine {
     p.hp = Math.min(p.maxHp, p.hp + Math.max(0, d.maxHp - prevMax));
     p.mana = Math.min(p.mana, p.maxMana);
     p.auraOverride = this.save.auraColor;
+    p.weaponSkinOverride = this.save.weaponSkin;
   }
 
   /** True when the player is close enough to the blacksmith to trade. */
@@ -383,6 +396,68 @@ export class AdventureEngine extends ArenaEngine {
     }
   }
 
+  /**
+   * The Daily Rift has no fixed spawn list — its roster is generated here,
+   * deterministically seeded by today's date (mulberry32/hashSeed, the same
+   * PRNG mobs.ts already uses for stable-per-seed terrain) so every player
+   * sees the exact same lineup all day and a fresh one tomorrow, no server
+   * required. Resets the attempt timer/cleared flag too, so re-entering
+   * (after a wipe, or just revisiting) always starts a clean run.
+   */
+  private spawnDailyChallengeMobs() {
+    this.dailyChallengeTime = 0;
+    this.dailyChallengeCleared = false;
+    const rand = mulberry32(hashSeed(todayKey()));
+    const margin = 200;
+    const usable = this.map.width - margin * 2;
+    const step = usable / (DAILY_CHALLENGE_MOB_COUNT + 1);
+    for (let i = 0; i < DAILY_CHALLENGE_MOB_COUNT; i++) {
+      const typeId = SURVIVAL_POOL[Math.floor(rand() * SURVIVAL_POOL.length)];
+      const type = MOB_TYPES[typeId];
+      if (type) this.spawnMob(type, Math.round(margin + step * (i + 1)));
+    }
+    const bossId = BOSS_RUSH_ORDER[Math.floor(rand() * BOSS_RUSH_ORDER.length)];
+    const boss = MOB_TYPES[bossId];
+    if (boss) this.spawnMob(boss, this.map.width - margin);
+  }
+
+  /** Picks a single Crucible-style modifier, seeded by today's date so it's
+   *  the same all day — one instead of Crucible's two, for a gentler daily
+   *  difficulty bump. Reuses `crucibleAffixes` itself (rather than a
+   *  parallel field) so every existing affix-read site just works. */
+  private rollDailyChallengeAffix() {
+    const rand = mulberry32(hashSeed(todayKey() + "affix"));
+    this.crucibleAffixes = [CRUCIBLE_AFFIX_POOL[Math.floor(rand() * CRUCIBLE_AFFIX_POOL.length)]];
+    const label = CRUCIBLE_AFFIX_META[this.crucibleAffixes[0]].label;
+    this.acb.onLog(`Today's Rift: ${label}.`, "big");
+  }
+
+  /**
+   * Tracks elapsed time on the seeded roster from stage entry to a full
+   * clear, recording it as today's best if it beats the existing one —
+   * patterned on updateBossRush's clear-detection, but a single fixed wave
+   * rather than a sequential gauntlet, so time just runs continuously
+   * until clear rather than needing Boss Rush's "only while a mob is
+   * alive" gating between spawns.
+   */
+  private updateDailyChallenge() {
+    if (this.dailyChallengeCleared) return;
+    this.dailyChallengeTime += DT;
+    const anyAlive = this.fighters.some((f) => f.isMob && f.state !== "dead");
+    if (anyAlive) return;
+    this.dailyChallengeCleared = true;
+    const cleared = this.dailyChallengeTime;
+    const today = todayKey();
+    const record = this.save.dailyChallengeRecord;
+    const best = record && record.date === today ? record.bestTime : undefined;
+    if (best === undefined || cleared < best) {
+      this.save.dailyChallengeRecord = { date: today, bestTime: cleared };
+      this.acb.onLog(`Daily Rift cleared in ${cleared.toFixed(1)}s — new best today!`, "big");
+    } else {
+      this.acb.onLog(`Daily Rift cleared in ${cleared.toFixed(1)}s.`, "big");
+    }
+  }
+
   /** Combat-log access for MobBrain — a boss phase transition is worth a
    *  line in the log, but `cb`/`acb` themselves stay private to the engine. */
   logMessage(text: string, tone: CombatLogEntry["tone"]) {
@@ -399,7 +474,8 @@ export class AdventureEngine extends ArenaEngine {
     // call). No new spawn list to maintain: every mob type can roll one.
     // A Rift Warden always forces the roll (see spawnRift) rather than
     // gambling on it, since the whole point is a guaranteed bonus encounter.
-    const crucible = this.stage.crucible ? this.crucibleAffixes : [];
+    const crucible =
+      this.stage.crucible || this.stage.dailyChallenge ? this.crucibleAffixes : [];
     const eliteChance = crucible.includes("volatile") ? ELITE_CHANCE * 3 : ELITE_CHANCE;
     const elite = !type.isBoss && (opts?.forceElite || Math.random() < eliteChance);
     const eliteAffix = elite
@@ -498,6 +574,7 @@ export class AdventureEngine extends ArenaEngine {
     this.updateLootDrops();
     if (this.stage.survival) this.updateSurvival();
     if (this.stage.bossRush) this.updateBossRush();
+    if (this.stage.dailyChallenge) this.updateDailyChallenge();
     this.updateRifts();
   }
 
@@ -526,6 +603,7 @@ export class AdventureEngine extends ArenaEngine {
       } else {
         this.acb.onLog(`Boss Rush cleared in ${cleared.toFixed(1)}s.`, "big");
       }
+      this.grantBossRushUnique();
       return;
     }
 
@@ -541,6 +619,29 @@ export class AdventureEngine extends ArenaEngine {
       this.spawnMob(type, this.map.width / 2);
     }
     this.bossRushCooldown = 2.5;
+  }
+
+  /**
+   * A full Boss Rush clear guarantees one still-missing unique from the
+   * gauntlet's own bosses — an alternative to rollDrops' 10%-per-kill RNG
+   * path (see UNIQUE_DROP_CHANCE in items.ts) for players who've been
+   * unlucky. Picks the first still-missing one in gauntlet order, so
+   * repeat clears systematically fill the collection rather than risking a
+   * duplicate. The Hollow isn't part of BOSS_RUSH_ORDER, so its own unique
+   * stays RNG-only — an accepted 7-of-8 gap rather than lengthening the
+   * gauntlet to fix it.
+   */
+  private grantBossRushUnique() {
+    const found = new Set(this.save.uniquesFound ?? []);
+    for (const bossId of BOSS_RUSH_ORDER) {
+      const uniqueBase = Object.values(ITEM_BASES).find((b) => b.unique && b.dropFrom === bossId);
+      if (uniqueBase && !found.has(uniqueBase.id)) {
+        const item = makeItem(uniqueBase.id, "legendary");
+        this.spawnLootDrop(item, this.player.x, this.player.y);
+        this.acb.onLog(`The Boss Rush yields ${itemName(item)}!`, "big");
+        return;
+      }
+    }
   }
 
   /** Once every mob from the current wave is gone, a short beat later the
@@ -913,6 +1014,10 @@ export class AdventureEngine extends ArenaEngine {
     this.riftCooldown = RIFT_COOLDOWN_MIN + Math.random() * RIFT_COOLDOWN_RANGE;
     if (this.stage.crucible) this.rollCrucibleAffixes();
     if (this.stage.survival) this.startNextWave();
+    if (this.stage.dailyChallenge) {
+      this.spawnDailyChallengeMobs();
+      this.rollDailyChallengeAffix();
+    }
     this.acb.onLog(`Entered ${stage.name}.`, "good");
     return true;
   }

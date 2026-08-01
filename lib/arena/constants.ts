@@ -44,6 +44,19 @@ export const MULTI_HIT_WINDOW = 0.4;
 /** How often standing in an environmental hazard deals another tick of damage. */
 export const HAZARD_TICK_INTERVAL = 0.5;
 
+// --- elemental status effects ----------------------------------------------
+/** How often Burn/Poison tick their snapshotted DPS — same cadence as
+ *  environmental hazards, for a consistent damage-over-time feel. */
+export const STATUS_TICK_INTERVAL = 0.5;
+/** Frost slows movement and attack speed by this fraction while active. */
+export const FREEZE_SLOW_MULT = 0.5;
+/** Shock shreds this much armour for its duration, same mechanism as ArmorBreak. */
+export const SHOCK_ARMOR_SHRED = 15;
+/** Burn/Poison DPS is this fraction of the triggering hit's own damage, so a
+ *  stronger hit leaves a proportionally stronger DOT rather than a flat tax. */
+export const BURN_DPS_MULT = 0.3;
+export const POISON_DPS_MULT = 0.25;
+
 // --- basic attack timings -------------------------------------------------
 export const PARAGON_LMB_CAST = 0.22;
 export const PARAGON_RMB_CAST = 0.35;

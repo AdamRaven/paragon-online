@@ -2,11 +2,19 @@
 
 import { useState } from "react";
 import { ACHIEVEMENTS } from "@/lib/arena/achievements";
+import { todayKey } from "@/lib/arena/bounties";
 import { importAdventureSave, type AdventureSave } from "@/lib/arena/progression";
 
 function fmtTime(seconds: number | undefined): string {
   if (seconds === undefined) return "—";
   return `${seconds.toFixed(1)}s`;
+}
+
+/** Only today's record is meaningful — yesterday's roster is gone. */
+function dailyBest(save: AdventureSave): number | undefined {
+  return save.dailyChallengeRecord?.date === todayKey()
+    ? save.dailyChallengeRecord.bestTime
+    : undefined;
 }
 
 /** Higher is better for every one of these rows, so "who's ahead" is always
@@ -109,6 +117,11 @@ export function HallOfRecordsPanel({
             <span>Fastest Boss Rush clear</span>
             <strong>{fmtTime(save.bestBossRushTime)}</strong>
             {friend && <strong>{fmtTime(friend.bestBossRushTime)}</strong>}
+          </div>
+          <div className="records-row">
+            <span>Today&apos;s Daily Rift best</span>
+            <strong>{fmtTime(dailyBest(save))}</strong>
+            {friend && <strong>{fmtTime(dailyBest(friend))}</strong>}
           </div>
         </div>
 

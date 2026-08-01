@@ -1,4 +1,4 @@
-import type { AttackSpec, ArenaMap, Hazard } from "./types";
+import type { AttackSpec, ArenaMap, DamageType, Hazard } from "./types";
 
 export interface MobType {
   id: string;
@@ -25,6 +25,13 @@ export interface MobType {
   /** Blocks any hit landing on its facing side entirely — approach from
    *  behind, or knock it around, or it just won't take frontal damage. */
   shielded?: boolean;
+  /** Its own attacks carry this element — see mobAttackSpec/mobRangedAttackSpec. */
+  damageType?: DamageType;
+  /** Fractional damage taken from each element, applied in dealDamage
+   *  (engine.ts) on top of armor mitigation; negative = vulnerability
+   *  (takes *more*). Player-side only exists as damageType on attacks —
+   *  there is no player elemental resistance yet, so this is one-directional. */
+  resist?: Partial<Record<DamageType, number>>;
 }
 
 export const MOB_TYPES: Record<string, MobType> = {
@@ -448,7 +455,92 @@ export const MOB_TYPES: Record<string, MobType> = {
     accent: "#1e0a3c",
     isBoss: true,
   },
+
+  // --- elemental enemies: built around DamageType/MobType.resist (types.ts/
+  // mobs.ts) so bringing the right element is a real decision, not flavor.
+  "bog-slime": {
+    id: "bog-slime",
+    name: "Bog Slime",
+    level: 6,
+    maxHp: 140,
+    damage: 14,
+    speed: 1.0,
+    expValue: 90,
+    range: 46,
+    windup: 0.4,
+    recover: 0.45,
+    aggro: 300,
+    w: 30,
+    h: 34,
+    color: "#65a30d",
+    accent: "#365314",
+    damageType: "poison",
+    resist: { poison: 0.75, fire: -0.5 },
+  },
+  "frost-adept": {
+    id: "frost-adept",
+    name: "Frost Adept",
+    level: 29,
+    maxHp: 1650,
+    damage: 78,
+    speed: 1.3,
+    expValue: 1550,
+    range: 260,
+    windup: 0.5,
+    recover: 0.4,
+    aggro: 550,
+    w: 34,
+    h: 80,
+    color: "#a5f3fc",
+    accent: "#155e75",
+    ranged: true,
+    damageType: "frost",
+    resist: { frost: 0.75, fire: -0.5 },
+  },
+  "cinder-imp": {
+    id: "cinder-imp",
+    name: "Cinder Imp",
+    level: 37,
+    maxHp: 2100,
+    damage: 118,
+    speed: 3.2,
+    expValue: 2450,
+    range: 70,
+    windup: 0.18,
+    recover: 0.22,
+    aggro: 600,
+    w: 30,
+    h: 62,
+    color: "#fb923c",
+    accent: "#7c2d12",
+    damageType: "fire",
+    resist: { fire: 0.75, frost: -0.5 },
+  },
+  "storm-wisp": {
+    id: "storm-wisp",
+    name: "Storm Wisp",
+    level: 43,
+    maxHp: 2800,
+    damage: 128,
+    speed: 1.8,
+    expValue: 3050,
+    range: 280,
+    windup: 0.2,
+    recover: 0.22,
+    aggro: 580,
+    w: 26,
+    h: 50,
+    color: "#ddd6fe",
+    accent: "#5b21b6",
+    ranged: true,
+    damageType: "shock",
+    resist: { shock: 0.75, poison: -0.5 },
+  },
 };
+
+/** Elemental mobs (MobType.damageType set) apply their status for this long
+ *  on every landed hit — plain physical mobs are unaffected (0 = no status). */
+const MOB_STATUS_DURATION = 3.5;
 
 /** The single melee swing every mob uses. */
 export function mobAttackSpec(type: MobType): AttackSpec {
@@ -464,6 +556,8 @@ export function mobAttackSpec(type: MobType): AttackSpec {
     height: type.h * 0.6,
     knockback: type.isBoss ? 7 : 3.5,
     effect: "none",
+    damageType: type.damageType ?? "physical",
+    statusDuration: type.damageType ? MOB_STATUS_DURATION : 0,
   };
 }
 
@@ -488,6 +582,8 @@ export function mobBossSpecialSpec(type: MobType): AttackSpec {
     height: type.h * 0.8,
     knockback: 9,
     effect: "knockdown",
+    damageType: type.damageType ?? "physical",
+    statusDuration: type.damageType ? MOB_STATUS_DURATION : 0,
   };
 }
 
@@ -511,6 +607,8 @@ export function mobBossSweepSpec(type: MobType): AttackSpec {
     knockback: 5,
     effect: "stun",
     effectDuration: 1.1,
+    damageType: type.damageType ?? "physical",
+    statusDuration: type.damageType ? MOB_STATUS_DURATION : 0,
   };
 }
 
@@ -532,6 +630,8 @@ export function mobRangedAttackSpec(type: MobType): AttackSpec {
     height: type.h * 0.6,
     knockback: 2,
     effect: "none",
+    damageType: type.damageType ?? "physical",
+    statusDuration: type.damageType ? MOB_STATUS_DURATION : 0,
   };
 }
 
@@ -557,11 +657,6 @@ export interface Stage {
   vendorX?: number;
   /** The bank keeper: stores items outside the backpack. */
   bankX?: number;
-  /** Center of the town's decorative lake — purely ambient scenery, see
-   *  render.ts. */
-  lakeX?: number;
-  /** Half-width of the lake's water rendering. */
-  lakeWidth?: number;
   /** Drives the backdrop the renderer paints for this stage. */
   biome: Biome;
   /**
@@ -583,6 +678,13 @@ export interface Stage {
    * adventure.ts.
    */
   crucible?: boolean;
+  /**
+   * A single fixed roster seeded from today's date (see
+   * AdventureEngine.spawnDailyChallengeMobs) — same roster for every player
+   * all day, a fresh one tomorrow, no server needed to keep it "daily." No
+   * fixed spawn list, same reasoning as `survival` above.
+   */
+  dailyChallenge?: boolean;
 }
 
 export type Biome =
@@ -642,8 +744,10 @@ function withLedges(
 }
 
 /** A small deterministic PRNG (mulberry32) so a stage's terrain is stable
- * across reloads but different from every other stage's. */
-function mulberry32(seed: number): () => number {
+ * across reloads but different from every other stage's. Exported for
+ * AdventureEngine's daily-challenge roster, which needs the same
+ * stable-per-seed determinism keyed off today's date instead of a stage id. */
+export function mulberry32(seed: number): () => number {
   let a = seed;
   return () => {
     a |= 0;
@@ -653,7 +757,7 @@ function mulberry32(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-function hashSeed(s: string): number {
+export function hashSeed(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
   return h;
@@ -730,8 +834,6 @@ export const STAGES: Stage[] = [
     npcX: 500,
     vendorX: 1000,
     bankX: 1500,
-    lakeX: 1850,
-    lakeWidth: 260,
     biome: "town",
     map: makeMap(2000, []),
     spawns: [],
@@ -790,12 +892,15 @@ export const STAGES: Stage[] = [
       { typeId: "brawler", x: 420 },
       { typeId: "rabid-cur", x: 560 },
       { typeId: "brawler", x: 640 },
+      { typeId: "bog-slime", x: 980 },
       { typeId: "blade-wraith", x: 1200 },
       { typeId: "cultist", x: 1450 },
+      { typeId: "bog-slime", x: 1680 },
       { typeId: "shieldbearer", x: 1900 },
       { typeId: "brawler", x: 2100 },
       { typeId: "blade-wraith", x: 2300 },
       { typeId: "colossus", x: 2450 },
+      { typeId: "bog-slime", x: 2650 },
       { typeId: "cultist", x: 2820 },
       { typeId: "shieldbearer", x: 2980 },
       { typeId: "brawler", x: 300, y: 400 },
@@ -866,12 +971,15 @@ export const STAGES: Stage[] = [
     spawns: [
       { typeId: "frostfang", x: 500 },
       { typeId: "frostfang", x: 740 },
+      { typeId: "frost-adept", x: 1050 },
       { typeId: "revenant", x: 1300 },
       { typeId: "sentinel", x: 1750 },
       { typeId: "frostfang", x: 1540 },
+      { typeId: "frost-adept", x: 1900 },
       { typeId: "frostfang", x: 2150 },
       { typeId: "sovereign", x: 2450 },
       { typeId: "frostfang", x: 2960 },
+      { typeId: "frost-adept", x: 3180 },
       { typeId: "frostking", x: 3400 },
       ...["frostfang", "frostfang", "revenant", "frostfang"].map((typeId, i) => ({
         typeId,
@@ -894,11 +1002,14 @@ export const STAGES: Stage[] = [
     spawns: [
       { typeId: "cinderwraith", x: 500 },
       { typeId: "cinderwraith", x: 740 },
+      { typeId: "cinder-imp", x: 1050 },
       { typeId: "frostking", x: 1300 },
       { typeId: "cinderwraith", x: 1540 },
+      { typeId: "cinder-imp", x: 1900 },
       { typeId: "cinderwraith", x: 2150 },
       { typeId: "frostking", x: 2450 },
       { typeId: "cinderwraith", x: 2960 },
+      { typeId: "cinder-imp", x: 3180 },
       { typeId: "forgeheart", x: 3400 },
       ...["cinderwraith", "cinderwraith", "frostking", "cinderwraith", "cinderwraith", "frostking"].map(
         (typeId, i) => ({ typeId, x: FORGE_TERRAIN.perches[i].x, y: FORGE_TERRAIN.perches[i].y })
@@ -915,11 +1026,14 @@ export const STAGES: Stage[] = [
     spawns: [
       { typeId: "stormcaller", x: 500 },
       { typeId: "stormcaller", x: 740 },
+      { typeId: "storm-wisp", x: 1050 },
       { typeId: "forgeheart", x: 1300 },
       { typeId: "stormcaller", x: 1540 },
+      { typeId: "storm-wisp", x: 1900 },
       { typeId: "stormcaller", x: 2150 },
       { typeId: "forgeheart", x: 2450 },
       { typeId: "stormcaller", x: 2960 },
+      { typeId: "storm-wisp", x: 3180 },
       { typeId: "tempestwarden", x: 3400 },
       ...["stormcaller", "stormcaller", "forgeheart", "stormcaller"].map((typeId, i) => ({
         typeId,
@@ -1034,6 +1148,17 @@ export const STAGES: Stage[] = [
         y: HOLLOW_TERRAIN.perches[i].y,
       })),
     ],
+  },
+  // Also appended last, for the same array-index-stability reason.
+  {
+    id: "daily-challenge",
+    biome: "abyss",
+    name: "The Daily Rift",
+    subtitle: "A fixed roster, the same for everyone today. How fast can you clear it?",
+    requiredLevel: 20,
+    dailyChallenge: true,
+    map: makeMap(2000, []),
+    spawns: [],
   },
 ];
 

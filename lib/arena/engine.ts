@@ -3,6 +3,7 @@ import {
   ARMOR_BREAK_AMOUNT,
   ARMOR_BREAK_DURATION,
   BLACK_HOLE_DURATION,
+  BURN_DPS_MULT,
   BLACK_HOLE_PULL,
   COMBOKILLER_MAX_STACKS,
   COMBOKILLER_PER_STACK,
@@ -15,6 +16,7 @@ import {
   COYOTE_TIME,
   DROP_THROUGH_TIME,
   DT,
+  FREEZE_SLOW_MULT,
   GROUND_ACCEL,
   GROUND_FRICTION,
   JUMP_BUFFER,
@@ -48,6 +50,7 @@ import {
   STUNLOCK_WINDOW,
   MAX_FALL_SPEED,
   MULTI_HIT_WINDOW,
+  POISON_DPS_MULT,
   RESPAWN_INVULN,
   RMB_CHAIN_FINISHER,
   PARAGON_DASH_IMMUNITY,
@@ -60,7 +63,9 @@ import {
   SHEDIM_BLAST_MANA_THRESHOLD,
   SHEDIM_STUN_CHAIN,
   SHEDIM_STUN_DURATION,
+  SHOCK_ARMOR_SHRED,
   SPRINT_MULTIPLIER,
+  STATUS_TICK_INTERVAL,
   WALK_SPEED,
 } from "./constants";
 import { ARENA, groundAt } from "./map";
@@ -77,6 +82,7 @@ import type {
   BlackHole,
   ClassId,
   CombatLogEntry,
+  DamageType,
   Facing,
   Fighter,
   FloatingText,
@@ -253,6 +259,14 @@ export class ArenaEngine {
       respawnInvuln: 0,
       dropThrough: 0,
       armorBreak: 0,
+      burnTimer: 0,
+      burnTick: 0,
+      burnDps: 0,
+      poisonTimer: 0,
+      poisonTick: 0,
+      poisonDps: 0,
+      freezeTimer: 0,
+      shockTimer: 0,
       coyoteTimer: 0,
       jumpBuffer: 0,
       jumpCut: false,
@@ -442,7 +456,11 @@ export class ArenaEngine {
         this.whirlwindHit(f);
       }
       // He keeps full movement, but cannot attack.
-      const wSpeed = WALK_SPEED * f.speedMult * (f.sprinting ? SPRINT_MULTIPLIER : 1);
+      const wSpeed =
+        WALK_SPEED *
+        f.speedMult *
+        (f.sprinting ? SPRINT_MULTIPLIER : 1) *
+        (f.freezeTimer > 0 ? FREEZE_SLOW_MULT : 1);
       if (input.moveX !== 0) {
         f.vx += clamp(input.moveX * wSpeed - f.vx, -GROUND_ACCEL, GROUND_ACCEL);
         f.facing = input.moveX > 0 ? 1 : -1;
@@ -570,7 +588,11 @@ export class ArenaEngine {
     // --- movement ----------------------------------------------------------
     // Accelerate toward the target speed rather than snapping to it, so
     // direction changes and landings read as momentum instead of teleporting.
-    const speed = WALK_SPEED * f.speedMult * (f.sprinting ? SPRINT_MULTIPLIER : 1);
+    const speed =
+      WALK_SPEED *
+      f.speedMult *
+      (f.sprinting ? SPRINT_MULTIPLIER : 1) *
+      (f.freezeTimer > 0 ? FREEZE_SLOW_MULT : 1);
     const accel = f.onGround ? GROUND_ACCEL : AIR_ACCEL;
 
     if (input.moveX !== 0) {
@@ -653,13 +675,19 @@ export class ArenaEngine {
     f.coyoteTimer = dec(f.coyoteTimer);
     f.jumpBuffer = dec(f.jumpBuffer);
     f.armorBreak = dec(f.armorBreak);
+    f.freezeTimer = dec(f.freezeTimer);
+    f.shockTimer = dec(f.shockTimer);
     f.reflectTimer = dec(f.reflectTimer);
     f.reflectCooldown = dec(f.reflectCooldown);
     f.hitFlash = dec(f.hitFlash);
     f.manaflowHold = dec(f.manaflowHold);
+    this.tickStatusDots(f);
 
     const cls = getClass(f.classId);
-    f.armor = cls.baseArmor - (f.armorBreak > 0 ? ARMOR_BREAK_AMOUNT : 0);
+    f.armor =
+      cls.baseArmor -
+      (f.armorBreak > 0 ? ARMOR_BREAK_AMOUNT : 0) -
+      (f.shockTimer > 0 ? SHOCK_ARMOR_SHRED : 0);
 
     // Legendary Vitality: passive regen while alive, gear-derived so mobs
     // (which never carry equipment) are always at 0 and unaffected.
@@ -681,6 +709,38 @@ export class ArenaEngine {
 
     for (const k of Object.keys(f.cooldowns)) {
       f.cooldowns[k] = dec(f.cooldowns[k]);
+    }
+  }
+
+  /**
+   * Burn/Poison tick their snapshotted DPS every STATUS_TICK_INTERVAL,
+   * modeled directly on applyHazards' tick-with-remainder shape — the DOT
+   * already paid its one-time mitigation/resist cost when it was applied
+   * (see applyElementalStatus), so ticks here are flat damage.
+   */
+  private tickStatusDots(f: Fighter) {
+    if (f.state === "dead") return;
+    if (f.burnTimer > 0) {
+      f.burnTimer = Math.max(0, f.burnTimer - DT);
+      f.burnTick -= DT;
+      if (f.burnTick <= 0) {
+        f.burnTick = STATUS_TICK_INTERVAL;
+        const dmg = Math.max(1, Math.round(f.burnDps * STATUS_TICK_INTERVAL));
+        f.hp = Math.max(0, f.hp - dmg);
+        this.spawnText(f.x + (Math.random() - 0.5) * 12, f.y - f.h - 4, `${dmg}`, "#f97316", 14);
+      }
+      if (f.burnTimer <= 0) f.burnDps = 0;
+    }
+    if (f.poisonTimer > 0) {
+      f.poisonTimer = Math.max(0, f.poisonTimer - DT);
+      f.poisonTick -= DT;
+      if (f.poisonTick <= 0) {
+        f.poisonTick = STATUS_TICK_INTERVAL;
+        const dmg = Math.max(1, Math.round(f.poisonDps * STATUS_TICK_INTERVAL));
+        f.hp = Math.max(0, f.hp - dmg);
+        this.spawnText(f.x + (Math.random() - 0.5) * 12, f.y - f.h - 4, `${dmg}`, "#84cc16", 14);
+      }
+      if (f.poisonTimer <= 0) f.poisonDps = 0;
     }
   }
 
@@ -720,7 +780,7 @@ export class ArenaEngine {
     // A combo can consume the input and clear the action outright.
     if (!f.action) return;
     const a = f.action;
-    a.elapsed += DT * f.attackSpeed;
+    a.elapsed += DT * f.attackSpeed * (f.freezeTimer > 0 ? FREEZE_SLOW_MULT : 1);
 
     if (!a.spawned && a.elapsed >= a.spec.activeAt) {
       a.spawned = true;
@@ -754,6 +814,8 @@ export class ArenaEngine {
         life: 1.2,
         label: spec.label,
         color: cls.colors.trim,
+        damageType: spec.damageType ?? "physical",
+        statusDuration: spec.statusDuration ?? 0,
       });
       return;
     }
@@ -776,6 +838,8 @@ export class ArenaEngine {
         life: 1.6,
         label: spec.label,
         color: type?.accent ?? "#0e7490",
+        damageType: spec.damageType ?? "physical",
+        statusDuration: spec.statusDuration ?? 0,
       });
       return;
     }
@@ -842,6 +906,8 @@ export class ArenaEngine {
       hit: new Set(),
       label: spec.label,
       facing: f.facing,
+      damageType: spec.damageType ?? "physical",
+      statusDuration: spec.statusDuration ?? 0,
     };
     this.hitboxes.push(hb);
     if (spec.kind === "lmb" || spec.kind === "rmb" || spec.kind === "skill") {
@@ -878,6 +944,8 @@ export class ArenaEngine {
         hit: new Set(),
         label: "Void Blast",
         facing: f.facing,
+        damageType: "physical",
+        statusDuration: 0,
       });
       this.burst(f.x + f.facing * 50, f.y - f.h * 0.6, cls.colors.aura, 26);
       this.cb.onLog(`${f.name}'s Void Blast detonates!`, "big");
@@ -1004,7 +1072,7 @@ export class ArenaEngine {
     if (target.state === "reflect" && target.reflectTimer > 0) {
       this.spawnText(target.x, target.y - target.h - 10, "REFLECT!", "#fbbf24", 20);
       this.cb.onLog(`${target.name} reflects ${hb.label}!`, "good");
-      this.dealDamage(attacker, hb.damage, target, "Reflect");
+      this.dealDamage(attacker, hb.damage, target, "Reflect", hb.damageType);
       this.launch(attacker, 0.6);
       target.state = "idle";
       target.reflectTimer = 0;
@@ -1031,7 +1099,8 @@ export class ArenaEngine {
       }
     }
 
-    this.dealDamage(target, hb.damage, attacker, hb.label);
+    this.dealDamage(target, hb.damage, attacker, hb.label, hb.damageType);
+    this.applyElementalStatus(target, hb.damageType, hb.statusDuration, hb.damage);
 
     // ArmorBreak strips the target's armour for its duration.
     if (hb.sourceId === "armorbreak") {
@@ -1150,11 +1219,49 @@ export class ArenaEngine {
     );
   }
 
+  /**
+   * Applies (or refreshes) the elemental status matching a hit's damage
+   * type. A refresh takes the stronger of old/new duration and DPS rather
+   * than stacking — same "no stacking-magnitude bugs" policy as everything
+   * else on Fighter being a flat named field instead of a list. Burn/poison
+   * DOT dps scales off the triggering hit's own damage (not raw
+   * attackPower), so a bigger hit leaves a proportionally bigger DOT.
+   */
+  private applyElementalStatus(
+    target: Fighter,
+    damageType: DamageType,
+    duration: number,
+    hitDamage: number
+  ) {
+    if (duration <= 0) return;
+    switch (damageType) {
+      case "fire":
+        if (target.burnTimer <= 0) target.burnTick = STATUS_TICK_INTERVAL;
+        target.burnTimer = Math.max(target.burnTimer, duration);
+        target.burnDps = Math.max(target.burnDps, hitDamage * BURN_DPS_MULT);
+        break;
+      case "poison":
+        if (target.poisonTimer <= 0) target.poisonTick = STATUS_TICK_INTERVAL;
+        target.poisonTimer = Math.max(target.poisonTimer, duration);
+        target.poisonDps = Math.max(target.poisonDps, hitDamage * POISON_DPS_MULT);
+        break;
+      case "frost":
+        target.freezeTimer = Math.max(target.freezeTimer, duration);
+        break;
+      case "shock":
+        target.shockTimer = Math.max(target.shockTimer, duration);
+        break;
+      default:
+        break;
+    }
+  }
+
   private dealDamage(
     target: Fighter,
     raw: number,
     source: Fighter,
-    label: string
+    label: string,
+    damageType: DamageType = "physical"
   ) {
     // Legendary Damage Negation: a flat chance to shrug the whole hit off,
     // rolled before armour so it's a full negation rather than a discount.
@@ -1164,8 +1271,14 @@ export class ArenaEngine {
     }
 
     // Armour is a straight percentage; ArmorBreak can drive it negative so the
-    // victim takes extra damage.
-    const mitigated = raw * (1 - target.armor / 100);
+    // victim takes extra damage. Elemental resistance (mobs only, see
+    // MobType.resist) is a second, independent multiplier on top — negative
+    // values there express a vulnerability instead.
+    let mitigated = raw * (1 - target.armor / 100);
+    if (target.isMob && target.mobTypeId) {
+      const resist = MOB_TYPES[target.mobTypeId]?.resist?.[damageType] ?? 0;
+      mitigated *= 1 - resist;
+    }
     const dmg = Math.max(1, Math.round(mitigated));
     target.hp = Math.max(0, target.hp - dmg);
     // A hit chunking a real fraction of the target's own health reads as
@@ -1373,6 +1486,8 @@ export class ArenaEngine {
           hit: new Set(),
           label: p.label,
           facing: p.vx >= 0 ? 1 : -1,
+          damageType: p.damageType,
+          statusDuration: p.statusDuration,
         };
         this.applyHit(box, target, this.fighters.find((f) => f.id === p.ownerId));
         consumed = true;
@@ -1487,6 +1602,8 @@ export class ArenaEngine {
       hit: new Set(),
       label: "Whirlwind",
       facing: f.facing,
+      damageType: "physical",
+      statusDuration: 0,
     });
     for (let i = 0; i < 6; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -1604,6 +1721,8 @@ export class ArenaEngine {
       life: SLASH_WAVE_LIFE,
       label: "Slash Wave",
       color: cls.colors.aura,
+      damageType: "physical",
+      statusDuration: 0,
     });
     this.cb.onLog(`${f.name} throws a Slash Wave!`, "big");
     this.spawnText(f.x, f.y - f.h - 10, "SLASH WAVE", cls.colors.aura, 16);
@@ -1637,6 +1756,8 @@ export class ArenaEngine {
       hit: new Set(),
       label: "Charge",
       facing: f.facing,
+      damageType: "physical",
+      statusDuration: 0,
     });
     this.cb.onLog(`${f.name} charges behind his greatsword — Stoic!`, "big");
     this.spawnText(f.x, f.y - f.h - 10, "STOIC", STOIC_GLOW, 16);

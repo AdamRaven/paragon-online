@@ -14,7 +14,7 @@ import {
   itemValue,
   type Item,
 } from "@/lib/arena/items";
-import { BASE_STAT, type AdventureSave } from "@/lib/arena/progression";
+import { BASE_STAT, TOWN_TIER_COST, type AdventureSave } from "@/lib/arena/progression";
 
 const RESPEC_COST_PER_POINT = 25;
 
@@ -29,6 +29,7 @@ export const BlacksmithPanel = memo(function BlacksmithPanel({
   onEnhance,
   onEnhanceMany,
   onRespec,
+  onBuyTownTier,
   lastResult,
   onClose,
 }: {
@@ -43,6 +44,7 @@ export const BlacksmithPanel = memo(function BlacksmithPanel({
   onEnhance: (item: Item) => void;
   onEnhanceMany: (item: Item, times: number) => void;
   onRespec: () => void;
+  onBuyTownTier: () => void;
   lastResult: string | null;
   onClose: () => void;
 }) {
@@ -210,15 +212,40 @@ export const BlacksmithPanel = memo(function BlacksmithPanel({
             </div>
 
             {(() => {
-              const spent =
+              const tier = save.townTier ?? 0;
+              const cost = TOWN_TIER_COST[tier];
+              return (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                  <h3 className="section-title">Decorate Emberhold</h3>
+                  <p className="hint" style={{ marginBottom: 10 }}>
+                    Purely cosmetic — spend gold to dress up the town, tier by tier. No stat effect.
+                  </p>
+                  <button
+                    className="btn"
+                    style={{ width: "100%" }}
+                    disabled={cost === undefined || save.gold < cost}
+                    onClick={onBuyTownTier}
+                  >
+                    {cost === undefined
+                      ? `Fully decorated (tier ${tier}/${TOWN_TIER_COST.length})`
+                      : `Buy tier ${tier + 1}/${TOWN_TIER_COST.length} (${cost}g)`}
+                  </button>
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const statsSpent =
                 save.stats.str + save.stats.agi + save.stats.vit + save.stats.foc - BASE_STAT * 4;
+              const talentsSpent = (save.talents ?? []).length;
+              const spent = statsSpent + talentsSpent;
               const cost = spent * RESPEC_COST_PER_POINT;
               return (
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
                   <h3 className="section-title">Respec</h3>
                   <p className="hint" style={{ marginBottom: 10 }}>
                     Refund every point you&apos;ve put into Strength, Agility, Vitality and
-                    Focus, so you can reallocate them from scratch.
+                    Focus, plus any talents chosen, so you can reallocate everything from scratch.
                   </p>
                   <button
                     className="btn"

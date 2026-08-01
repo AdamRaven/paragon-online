@@ -26,6 +26,25 @@
   --aura-shedim: #3fe0e8;
   --aura-kacper: #ff6b4a;
   --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* "Obsidian Pixel Protocol" — the live HUD (ArenaHud.tsx + AdventureClient's
+     camp-bar) and the bag (InventoryPanel.tsx, scoped under .bag-v2) use this
+     navy/cyan/pink palette instead of the gold chrome above. Namespaced so it
+     can never collide with --gold/--accent/etc used by every other panel. */
+  --hud2-bg: #041424;
+  --hud2-bg-deep: #051425;
+  --hud2-panel: rgba(16, 33, 48, 0.85);
+  --hud2-panel-solid: #0c1d2c;
+  --hud2-recessed: #000f1e;
+  --hud2-border: #44474c;
+  --hud2-primary: #b9c7df;
+  --hud2-muted: #c4c6cd;
+  --hud2-tertiary: #00dbe9;
+  --hud2-tertiary-dim: #7df4ff;
+  --hud2-secondary: #ffb3ad;
+  --hud2-danger: #c00019;
+  --hud2-gold: #ffd700;
+  --hud2-font: var(--font-jetbrains-mono), var(--mono);
 }
 
 * {
@@ -49,6 +68,51 @@ body {
 button {
   font-family: inherit;
   cursor: pointer;
+}
+
+/* -------------------------------------------------------- pixel-chrome (HUD2) */
+/* Shared building blocks for the "Obsidian Pixel Protocol" look — the live
+   HUD and the bag panel. New, unused class names, so they're safe to add
+   without touching any of the app's existing gold-chrome CSS. */
+
+.pixel-border-4 {
+  box-shadow:
+    0 -4px 0 0 #000,
+    0 4px 0 0 #000,
+    -4px 0 0 0 #000,
+    4px 0 0 0 #000;
+}
+
+.pixel-border-cyan {
+  box-shadow:
+    0 -4px 0 0 var(--hud2-tertiary),
+    0 4px 0 0 var(--hud2-tertiary),
+    -4px 0 0 0 var(--hud2-tertiary),
+    4px 0 0 0 var(--hud2-tertiary);
+}
+
+.pixel-border-outline {
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.hollow-panel {
+  background: var(--hud2-panel);
+  backdrop-filter: blur(2px);
+}
+
+/* A 2px checkerboard texture for bar fills, matching the mockups' dither-bg —
+   layer as a semi-transparent overlay on top of a solid gradient fill. */
+.dither-overlay {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#000 1px, transparent 0);
+  background-size: 2px 2px;
+  opacity: 0.25;
+  pointer-events: none;
 }
 
 /* ------------------------------------------------------------------ landing */
@@ -935,6 +999,49 @@ kbd {
 
 .achievement-row.done .achievement-main small {
   color: var(--gold-lit);
+}
+
+.talent-picker {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.talent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.talent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+}
+
+.talent-row.chosen {
+  border-color: var(--accent);
+  background: rgba(110, 231, 183, 0.06);
+}
+
+.talent-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.talent-info strong {
+  font-size: 12px;
+}
+
+.talent-info small {
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .bounty-row {
@@ -1966,6 +2073,235 @@ kbd {
   .fighter-panel { width: 40vw; }
 }
 
+/* ------------------------------------------------- HUD2 (Obsidian Pixel Protocol) */
+/* Every rule below is scoped under `.arena-hud` purely for CSS specificity —
+   it's the ArenaHud.tsx root, so this can't leak anywhere else — no classes
+   were added to the component itself. Same navy/cyan/pink look for both
+   PVP duel and campaign, since a split HUD skin between modes would read as
+   unfinished. */
+
+.arena-hud .fighter-panel {
+  background: var(--hud2-panel);
+  backdrop-filter: blur(2px);
+  border: none;
+  box-shadow:
+    0 -4px 0 0 #000,
+    0 4px 0 0 #000,
+    -4px 0 0 0 #000,
+    4px 0 0 0 #000,
+    0 0 16px -4px color-mix(in srgb, var(--aura, var(--hud2-tertiary)) 55%, transparent);
+}
+
+@keyframes critical-pulse {
+  0%, 100% {
+    box-shadow:
+      0 -4px 0 0 #000, 0 4px 0 0 #000, -4px 0 0 0 #000, 4px 0 0 0 #000,
+      0 0 0 1px rgba(239, 68, 68, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 -4px 0 0 #000, 0 4px 0 0 #000, -4px 0 0 0 #000, 4px 0 0 0 #000,
+      0 0 22px 1px rgba(239, 68, 68, 0.45);
+  }
+}
+
+.arena-hud .fighter-head strong {
+  color: var(--hud2-primary);
+  font-family: var(--hud2-font);
+}
+
+.arena-hud .fighter-panel.right .fighter-head strong {
+  color: var(--hud2-secondary);
+}
+
+.arena-hud .fighter-head span span {
+  color: var(--hud2-tertiary);
+}
+
+.arena-hud .fighter-panel.right .fighter-head span span {
+  color: var(--hud2-danger);
+}
+
+.arena-hud .bar {
+  background: var(--hud2-bg);
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.arena-hud .bar-text {
+  font-family: var(--hud2-font);
+}
+
+.arena-hud .hpbar .bar-fill {
+  background: linear-gradient(90deg, var(--hud2-danger), #ff4d4d);
+}
+
+.arena-hud .manabar .bar-fill {
+  background: linear-gradient(90deg, #00838f, var(--hud2-tertiary));
+}
+
+.arena-hud .hpbar .bar-fill::before,
+.arena-hud .manabar .bar-fill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#000 1px, transparent 0);
+  background-size: 2px 2px;
+  opacity: 0.22;
+}
+
+.arena-hud .arena-tag {
+  font-family: var(--hud2-font);
+  background: var(--hud2-panel);
+  backdrop-filter: blur(2px);
+  border-color: var(--hud2-border);
+}
+
+.arena-hud .arena-tag.combo,
+.arena-hud .arena-tag.combo-hot {
+  color: var(--hud2-gold);
+  border-color: var(--hud2-gold);
+}
+
+.arena-hud .strike-counter {
+  padding: 2px 16px;
+  background: var(--hud2-panel);
+  backdrop-filter: blur(2px);
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.arena-hud .strike-counter-num {
+  font-family: var(--hud2-font);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--hud2-gold);
+  text-shadow: 2px 2px 0 #8b4513;
+  animation: strike-pulse 1s ease-in-out infinite;
+}
+
+@keyframes strike-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.arena-hud .arena-log {
+  background: var(--hud2-panel);
+  backdrop-filter: blur(2px);
+  border: none;
+  box-shadow: 0 -4px 0 0 #000, 0 4px 0 0 #000, -4px 0 0 0 #000, 4px 0 0 0 #000;
+  font-family: var(--hud2-font);
+}
+
+.arena-hud .log-info { color: var(--hud2-muted); }
+.arena-hud .log-good { color: var(--hud2-tertiary); }
+.arena-hud .log-bad { color: var(--hud2-danger); }
+.arena-hud .log-big { color: var(--hud2-gold); }
+
+.arena-hud .manaflow,
+.campaign-bottom-stack .manaflow {
+  background: var(--hud2-panel);
+  backdrop-filter: blur(2px);
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.arena-hud .manaflow-fill,
+.campaign-bottom-stack .manaflow-fill {
+  background: linear-gradient(90deg, #00838f, var(--hud2-tertiary));
+}
+
+.arena-hud .manaflow span,
+.campaign-bottom-stack .manaflow span {
+  font-family: var(--hud2-font);
+  color: var(--hud2-tertiary-dim);
+}
+
+.arena-hud .skill,
+.campaign-bottom-stack .skill {
+  background: #263647;
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.arena-hud .skill.ready,
+.campaign-bottom-stack .skill.ready {
+  background: #001719;
+}
+
+@keyframes skill-ready-glow {
+  0%, 100% {
+    box-shadow:
+      0 -4px 0 0 var(--hud2-tertiary), 0 4px 0 0 var(--hud2-tertiary),
+      -4px 0 0 0 var(--hud2-tertiary), 4px 0 0 0 var(--hud2-tertiary),
+      0 0 0 0 color-mix(in srgb, var(--hud2-tertiary) 0%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 -4px 0 0 var(--hud2-tertiary), 0 4px 0 0 var(--hud2-tertiary),
+      -4px 0 0 0 var(--hud2-tertiary), 4px 0 0 0 var(--hud2-tertiary),
+      0 0 12px 1px color-mix(in srgb, var(--hud2-tertiary) 55%, transparent);
+  }
+}
+
+@keyframes skill-activate {
+  0% {
+    transform: scale(1.14);
+    box-shadow:
+      0 -4px 0 0 #fff, 0 4px 0 0 #fff, -4px 0 0 0 #fff, 4px 0 0 0 #fff,
+      0 0 20px 4px color-mix(in srgb, var(--hud2-tertiary) 80%, white);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 -2px 0 0 var(--hud2-border), 0 2px 0 0 var(--hud2-border),
+      -2px 0 0 0 var(--hud2-border), 2px 0 0 0 var(--hud2-border);
+  }
+}
+
+.arena-hud .skill-key,
+.campaign-bottom-stack .skill-key {
+  color: var(--hud2-tertiary);
+  font-family: var(--hud2-font);
+}
+
+.arena-hud .skill-name,
+.campaign-bottom-stack .skill-name {
+  color: var(--hud2-muted);
+  font-family: var(--hud2-font);
+  text-transform: uppercase;
+}
+
+.arena-hud .skill-cost,
+.campaign-bottom-stack .skill-cost {
+  color: var(--hud2-tertiary-dim);
+}
+
+.arena-hud .skill-cd,
+.campaign-bottom-stack .skill-cd {
+  font-family: var(--hud2-font);
+}
+
+.campaign-bottom-stack .arena-skills {
+  justify-items: center;
+}
+
 /* ------------------------------------------------------ campaign overlay */
 
 /* Bottom-anchored stack for the achievement banner, minimap and camp bar —
@@ -2063,6 +2399,81 @@ kbd {
   .expbar { width: 100%; }
 }
 
+/* HUD2 skin for the campaign bottom console — scoped under
+   .campaign-bottom-stack (camp-bar's stable wrapper) so it can't affect
+   anything else, matching the .arena-hud scoping approach above. */
+
+/* One bordered window holding the skill row and the XP/gold/nav row
+   together — see AdventureClient.tsx's .camp-console wrapper — instead of
+   the skill row and camp-bar reading as two separate stacked panels. */
+.camp-console {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--hud2-panel);
+  backdrop-filter: blur(2px);
+  border: none;
+  border-radius: 0;
+  box-shadow: 0 -4px 0 0 #000, 0 4px 0 0 #000, -4px 0 0 0 #000, 4px 0 0 0 #000;
+  font-family: var(--hud2-font);
+}
+
+/* Nested inside .camp-console now, so it's just a flex row — the window
+   chrome (background/border) lives on the wrapper instead. */
+.camp-console .camp-bar {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.campaign-bottom-stack .camp-level {
+  color: var(--hud2-tertiary);
+}
+
+.campaign-bottom-stack .camp-purse {
+  font-family: var(--hud2-font);
+  color: var(--hud2-primary);
+}
+
+.campaign-bottom-stack .expbar {
+  background: var(--hud2-bg);
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.campaign-bottom-stack .expbar .bar-fill {
+  background: linear-gradient(90deg, #b3413d, var(--hud2-secondary));
+}
+
+.campaign-bottom-stack .camp-btn {
+  font-family: var(--hud2-font);
+  background: var(--hud2-panel-solid);
+  color: var(--hud2-muted);
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.campaign-bottom-stack .camp-btn:not(.btn-ghost) {
+  background: var(--hud2-tertiary);
+  color: #002022;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-tertiary),
+    0 2px 0 0 var(--hud2-tertiary),
+    -2px 0 0 0 var(--hud2-tertiary),
+    2px 0 0 0 var(--hud2-tertiary);
+}
+
 /* Lift the log and skill row clear of the campaign bar at the bottom. */
 .campaign .arena-bottom {
   padding-bottom: 46px;
@@ -2089,23 +2500,6 @@ kbd {
 .almost-there .bar {
   height: 10px;
   margin-bottom: 0;
-}
-
-.interact-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 118px;
-  transform: translateX(-50%);
-  z-index: 5;
-  background: var(--panel);
-  border: 1px solid var(--gold-dim);
-  border-radius: var(--radius);
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--gold-lit);
-  white-space: nowrap;
-  pointer-events: none;
 }
 
 .stage-minimap {
@@ -2793,4 +3187,140 @@ body {
 @keyframes stoic-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.9); }
   50% { box-shadow: 0 0 10px 2px rgba(255, 59, 48, 0.9); }
+}
+
+.arena-tag.status-burn { color: #fb923c; border-color: rgba(251,146,60,0.5); }
+.arena-tag.status-poison { color: #a3e635; border-color: rgba(163,230,53,0.5); }
+.arena-tag.status-freeze { color: #7dd3fc; border-color: rgba(125,211,252,0.5); }
+.arena-tag.status-shock { color: #c4b5fd; border-color: rgba(196,181,253,0.5); }
+
+/* ------------------------------------------- HUD2 bag (InventoryPanel.tsx) */
+/* Everything here is scoped under .bag-v2 — the one marker class added to
+   InventoryPanel's root <div className="sheet wide bag-v2"> — so none of it
+   can leak into BlacksmithPanel/VendorPanel/StoragePanel, which reuse the
+   same base .sheet/.btn/.item-row/ItemRow the bag does. The one exception is
+   the hover-card tooltip (ItemHoverCard portals straight onto <body>, so it
+   sits outside this DOM subtree and can't be scoped this way) — it keeps the
+   existing gold-chrome look everywhere, including in the bag; a reasonable
+   cut given it's a transient hover popup, not part of either mockup. */
+
+.sheet.bag-v2 {
+  background: var(--hud2-bg-deep);
+  border: none;
+  box-shadow: 0 -4px 0 0 #000, 0 4px 0 0 #000, -4px 0 0 0 #000, 4px 0 0 0 #000;
+  font-family: var(--hud2-font);
+}
+
+.bag-v2 .sheet-head h2 {
+  color: var(--hud2-primary);
+}
+
+.bag-v2 .sheet-head h2::after {
+  background: linear-gradient(90deg, var(--hud2-tertiary), transparent);
+}
+
+.bag-v2 .sheet-head > div > span {
+  color: var(--hud2-secondary) !important;
+}
+
+.bag-v2 .section-title {
+  color: var(--hud2-tertiary);
+  border-color: color-mix(in srgb, var(--hud2-tertiary) 20%, transparent);
+}
+
+.bag-v2 .slot-card {
+  background: var(--hud2-panel-solid);
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.bag-v2 .slot-card.empty {
+  opacity: 0.6;
+}
+
+.bag-v2 .slot-glyph {
+  background: var(--hud2-bg);
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.bag-v2 .slot-name {
+  color: var(--hud2-tertiary-dim);
+}
+
+.bag-v2 .slot-body strong {
+  color: var(--hud2-primary);
+}
+
+.bag-v2 .slot-hint {
+  color: var(--hud2-muted);
+}
+
+.bag-v2 .item-list {
+  background: var(--hud2-recessed);
+  box-shadow: inset 2px 2px 0 0 #000, inset -2px -2px 0 0 var(--hud2-border);
+  padding: 8px;
+}
+
+.bag-v2 .item-row {
+  background: rgba(38, 54, 71, 0.4);
+  border: none;
+}
+
+.bag-v2 .item-stats {
+  color: var(--hud2-tertiary-dim);
+}
+
+.bag-v2 .item-sub {
+  color: var(--hud2-muted);
+}
+
+.bag-v2 .item-value {
+  color: var(--hud2-secondary);
+}
+
+.bag-v2 .tab-row .btn.tab {
+  font-family: var(--hud2-font);
+  background: var(--hud2-panel-solid);
+  color: var(--hud2-muted);
+  border: none;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-border),
+    0 2px 0 0 var(--hud2-border),
+    -2px 0 0 0 var(--hud2-border),
+    2px 0 0 0 var(--hud2-border);
+}
+
+.bag-v2 .tab-row .btn.tab:not(.btn-ghost) {
+  background: var(--hud2-tertiary);
+  color: #002022;
+  box-shadow:
+    0 -2px 0 0 var(--hud2-tertiary),
+    0 2px 0 0 var(--hud2-tertiary),
+    -2px 0 0 0 var(--hud2-tertiary),
+    2px 0 0 0 var(--hud2-tertiary);
+}
+
+.bag-v2 .btn.tiny:not(.btn-ghost) {
+  background: color-mix(in srgb, var(--hud2-tertiary) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hud2-tertiary) 40%, transparent);
+  color: var(--hud2-tertiary);
+  box-shadow: none;
+}
+
+.bag-v2 .btn.btn-ghost {
+  color: var(--hud2-muted);
+  border-color: var(--hud2-border);
+}
+
+.bag-v2 .hint {
+  color: var(--hud2-muted);
 }

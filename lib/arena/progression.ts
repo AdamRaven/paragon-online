@@ -8,6 +8,7 @@ import {
   type Item,
 } from "./items";
 import { DEFAULT_STAGE } from "./mobs";
+import { TALENT_MILESTONE_LEVELS, totalTalentBonus } from "./talents";
 import type { ClassDef, ClassId } from "./types";
 
 export const MAX_LEVEL = 50;
@@ -144,7 +145,29 @@ export interface AdventureSave {
    *  AdventureEngine.toggleAutoGrind. Deliberately dumb: no skills, no
    *  jumping, just walk to the nearest mob and swing. */
   autoGrind?: boolean;
+  /** Unspent talent points — see lib/arena/talents.ts, granted at
+   *  TALENT_MILESTONE_LEVELS. */
+  talentPoints?: number;
+  /** Chosen talent ids, up to MAX_TALENTS, no duplicates. */
+  talents?: string[];
+  /** Today's best clear time on the Daily Rift (see
+   *  AdventureEngine.updateDailyChallenge) — reset whenever `date` isn't
+   *  today, same as dailyBounty above. */
+  dailyChallengeRecord?: { date: string; bestTime?: number };
+  /** Cosmetic-only gear-trim recolor, unlocked via Prestige tiers (see
+   *  lib/arena/prestige.ts) — parallels auraColor above, no stat effect. */
+  weaponSkin?: string;
+  /** How many town-decoration tiers have been bought — see TOWN_TIER_COST
+   *  and drawTownDecor in render.ts. Purely cosmetic, sequential (buy tier
+   *  N+1, no picking à la carte). */
+  townTier?: number;
 }
+
+/** Escalating gold cost per town-decoration tier — index 0 is the cost of
+ *  buying tier 1 from tier 0, etc. Fixed and short (5 tiers) rather than an
+ *  open-ended expansion like storage, since "decorate the town" has a
+ *  natural endpoint. */
+export const TOWN_TIER_COST = [500, 1500, 4000, 10000, 25000];
 
 /** Experience needed to advance from `level` to `level + 1`. */
 export function expToNext(level: number): number {
@@ -183,12 +206,14 @@ export function deriveArenaStats(
   level: number,
   stats: Stats,
   equipped: Partial<Record<EquipSlot, Item>> = {},
-  ascension = 0
+  ascension = 0,
+  talents: string[] = []
 ): DerivedArenaStats {
   const gear = equippedStats(equipped);
   const gearSet = equippedSetStats(equipped);
   const fx = equippedEffects(equipped);
   const fxSet = equippedSetEffects(equipped);
+  const talent = totalTalentBonus(talents);
   const str = stats.str - BASE_STAT;
   const agi = stats.agi - BASE_STAT;
   const vit = stats.vit - BASE_STAT;
@@ -196,14 +221,20 @@ export function deriveArenaStats(
   const ascendMult = 1 + Math.max(0, ascension) * ASCENSION_BONUS_PER_RANK;
 
   const maxHp = Math.round(
-    (cls.maxHp + vit * 18 + (level - 1) * 14 + gear.hp + gearSet.hp) * ascendMult
+    (cls.maxHp + vit * 18 + (level - 1) * 14 + gear.hp + gearSet.hp) *
+      (1 + talent.hpPct) *
+      ascendMult
   );
-  const maxMana = Math.round((cls.maxMana + foc * 7 + gear.mana + gearSet.mana) * ascendMult);
+  const maxMana = Math.round(
+    (cls.maxMana + foc * 7 + gear.mana + gearSet.mana) * (1 + talent.manaPct) * ascendMult
+  );
   const attackPower =
     (cls.attackPower + str * 2.2 + (level - 1) * 1.6 + gear.attack + gearSet.attack) *
+    (1 + talent.atkPct) *
     ascendMult;
   const speedMult =
-    1 + Math.min(0.4, Math.max(0, agi) * 0.013) + gear.speed + gearSet.speed;
+    (1 + Math.min(0.4, Math.max(0, agi) * 0.013) + gear.speed + gearSet.speed) *
+    (1 + talent.speedPct);
   const attackSpeed =
     1 + Math.min(0.35, Math.max(0, agi) * 0.009) + gear.atkSpeed + gearSet.atkSpeed;
   const power = Math.round(
@@ -217,11 +248,11 @@ export function deriveArenaStats(
     speedMult,
     attackSpeed,
     power,
-    lifesteal: Math.min(0.5, fx.lifesteal + fxSet.lifesteal),
+    lifesteal: Math.min(0.5, fx.lifesteal + fxSet.lifesteal + talent.lifesteal),
     negation: Math.min(0.6, fx.negation + fxSet.negation),
     regenHp,
     regenMana: Math.round(regenHp * 0.6),
-    cdr: Math.min(0.4, fx.cdr + fxSet.cdr),
+    cdr: Math.min(0.4, fx.cdr + fxSet.cdr + talent.cdr),
   };
 }
 
@@ -253,6 +284,9 @@ export function grantExp(save: AdventureSave, amount: number): LevelUpResult {
     save.exp -= expToNext(save.level);
     save.level += 1;
     save.statPoints += STAT_POINTS_PER_LEVEL;
+    if (TALENT_MILESTONE_LEVELS.includes(save.level)) {
+      save.talentPoints = (save.talentPoints ?? 0) + 1;
+    }
   }
   if (save.level >= MAX_LEVEL) save.exp = 0;
   const levelsGained = save.level - start;
@@ -303,9 +337,12 @@ export function createAdventureSave(
     storageCap: STORAGE_BASE_CAP,
     mobKills: {},
     dailyBounty: undefined,
+    dailyChallengeRecord: undefined,
     uniquesFound: [],
     seenRunComplete: false,
     autoGrind: false,
+    talentPoints: 0,
+    talents: [],
   };
 }
 

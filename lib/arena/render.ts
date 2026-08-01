@@ -814,6 +814,7 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
     drawBlackHole(b, wx(bh.x), wy(bh.y), bh.radius / S, bh.life / bh.maxLife, engine.time);
   }
   drawVillageProps(b, engine, wx, wy, engine.time);
+  drawTownDecor(b, engine, wx, wy, engine.time);
   drawBlacksmith(b, engine, wx, wy, engine.time);
   drawVendor(b, engine, wx, wy, engine.time);
   drawBank(b, engine, wx, wy, engine.time);
@@ -1492,75 +1493,6 @@ function drawTerrain(
     }
   }
 
-  // The town's decorative lake — a real basin dropping below the ground
-  // line (there's no physics pit, same "decoration, not terrain" deal as
-  // the hazard patches above, just painted deep enough to read as a lake
-  // instead of a puddle) with a two-layer drifting shimmer for a bit of
-  // parallax on the surface. Purely ambient scenery, no gameplay tied to it.
-  if (biomeId === "town") {
-    const stage = (engine as ArenaEngine & { stage?: { lakeX?: number; lakeWidth?: number } })
-      .stage;
-    const lakeX = stage?.lakeX;
-    const lakeWidth = stage?.lakeWidth;
-    if (lakeX !== undefined && lakeWidth) {
-      const groundY = map.ground[0]?.y ?? lakeX;
-      const x = wx(lakeX - lakeWidth / 2);
-      const y = wy(groundY);
-      const w = Math.round(lakeWidth / S);
-      if (x < vw && x + w > 0) {
-        const t = engine.time;
-        // Sandy banks framing the water — top edge, plus a thin skirt along
-        // the bottom so the basin reads as sitting in a sandy hollow rather
-        // than just ending abruptly.
-        px(b, x - 6, y - 1, w + 12, 4, "#6b5336");
-        px(b, x - 6, y - 1, w + 12, 1, "#8f7047");
-        px(b, x - 6, y + 51, w + 12, 3, "#5a4429");
-        // A little pebble texture along the shore so the sand doesn't read
-        // as a flat painted stripe.
-        for (let i = 0; i < w + 12; i += 7) {
-          if ((i * 7) % 3 === 0) px(b, x - 6 + i, y, 1, 1, "#a68a5c");
-        }
-        // The basin itself — five times deeper than the first pass, banded
-        // darkest-at-the-bottom to lightest-at-the-surface so it genuinely
-        // reads as a lake instead of a puddle.
-        px(b, x, y, w, 52, "#051f2b");
-        px(b, x, y, w, 40, "#082e3f");
-        px(b, x, y, w, 28, "#0f4c66");
-        px(b, x, y, w, 16, "#1c6f8f");
-        px(b, x, y, w, 6, "#2f8fae");
-        px(b, x, y, w, 1, "#7fd8f2");
-        // Fast surface shimmer.
-        for (let i = 0; i < w; i += 8) {
-          if (Math.sin(t * 1.1 + i * 0.7) > 0.6) px(b, x + i, y + 1, 2, 1, "#d6f3ff");
-        }
-        // Slower, deeper glints scattered through the water for parallax.
-        for (let i = 0; i < w; i += 11) {
-          if (Math.sin(t * 0.6 + i * 0.5 + 2) > 0.7) {
-            const depth = 8 + ((i * 13) % 30);
-            px(b, x + i, y + depth, 2, 1, "#3fa8c9");
-          }
-        }
-        pxGlow(b, x + w / 2, y + 20, w * 0.4, "#1c6f8f", 0.22);
-
-        // A few small fish drifting back and forth in the shallows — each
-        // just a body blob and a tail wedge that flips with its direction.
-        for (let n = 0; n < 3; n++) {
-          const speed = 0.35 + n * 0.12;
-          const phase = n * 2.1;
-          const depthY = y + 10 + n * 12;
-          const span = w / 2 - 10;
-          if (span <= 0) continue;
-          const cx = Math.round(x + w / 2 + Math.sin(t * speed + phase) * span);
-          const goingRight = Math.cos(t * speed + phase) > 0;
-          const fColor = n % 2 === 0 ? "#e8c15a" : "#f97316";
-          const tailDir = goingRight ? -1 : 1;
-          px(b, cx - 2, depthY, 4, 2, fColor);
-          px(b, cx + tailDir * 2, depthY, 1, 2, fColor);
-          px(b, cx - tailDir, depthY, 1, 1, "#fff2cf");
-        }
-      }
-    }
-  }
 }
 
 /**
@@ -1774,6 +1706,101 @@ function drawVillageProps(
   }
 }
 
+/**
+ * Emberhold grows fancier as the player spends gold on it (see
+ * AdventureSave.townTier, bought from the Blacksmith's buy tab) — five
+ * cumulative tiers of purely cosmetic street dressing, each just a few more
+ * px/pxGlow calls at a fixed, empty stretch of the town map. No new NPC or
+ * anchor point: the purchase itself lives in an existing shop panel.
+ */
+function drawTownDecor(
+  b: CanvasRenderingContext2D,
+  engine: ArenaEngine,
+  wx: (v: number) => number,
+  wy: (v: number) => number,
+  time: number
+) {
+  const stage = (engine as ArenaEngine & { stage?: { isTown?: boolean } }).stage;
+  if (!stage?.isTown) return;
+  const tier = (engine as ArenaEngine & { save?: { townTier?: number } }).save?.townTier ?? 0;
+  if (tier <= 0) return;
+
+  // Tier 1: bunting strung between the gate and the well.
+  if (tier >= 1) {
+    const colors = ["#f6b352", "#7dd3fc", "#f87171", "#a3e635"];
+    for (let i = 0; i < 10; i++) {
+      const gx = 260 + i * 55;
+      const gy = engine.groundAtX(gx);
+      if (gy === null) continue;
+      const x = wx(gx);
+      const y = wy(gy) - 46 + Math.round(Math.sin(i * 1.3) * 3);
+      px(b, x - 2, y, 4, 3, colors[i % colors.length]);
+    }
+  }
+
+  // Tier 2: a small flowerbed by the square.
+  if (tier >= 2) {
+    const gx = 600;
+    const gy = engine.groundAtX(gx);
+    if (gy !== null) {
+      const x = wx(gx);
+      const y = wy(gy);
+      px(b, x - 14, y - 3, 28, 3, "#2f4d1f");
+      const petals = ["#f472b6", "#fde68a", "#f87171", "#e9d5ff"];
+      for (let i = 0; i < 8; i++) {
+        const fx = x - 12 + i * 4 + Math.round(Math.sin(time * 1.5 + i) * 1);
+        px(b, fx, y - 5, 1, 2, "#3f6212");
+        px(b, fx - 1, y - 6, 3, 2, petals[i % petals.length]);
+      }
+    }
+  }
+
+  // Tier 3: a modest statue of the player's own class, where the old town
+  // lake used to be.
+  if (tier >= 3) {
+    const gx = 1850;
+    const gy = engine.groundAtX(gx);
+    if (gy !== null) {
+      const x = wx(gx);
+      const y = wy(gy);
+      px(b, x - 14, y - 1, 28, 3, "#4a4f5c");
+      px(b, x - 10, y - 4, 20, 3, "#5c6270");
+      px(b, x - 4, y - 34, 8, 30, "#6b7690");
+      px(b, x - 6, y - 34, 12, 3, "#7a8090");
+      pxGlow(b, x, y - 24, 10, "#f6b352", 0.3 + Math.sin(time * 2) * 0.08);
+    }
+  }
+
+  // Tier 4: festival lanterns strung along the main street.
+  if (tier >= 4) {
+    for (let i = 0; i < 6; i++) {
+      const gx = 850 + i * 60;
+      const gy = engine.groundAtX(gx);
+      if (gy === null) continue;
+      const x = wx(gx);
+      const y = wy(gy) - 52 + Math.round(Math.sin(time * 2 + i) * 2);
+      const flicker = 0.5 + 0.5 * Math.sin(time * 4 + i * 2);
+      pxGlow(b, x, y, 6, "#fb923c", 0.3 + flicker * 0.25);
+      px(b, x - 2, y - 2, 4, 4, "#fde68a");
+    }
+  }
+
+  // Tier 5: a grand gate arch at the western entrance.
+  if (tier >= 5) {
+    const gx = 60;
+    const gy = engine.groundAtX(gx);
+    if (gy !== null) {
+      const x = wx(gx);
+      const y = wy(gy);
+      px(b, x - 24, y - 46, 6, 46, "#7a8090");
+      px(b, x + 18, y - 46, 6, 46, "#7a8090");
+      px(b, x - 26, y - 50, 52, 6, "#8f97a8");
+      pxGlow(b, x, y - 50, 16, "#fde68a", 0.35 + Math.sin(time * 1.5) * 0.1);
+      pxText(b, "EMBERHOLD RISES", x, y - 56, "#fde68a", 5);
+    }
+  }
+}
+
 /** A dead mob's loot: a little drawstring pouch with a rarity-tinted gem,
  * glinting on the ground until the player walks over it. */
 function drawLootDrops(
@@ -1839,7 +1866,9 @@ function paletteFor(f: Fighter): Pal {
     shade: shade(c.primary),
     lit: lighten(c.primary),
     secondary: c.secondary,
-    trim: c.trim,
+    // A cosmetic-only override unlocked via Prestige tiers — never set for
+    // mobs, so this can never affect anything but the player's own gear trim.
+    trim: f.weaponSkinOverride ?? c.trim,
     skin: c.skin,
     skinShade: shade(c.skin),
     hair: c.hair,
@@ -1907,6 +1936,56 @@ const KIT = {
   iceDark: "#4a7f95",
 };
 
+/**
+ * A Dragon-Ball-"God"-style rising energy aura: a pulsing bright core plus
+ * several jagged flame tendrils that sway and lick upward past the head,
+ * shedding embers off their tips — built entirely from the existing
+ * px/pxCircle/pxGlow primitives, no new art assets. `seed` (the fighter's
+ * own x) keeps multiple auras from animating in lockstep with each other.
+ */
+function drawGodAura(
+  b: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  h: number,
+  color: string,
+  time: number,
+  seed: number
+) {
+  const baseY = y - h * 0.5;
+  const pulse = 0.85 + Math.sin(time * 6 + seed) * 0.15;
+  pxGlow(b, x, baseY, h * 0.62, color, 0.42 * pulse);
+  pxGlow(b, x, baseY, h * 0.3, "#ffffff", 0.18 * pulse);
+
+  const tendrils = 7;
+  for (let i = 0; i < tendrils; i++) {
+    const phase = seed * 0.7 + i * 1.7;
+    const speed = 2.6 + (i % 3) * 0.4;
+    const sway = Math.sin(time * speed + phase) * (h * 0.16);
+    const riseFrac = 0.55 + 0.45 * ((Math.sin(time * (speed * 0.6) + phase * 1.3) + 1) / 2);
+    const tipY = baseY - h * (0.55 + riseFrac * 0.85);
+    const baseX = x + Math.cos((i / tendrils) * Math.PI * 2) * h * 0.22;
+    const midX = baseX + sway * 0.6;
+    const tipX = baseX + sway;
+    // Three-segment flame lick: wide at the base, tapering to a point,
+    // brightening toward white at the very tip.
+    pxCircle(b, baseX, baseY - h * 0.1, h * 0.09, color);
+    pxCircle(b, midX, (baseY + tipY) / 2, h * 0.065, color);
+    pxCircle(b, tipX, tipY, h * 0.035, "#fff7e6");
+    // An ember breaking free above the tip every so often.
+    const emberPhase = (time * (0.8 + (i % 2) * 0.3) + phase) % 3;
+    if (emberPhase < 1.2) {
+      const emberY = tipY - emberPhase * h * 0.35;
+      const emberX = tipX + Math.sin(time * 4 + phase) * 3;
+      const emberAlpha = Math.max(0, 1 - emberPhase / 1.2);
+      const prevAlpha = b.globalAlpha;
+      b.globalAlpha = emberAlpha;
+      pxCircle(b, emberX, emberY, 1.4, "#ffe9b0");
+      b.globalAlpha = prevAlpha;
+    }
+  }
+}
+
 function drawFighter(
   b: CanvasRenderingContext2D,
   f: Fighter,
@@ -1963,10 +2042,10 @@ function drawFighter(
   }
 
   // Cosmetic-only aura, unlocked via achievements and equipped from the
-  // character sheet — off by default, so nobody sees a glow around the
+  // character sheet — off by default, so nobody sees anything around the
   // player until they've actually earned and picked one.
   if (!f.isMob && f.auraOverride) {
-    pxGlow(b, x, y - h * 0.5, h * 0.55, f.auraOverride, 0.4);
+    drawGodAura(b, x, y, h, f.auraOverride, time, f.x);
   }
 
   // Immunity halo.

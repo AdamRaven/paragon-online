@@ -38,6 +38,11 @@ export interface ArenaHudData {
   manaflowCharge: number;
   /** Seconds of Stoic remaining, 0 when inactive. */
   stoic?: number;
+  /** Seconds of each elemental status remaining on the player, 0 when inactive. */
+  burn?: number;
+  poison?: number;
+  freeze?: number;
+  shock?: number;
   sprinting: boolean;
   state: string;
 }
@@ -45,41 +50,17 @@ export interface ArenaHudData {
 export function ArenaHud({
   hud,
   logs,
+  hideSkills,
 }: {
   hud: ArenaHudData;
   logs: CombatLogEntry[];
+  /** Campaign mode renders <SkillBar> itself, stacked above the camp-bar's
+   *  XP row instead of pinned to the HUD's own bottom-right corner — see
+   *  AdventureClient.tsx's .campaign-bottom-stack. */
+  hideSkills?: boolean;
 }) {
   const cls = getClass(hud.playerClass);
   const enemyCls = getClass(hud.enemyClass);
-
-  // Tracks which skills just came off a fresh activation (cooldown rising
-  // from 0) so their icon can flash once, the same "you did a thing" tell
-  // every juicy skill bar gives on cast.
-  const prevCdRef = useRef<Record<string, number>>({});
-  const [flash, setFlash] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    const prev = prevCdRef.current;
-    let justUsed: string[] | null = null;
-    for (const s of cls.skills) {
-      const cd = hud.cooldowns[s.id] ?? 0;
-      const prevCd = prev[s.id] ?? 0;
-      if (cd > prevCd + 0.001 && prevCd <= 0.001) {
-        (justUsed ??= []).push(s.id);
-      }
-    }
-    prevCdRef.current = hud.cooldowns;
-    if (justUsed) {
-      const now = Date.now();
-      setFlash((f) => {
-        const next = { ...f };
-        for (const id of justUsed!) next[id] = now;
-        return next;
-      });
-      playSound("skillCast");
-    }
-  }, [hud.cooldowns, cls.skills]);
-
   const hpPct = hud.playerHp / hud.playerMaxHp;
   return (
     <div className="arena-hud">
@@ -108,6 +89,18 @@ export function ArenaHud({
           {!!hud.stoic && hud.stoic > 0 && (
             <span className="arena-tag stoic">STOIC {hud.stoic.toFixed(1)}s</span>
           )}
+          {!!hud.burn && hud.burn > 0 && (
+            <span className="arena-tag status-burn">BURNING {hud.burn.toFixed(1)}s</span>
+          )}
+          {!!hud.poison && hud.poison > 0 && (
+            <span className="arena-tag status-poison">POISONED {hud.poison.toFixed(1)}s</span>
+          )}
+          {!!hud.freeze && hud.freeze > 0 && (
+            <span className="arena-tag status-freeze">FROZEN {hud.freeze.toFixed(1)}s</span>
+          )}
+          {!!hud.shock && hud.shock > 0 && (
+            <span className="arena-tag status-shock">SHOCKED {hud.shock.toFixed(1)}s</span>
+          )}
           {hud.lmbChain > 0 && (
             <span className="arena-tag lmb">LMB ×{hud.lmbChain}</span>
           )}
@@ -115,9 +108,14 @@ export function ArenaHud({
             <span className="arena-tag rmb">RMB ×{hud.rmbChain}</span>
           )}
           {hud.hitStreak >= 2 && (
-            <span className={`arena-tag combo${hud.hitStreak >= 5 ? " combo-hot" : ""}`}>
-              COMBO ×{hud.hitStreak}
-            </span>
+            <>
+              <span className={`arena-tag combo${hud.hitStreak >= 5 ? " combo-hot" : ""}`}>
+                COMBO ×{hud.hitStreak}
+              </span>
+              <div className="strike-counter">
+                <span className="strike-counter-num">{hud.hitStreak} STRIKES</span>
+              </div>
+            </>
           )}
           {hud.playerClass === "paragon" && hud.comboStacks > 0 && (
             <span className="arena-tag combo">
@@ -147,7 +145,7 @@ export function ArenaHud({
       </div>
 
       <div className="arena-bottom">
-        {logs.length > 0 ? (
+        {process.env.NODE_ENV !== "production" && logs.length > 0 ? (
           <div className="arena-log">
             {logs.map((l) => (
               <div key={l.id} className={`log-${l.tone}`}>
@@ -159,55 +157,96 @@ export function ArenaHud({
           <div />
         )}
 
-        <div className="arena-skills">
-          {hud.manaflowCharge > 0 && (
-            <div className="manaflow">
-              <div
-                className="manaflow-fill"
-                style={{ width: `${Math.min(100, hud.manaflowCharge * 100)}%` }}
-              />
-              <span>
-                MANASTOP {hud.playerMana >= MANASTOP_COST ? "" : "— need 70 mana"}
-              </span>
-            </div>
-          )}
-          <div className="skill-row" style={{ "--aura": cls.colors.aura } as React.CSSProperties}>
-            {cls.skills.map((s) => {
-              const cd = hud.cooldowns[s.id] ?? 0;
-              const poor = !!s.manaCost && hud.playerMana < s.manaCost;
-              const ready = cd <= 0;
-              const effectiveCooldown = s.cooldown * (1 - (hud.playerCdr ?? 0));
-              const pct = effectiveCooldown > 0 ? Math.min(1, cd / effectiveCooldown) : 0;
-              const justUsed = flash[s.id] && Date.now() - flash[s.id] < 400;
-              return (
-                <div
-                  key={s.id}
-                  className={`skill${poor ? " poor" : ""}${ready && !poor ? " ready" : ""}${
-                    justUsed ? " skill-flash" : ""
-                  }`}
-                  title={`${s.label} — ${s.description}`}
-                >
-                  <span className="skill-key">{skillKeyLabel(s.slot)}</span>
-                  <span className="skill-name">{s.label}</span>
-                  {s.manaCost ? (
-                    <span className="skill-cost">{s.manaCost}</span>
-                  ) : null}
-                  {cd > 0 && (
-                    <>
-                      <div
-                        className="skill-sweep"
-                        style={{
-                          background: `conic-gradient(rgba(5,7,12,0.86) ${pct * 360}deg, transparent ${pct * 360}deg)`,
-                        }}
-                      />
-                      <span className="skill-cd">{cd.toFixed(1)}</span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        {!hideSkills && <SkillBar hud={hud} />}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The manaflow bar + skill row, split out of ArenaHud so campaign mode can
+ * render it stacked above the camp-bar's XP row (see AdventureClient.tsx's
+ * .campaign-bottom-stack) instead of pinned to the HUD's own bottom-right
+ * corner — PVP duel mode has no camp-bar, so ArenaHud still renders this
+ * itself there.
+ */
+export function SkillBar({ hud }: { hud: ArenaHudData }) {
+  const cls = getClass(hud.playerClass);
+
+  // Tracks which skills just came off a fresh activation (cooldown rising
+  // from 0) so their icon can flash once, the same "you did a thing" tell
+  // every juicy skill bar gives on cast.
+  const prevCdRef = useRef<Record<string, number>>({});
+  const [flash, setFlash] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const prev = prevCdRef.current;
+    let justUsed: string[] | null = null;
+    for (const s of cls.skills) {
+      const cd = hud.cooldowns[s.id] ?? 0;
+      const prevCd = prev[s.id] ?? 0;
+      if (cd > prevCd + 0.001 && prevCd <= 0.001) {
+        (justUsed ??= []).push(s.id);
+      }
+    }
+    prevCdRef.current = hud.cooldowns;
+    if (justUsed) {
+      const now = Date.now();
+      setFlash((f) => {
+        const next = { ...f };
+        for (const id of justUsed!) next[id] = now;
+        return next;
+      });
+      playSound("skillCast");
+    }
+  }, [hud.cooldowns, cls.skills]);
+
+  return (
+    <div className="arena-skills">
+      {hud.manaflowCharge > 0 && (
+        <div className="manaflow">
+          <div
+            className="manaflow-fill"
+            style={{ width: `${Math.min(100, hud.manaflowCharge * 100)}%` }}
+          />
+          <span>
+            MANASTOP {hud.playerMana >= MANASTOP_COST ? "" : "— need 70 mana"}
+          </span>
         </div>
+      )}
+      <div className="skill-row" style={{ "--aura": cls.colors.aura } as React.CSSProperties}>
+        {cls.skills.map((s) => {
+          const cd = hud.cooldowns[s.id] ?? 0;
+          const poor = !!s.manaCost && hud.playerMana < s.manaCost;
+          const ready = cd <= 0;
+          const effectiveCooldown = s.cooldown * (1 - (hud.playerCdr ?? 0));
+          const pct = effectiveCooldown > 0 ? Math.min(1, cd / effectiveCooldown) : 0;
+          const justUsed = flash[s.id] && Date.now() - flash[s.id] < 400;
+          return (
+            <div
+              key={s.id}
+              className={`skill${poor ? " poor" : ""}${ready && !poor ? " ready" : ""}${
+                justUsed ? " skill-flash" : ""
+              }`}
+              title={`${s.label} — ${s.description}`}
+            >
+              <span className="skill-key">{skillKeyLabel(s.slot)}</span>
+              <span className="skill-name">{s.label}</span>
+              {s.manaCost ? <span className="skill-cost">{s.manaCost}</span> : null}
+              {cd > 0 && (
+                <>
+                  <div
+                    className="skill-sweep"
+                    style={{
+                      background: `conic-gradient(rgba(5,7,12,0.86) ${pct * 360}deg, transparent ${pct * 360}deg)`,
+                    }}
+                  />
+                  <span className="skill-cd">{cd.toFixed(1)}</span>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

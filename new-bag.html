@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PARAGON - Inventory Focus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary": "#233143",
+                    "on-background": "#d3e4fa",
+                    "tertiary": "#00dbe9",
+                    "surface-variant": "#263647",
+                    "on-tertiary-fixed": "#002022",
+                    "on-surface": "#d3e4fa",
+                    "surface-container": "#102130",
+                    "surface-container-lowest": "#000f1e",
+                    "secondary-container": "#c00019",
+                    "on-tertiary": "#00363a",
+                    "tertiary-container": "#001719",
+                    "tertiary-fixed": "#7df4ff",
+                    "inverse-on-surface": "#223242",
+                    "on-primary-container": "#717f94",
+                    "on-secondary-fixed-variant": "#930010",
+                    "surface-bright": "#2b3b4b",
+                    "on-secondary-fixed": "#410003",
+                    "on-secondary": "#680008",
+                    "on-tertiary-fixed-variant": "#004f54",
+                    "surface-container-highest": "#263647",
+                    "outline-variant": "#44474c",
+                    "outline": "#8e9197",
+                    "on-tertiary-container": "#008c95",
+                    "on-surface-variant": "#c4c6cd",
+                    "secondary": "#ffb3ad",
+                    "primary-container": "#051425",
+                    "on-primary-fixed": "#0e1c2e",
+                    "secondary-fixed-dim": "#ffb3ad",
+                    "primary-fixed-dim": "#b9c7df",
+                    "surface-container-high": "#1b2b3b",
+                    "secondary-fixed": "#ffdad6",
+                    "error": "#ffb4ab",
+                    "tertiary-fixed-dim": "#00dbe9",
+                    "inverse-primary": "#515f73",
+                    "surface-tint": "#b9c7df",
+                    "primary": "#b9c7df",
+                    "inverse-surface": "#d3e4fa",
+                    "on-secondary-container": "#ffcdc8",
+                    "surface-container-low": "#0c1d2c",
+                    "error-container": "#93000a",
+                    "on-primary-fixed-variant": "#3a485b",
+                    "on-error-container": "#ffdad6",
+                    "background": "#051425",
+                    "primary-fixed": "#d5e3fc",
+                    "surface-dim": "#041424",
+                    "on-error": "#690005",
+                    "surface": "#051425"
+            },
+            "spacing": {
+                    "border-width-lg": "4px",
+                    "margin": "24px",
+                    "unit": "4px",
+                    "gutter": "16px",
+                    "border-width-sm": "2px"
+            },
+            "fontFamily": {
+                    "headline-md": ["JetBrains Mono"],
+                    "body-lg": ["JetBrains Mono"],
+                    "label-sm": ["JetBrains Mono"],
+                    "display-lg": ["JetBrains Mono"],
+                    "body-md": ["JetBrains Mono"],
+                    "headline-lg": ["JetBrains Mono"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "1.5", "fontWeight": "500"}],
+                    "label-sm": ["12px", {"lineHeight": "1.0", "fontWeight": "700"}],
+                    "display-lg": ["48px", {"lineHeight": "1.0", "letterSpacing": "-2px", "fontWeight": "800"}],
+                    "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        :root { --pixel-size: 4px; }
+        body {
+            background-color: #051425;
+            color: #d3e4fa;
+            font-family: 'JetBrains Mono', monospace;
+            image-rendering: pixelated;
+        }
+
+        .pixel-border-4 {
+            box-shadow: 
+                0 calc(var(--pixel-size) * -1) 0 0 #000,
+                0 var(--pixel-size) 0 0 #000,
+                calc(var(--pixel-size) * -1) 0 0 0 #000,
+                var(--pixel-size) 0 0 0 #000;
+        }
+
+        .pixel-border-primary {
+            box-shadow: 
+                0 calc(var(--pixel-size) * -1) 0 0 #00dbe9,
+                0 var(--pixel-size) 0 0 #00dbe9,
+                calc(var(--pixel-size) * -1) 0 0 0 #00dbe9,
+                var(--pixel-size) 0 0 0 #00dbe9;
+        }
+
+        .pixel-border-outline {
+            box-shadow: 
+                0 -2px 0 0 #44474c,
+                0 2px 0 0 #44474c,
+                -2px 0 0 0 #44474c,
+                2px 0 0 0 #44474c;
+        }
+
+        .pixel-inset {
+            box-shadow: inset 2px 2px 0 0 #000, inset -2px -2px 0 0 #44474c;
+            background: #0c1d2c;
+        }
+
+        .dither-bg {
+            background-image: radial-gradient(#000 1px, transparent 0);
+            background-size: 2px 2px;
+        }
+
+        .scrollbar-custom::-webkit-scrollbar { width: 12px; }
+        .scrollbar-custom::-webkit-scrollbar-track { background: #0c1d2c; }
+        .scrollbar-custom::-webkit-scrollbar-thumb { 
+            background: #44474c; 
+            border: 2px solid #0c1d2c;
+        }
+
+        .slot-border {
+            border: 2px solid #ffb3ad;
+            position: relative;
+        }
+        .slot-border::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border: 1px solid rgba(255,179,173,0.2);
+            pointer-events: none;
+        }
+
+        .slot-border-rare { border-color: #00dbe9; }
+        .slot-border-rare::before { border-color: rgba(0,219,233,0.2); }
+        
+        .slot-compact {
+            width: 5.5rem;
+            height: 6.5rem;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden select-none">
+<!-- CRT Overlay -->
+<div class="fixed inset-0 pointer-events-none opacity-10 z-[100] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))] bg-[length:100%_4px,3px_100%]"></div>
+<main class="flex-1 p-margin flex flex-col gap-gutter overflow-hidden">
+<div class="flex justify-between items-end border-b border-outline-variant pb-4 mb-4">
+<div>
+<h1 class="font-display-lg text-[48px] text-primary uppercase leading-none mb-2">PARAGON SYSTEM</h1>
+<div class="flex gap-4 font-label-sm text-on-surface-variant">
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-tertiary">payments</span> 109 GOLD</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-outline">diamond</span> 761 STONES</span>
+<span class="ml-4 flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">person</span> LVL 99 WARRIOR</span>
+</div>
+</div>
+<button class="bg-[#263647] pixel-border-4 px-8 py-3 text-on-surface font-headline-md uppercase hover:bg-surface-bright transition-colors active:translate-y-1">CLOSE (I)</button>
+</div>
+<div class="grid grid-cols-12 gap-gutter flex-1 overflow-hidden">
+<!-- Equipped Section: Reorganized Grid -->
+<section class="col-span-5 flex flex-col overflow-hidden">
+<h2 class="text-tertiary font-label-sm uppercase mb-gutter tracking-widest border-b border-tertiary/20 pb-1 w-fit">EQUIPPED</h2>
+<div class="flex-1 bg-surface-dim/50 pixel-inset p-4 overflow-y-auto scrollbar-custom">
+<div class="grid grid-cols-3 gap-y-4 gap-x-3 justify-items-center">
+<!-- Row 1: Head & Neck Area -->
+<div class="col-start-1 w-20 h-24 slot-border slot-border-rare bg-surface-container-highest flex flex-col items-center justify-center p-1 self-end">
+<span class="material-symbols-outlined text-tertiary text-lg">pentagon</span>
+<span class="text-[7px] text-tertiary/60 uppercase mt-1">EARRING</span>
+<span class="text-[8px] text-on-surface text-center leading-tight mt-1">+10 Storm Earring</span>
+</div>
+<div class="col-start-2 w-24 h-28 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1">
+<span class="material-symbols-outlined text-secondary text-2xl" style="font-variation-settings: 'FILL' 1;">theater_comedy</span>
+<span class="text-[8px] text-secondary/60 uppercase mt-1">HELMET</span>
+<span class="text-[9px] text-on-surface text-center leading-tight mt-1">+10 Sundered Helm</span>
+</div>
+<div class="col-start-3 w-20 h-24 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1 self-end">
+<span class="material-symbols-outlined text-secondary text-lg">pentagon</span>
+<span class="text-[7px] text-secondary/60 uppercase mt-1">EARRING</span>
+<span class="text-[8px] text-on-surface text-center leading-tight mt-1">+10 Sundered Earring</span>
+</div>
+<!-- Row 2: Neck -->
+<div class="col-start-2 w-24 h-24 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1">
+<span class="material-symbols-outlined text-error text-xl">diamond</span>
+<span class="text-[8px] text-secondary/60 uppercase mt-1">NECKLACE</span>
+<span class="text-[9px] text-on-surface text-center leading-tight mt-1">+10 Sundered Necklace</span>
+</div>
+<!-- Row 3: Chest -->
+<div class="col-start-2 w-28 h-32 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-2">
+<span class="material-symbols-outlined text-primary text-3xl">shield</span>
+<span class="text-[8px] text-secondary/60 uppercase mt-1">CHEST</span>
+<span class="text-[9px] text-on-surface text-center leading-tight mt-1">+10 Rotmother's Carapace</span>
+</div>
+<!-- Row 4: Belt, Weapons, Rings -->
+<div class="col-start-1 w-24 h-28 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1 row-start-3">
+<span class="material-symbols-outlined text-error-container text-2xl">swords</span>
+<span class="text-[8px] text-secondary/60 uppercase mt-1">WEAPON</span>
+<span class="text-[9px] text-on-surface text-center leading-tight mt-1">+6 Rotmother's Gauntlets</span>
+</div>
+<div class="col-start-2 w-24 h-24 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1">
+<span class="material-symbols-outlined text-secondary text-xl">line_weight</span>
+<span class="text-[8px] text-secondary/60 uppercase mt-1">BELT</span>
+<span class="text-[9px] text-on-surface text-center leading-tight mt-1">+10 Sundered Belt</span>
+</div>
+<!-- Ring pairings near hands area -->
+<div class="col-start-3 flex flex-col gap-2">
+<div class="w-16 h-16 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1">
+<span class="material-symbols-outlined text-tertiary-fixed text-sm">toll</span>
+<span class="text-[7px] text-secondary/60 uppercase mt-0.5">RING</span>
+</div>
+<div class="w-16 h-16 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1">
+<span class="material-symbols-outlined text-tertiary-fixed text-sm">toll</span>
+<span class="text-[7px] text-secondary/60 uppercase mt-0.5">RING</span>
+</div>
+</div>
+<!-- Row 5: Gloves & Boots -->
+<div class="col-start-3 row-start-3 w-24 h-28 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1">
+<span class="material-symbols-outlined text-primary-fixed text-2xl">pan_tool</span>
+<span class="text-[8px] text-secondary/60 uppercase mt-1">GLOVES</span>
+<span class="text-[9px] text-on-surface text-center leading-tight mt-1">+10 Rotmother's Gloves</span>
+</div>
+<div class="col-start-2 w-24 h-28 slot-border bg-surface-container-highest flex flex-col items-center justify-center p-1">
+<span class="material-symbols-outlined text-tertiary text-2xl">stairs</span>
+<span class="text-[8px] text-secondary/60 uppercase mt-1">BOOTS</span>
+<span class="text-[9px] text-on-surface text-center leading-tight mt-1">+10 Stormward Boots</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Backpack Section: Identical content -->
+<section class="col-span-7 flex flex-col overflow-hidden">
+<h2 class="text-tertiary font-label-sm uppercase mb-gutter tracking-widest border-b border-tertiary/20 pb-1 w-fit">BACKPACK</h2>
+<div class="flex gap-1 mb-2">
+<button class="flex-1 py-3 bg-tertiary text-on-tertiary pixel-border-outline font-headline-md uppercase">GEAR (494)</button>
+<button class="flex-1 py-3 bg-surface-container-highest text-on-surface-variant pixel-border-outline font-headline-md uppercase">TRASH (639)</button>
+</div>
+<div class="flex-1 bg-surface-container-lowest pixel-inset p-4 overflow-y-auto scrollbar-custom space-y-3">
+<!-- Stormward Boots -->
+<div class="flex items-center gap-gutter p-4 border-l-4 border-secondary-fixed-dim bg-surface-container-highest/40">
+<div class="w-14 h-14 bg-surface-dim pixel-border-outline flex items-center justify-center border-2 border-secondary-fixed-dim">
+<span class="material-symbols-outlined text-secondary text-2xl">stairs</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-md text-secondary-fixed-dim uppercase leading-none">Stormward Boots</h3>
+<div class="flex gap-4 mt-1">
+<span class="text-[8px] text-on-surface-variant uppercase">Epic · armor · <span class="text-error">worse</span></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-secondary">10624g</span>
+<button class="bg-tertiary/20 border border-tertiary/40 px-3 py-1 text-tertiary text-[10px] uppercase font-bold">EQUIP</button>
+</div>
+</div>
+<!-- Plague Ring -->
+<div class="flex items-center gap-gutter p-4 border-l-4 border-tertiary bg-surface-container-highest/40">
+<div class="w-14 h-14 bg-surface-dim pixel-border-outline flex items-center justify-center border-2 border-tertiary">
+<span class="material-symbols-outlined text-tertiary text-2xl">toll</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-md text-tertiary uppercase leading-none">Plague Ring</h3>
+<div class="flex gap-4 mt-1">
+<span class="text-[8px] text-on-surface-variant uppercase">Uncommon · trinket · <span class="text-error">worse</span></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-secondary">7600g</span>
+<button class="bg-tertiary/20 border border-tertiary/40 px-3 py-1 text-tertiary text-[10px] uppercase font-bold">EQUIP</button>
+</div>
+</div>
+<!-- Stormcaller's Gauntlets -->
+<div class="flex items-center gap-gutter p-4 border-l-4 border-tertiary-fixed-dim bg-surface-container-highest/40">
+<div class="w-14 h-14 bg-surface-dim pixel-border-outline flex items-center justify-center border-2 border-tertiary-fixed-dim">
+<span class="material-symbols-outlined text-tertiary-fixed-dim text-2xl">pan_tool</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-md text-tertiary-fixed-dim uppercase leading-none">Stormcaller's Gauntlets</h3>
+<div class="flex gap-4 mt-1">
+<span class="text-[8px] text-on-surface-variant uppercase">Rare · weapon · <span class="text-error">worse</span></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-secondary">11600g</span>
+<button class="bg-tertiary/20 border border-tertiary/40 px-3 py-1 text-tertiary text-[10px] uppercase font-bold">EQUIP</button>
+</div>
+</div>
+<!-- Rotmother's Gloves -->
+<div class="flex items-center gap-gutter p-4 border-l-4 border-secondary-fixed-dim bg-surface-container-highest/40">
+<div class="w-14 h-14 bg-surface-dim pixel-border-outline flex items-center justify-center border-2 border-secondary-fixed-dim">
+<span class="material-symbols-outlined text-secondary text-2xl">pan_tool</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-md text-secondary-fixed-dim uppercase leading-none">Rotmother's Gloves</h3>
+<div class="mt-1">
+<span class="text-[8px] text-on-surface-variant uppercase">Epic · armor · <span class="text-error">worse</span></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-secondary">13160g</span>
+<button class="bg-tertiary/20 border border-tertiary/40 px-3 py-1 text-tertiary text-[10px] uppercase font-bold">EQUIP</button>
+</div>
+</div>
+<!-- Broken Scrap -->
+<!-- Sundered Helm -->
+<div class="flex items-center gap-gutter p-4 border-l-4 border-secondary-fixed-dim bg-surface-container-highest/40">
+<div class="w-14 h-14 bg-surface-dim pixel-border-outline flex items-center justify-center border-2 border-secondary-fixed-dim">
+<span class="material-symbols-outlined text-secondary text-2xl">theater_comedy</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-md text-secondary-fixed-dim uppercase leading-none">Sundered Helm</h3>
+<div class="flex gap-4 mt-1">
+<span class="text-[8px] text-on-surface-variant uppercase">Epic · armor · <span class="text-tertiary">better</span></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-secondary">15200g</span>
+<button class="bg-tertiary/20 border border-tertiary/40 px-3 py-1 text-tertiary text-[10px] uppercase font-bold">EQUIP</button>
+</div>
+</div>
+<!-- Rotmother's Carapace -->
+<div class="flex items-center gap-gutter p-4 border-l-4 border-secondary-fixed-dim bg-surface-container-highest/40">
+<div class="w-14 h-14 bg-surface-dim pixel-border-outline flex items-center justify-center border-2 border-secondary-fixed-dim">
+<span class="material-symbols-outlined text-secondary text-2xl">shield</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-md text-secondary-fixed-dim uppercase leading-none">Rotmother's Carapace</h3>
+<div class="flex gap-4 mt-1">
+<span class="text-[8px] text-on-surface-variant uppercase">Epic · armor · <span class="text-error">worse</span></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-secondary">22400g</span>
+<button class="bg-tertiary/20 border border-tertiary/40 px-3 py-1 text-tertiary text-[10px] uppercase font-bold">EQUIP</button>
+</div>
+</div>
+<!-- Storm Earring -->
+<div class="flex items-center gap-gutter p-4 border-l-4 border-tertiary bg-surface-container-highest/40">
+<div class="w-14 h-14 bg-surface-dim pixel-border-outline flex items-center justify-center border-2 border-tertiary">
+<span class="material-symbols-outlined text-tertiary text-2xl">pentagon</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-md text-tertiary uppercase leading-none">Storm Earring</h3>
+<div class="flex gap-4 mt-1">
+<span class="text-[8px] text-on-surface-variant uppercase">Uncommon · trinket · <span class="text-tertiary">better</span></span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] text-secondary">4200g</span>
+<button class="bg-tertiary/20 border border-tertiary/40 px-3 py-1 text-tertiary text-[10px] uppercase font-bold">EQUIP</button>
+</div>
+</div></div>
+</section>
+</div>
+</main>
+</body></html>

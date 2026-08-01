@@ -22,6 +22,10 @@ export type FighterState =
 /** What landing this attack does to the target beyond raw damage. */
 export type HitEffect = "none" | "knockdown" | "launch" | "stun";
 
+/** Absent/"physical" means plain armor-mitigated damage, same as before this
+ *  existed — every pre-existing skill/lmb/rmb spec needs no changes. */
+export type DamageType = "physical" | "fire" | "poison" | "frost" | "shock";
+
 export interface AttackSpec {
   id: string;
   label: string;
@@ -43,6 +47,12 @@ export interface AttackSpec {
   manaCost?: number;
   /** Centres the hitbox on the caster instead of projecting it forward. */
   selfCentered?: boolean;
+  /** Defaults to "physical" — see DamageType. Independent of `effect`: a hit
+   *  can knock down *and* ignite at once. */
+  damageType?: DamageType;
+  /** Seconds the elemental status (burn/poison/freeze/shock) lasts on hit;
+   *  absent/0 means damageType deals its armor step but applies no status. */
+  statusDuration?: number;
 }
 
 export interface SkillDef extends AttackSpec {
@@ -101,6 +111,8 @@ export interface Hitbox {
   /** Source label, used for the on-screen combat feed. */
   label: string;
   facing: Facing;
+  damageType: DamageType;
+  statusDuration: number;
 }
 
 export interface Projectile {
@@ -119,6 +131,8 @@ export interface Projectile {
   life: number;
   label: string;
   color: string;
+  damageType: DamageType;
+  statusDuration: number;
 }
 
 export interface BlackHole {
@@ -162,6 +176,10 @@ export interface Fighter {
   /** Cosmetic-only rim-glow override, unlocked via achievements and set from
    *  AdventureSave.auraColor in applyProgression — never touches combat. */
   auraOverride?: string;
+  /** Cosmetic-only gear-trim recolor, unlocked via Prestige tiers and set
+   *  from AdventureSave.weaponSkin in applyProgression — never touches
+   *  combat. See lib/arena/prestige.ts. */
+  weaponSkinOverride?: string;
   level: number;
   expValue: number;
   spawnX: number;
@@ -211,6 +229,18 @@ export interface Fighter {
   respawnInvuln: number;
   dropThrough: number;
   armorBreak: number;
+  /** Elemental status effects — see DamageType/applyHit in engine.ts. Burn
+   *  and poison are DOTs (their own snapshotted tick/dps, ticked in
+   *  tickStatusDots); freeze slows movement/attack speed; shock shreds armor.
+   *  Refreshing an active status takes the stronger of old/new, never stacks. */
+  burnTimer: number;
+  burnTick: number;
+  burnDps: number;
+  poisonTimer: number;
+  poisonTick: number;
+  poisonDps: number;
+  freezeTimer: number;
+  shockTimer: number;
   /** Grace period after leaving a ledge during which a jump still works. */
   coyoteTimer: number;
   /** A jump pressed slightly too early, replayed on landing. */
