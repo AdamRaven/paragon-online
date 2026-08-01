@@ -387,6 +387,34 @@ function getRunSprite(): HTMLImageElement | null {
 }
 
 /**
+ * Paragon's idle cycle: 8 frames on a 4x2 sheet (each cell 125x250), a subtle
+ * breathing/charging loop with a glowing hand — rects measured from the
+ * sheet's own alpha content the same way as the walk cycle, since the actual
+ * figure only fills a small band within each cell rather than the cell's
+ * full nominal height.
+ */
+const IDLE_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 34, y: 57, w: 73, h: 107 },
+  { x: 149, y: 63, w: 76, h: 101 },
+  { x: 265, y: 62, w: 78, h: 102 },
+  { x: 395, y: 59, w: 76, h: 105 },
+  { x: 29, y: 213, w: 76, h: 107 },
+  { x: 151, y: 213, w: 76, h: 108 },
+  { x: 277, y: 213, w: 82, h: 107 },
+  { x: 402, y: 213, w: 80, h: 107 },
+];
+let idleSprite: HTMLImageElement | null = null;
+
+function getIdleSprite(): HTMLImageElement | null {
+  if (!idleSprite) {
+    if (typeof Image === "undefined") return null;
+    idleSprite = new Image();
+    idleSprite.src = "/art/paragon/idle-animation-removebg-preview.png";
+  }
+  return idleSprite.complete && idleSprite.naturalWidth > 0 ? idleSprite : null;
+}
+
+/**
  * Paragon's jump arc: 7 poses laid out on the sheet following the actual
  * trajectory shape (crouch, rising, apex, falling, landing crouch) rather
  * than a straight row, so each frame's rect was isolated as its own
@@ -698,11 +726,15 @@ export function renderFighterPortraits(
     const actionSprite = paragonActionSprite(f);
     const sprinting = f.state === "sprint";
     const walking = f.state === "walk";
+    const idling = f.state === "idle";
     const walkSpriteImg =
       !actionSprite && f.classId === "paragon" && walking ? getWalkSprite() : null;
     const runSpriteImg =
       !actionSprite && f.classId === "paragon" && sprinting ? getRunSprite() : null;
-    const img = actionSprite?.img ?? walkSpriteImg ?? runSpriteImg ?? getPortraitImage(f.classId);
+    const idleSpriteImg =
+      !actionSprite && f.classId === "paragon" && idling ? getIdleSprite() : null;
+    const img =
+      actionSprite?.img ?? walkSpriteImg ?? runSpriteImg ?? idleSpriteImg ?? getPortraitImage(f.classId);
     if (!img) continue;
 
     const x = px2(f.x);
@@ -746,6 +778,15 @@ export function renderFighterPortraits(
       sw = frame.w;
       sh = frame.h;
       drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
+    } else if (idleSpriteImg) {
+      // Slower cadence than walk/run — a calm breathing loop, not a stride.
+      const step = Math.floor(engine.time * 6) % IDLE_FRAMES.length;
+      const frame = IDLE_FRAMES[step];
+      sx = frame.x;
+      sy = frame.y;
+      sw = frame.w;
+      sh = frame.h;
+      drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
     }
     drawH *= PORTRAIT_SCALE[f.classId] ?? 1;
     const drawW = drawH * (sw / sh);
@@ -757,7 +798,7 @@ export function renderFighterPortraits(
     // stand higher when idle than when walking. Shifting the draw down by
     // that margin's share of the frame puts the real feet at yFeet either way.
     const marginBottomFrac =
-      actionSprite || walkSpriteImg || runSpriteImg
+      actionSprite || walkSpriteImg || runSpriteImg || idleSpriteImg
         ? 0
         : (img.naturalHeight - (PORTRAIT_CONTENT_BOTTOM[f.classId] ?? img.naturalHeight)) /
           img.naturalHeight;
@@ -2929,6 +2970,23 @@ function drawHitboxes(
       hb.kind === "skill" ? "#ffe38a" : hb.kind === "rmb" ? "#f79ad3" : "#9fdcff";
     const trail =
       hb.kind === "skill" ? "#b9821f" : hb.kind === "rmb" ? "#a8508a" : "#4b8fc4";
+
+    // Detonate and Whirlwind hit all around the caster, not in the facing
+    // direction — drawing them with the directional crescent below made a
+    // one-sided arc that read as a stray half-moon rather than a burst.
+    // A centered ring reads as "everything around me" instead.
+    if (hb.sourceId === "detonate" || hb.sourceId === "whirlwind") {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const radius = Math.max(w, h) / 2;
+      pxGlow(b, cx, cy, radius * 0.7, colour, 0.35);
+      const rings = 10;
+      for (let i = 0; i < rings; i++) {
+        const a = (i / rings) * Math.PI * 2;
+        px(b, Math.round(cx + Math.cos(a) * radius), Math.round(cy + Math.sin(a) * radius * 0.5), 2, 2, colour);
+      }
+      continue;
+    }
 
     // A crescent: the leading edge bows outward at the middle of the swing,
     // with a short tail behind it, which reads as an arc in few pixels.

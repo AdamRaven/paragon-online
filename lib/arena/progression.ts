@@ -22,7 +22,7 @@ export const STAT_POINTS_PER_LEVEL = 3;
  */
 export const BASE_STAT = 5;
 
-export type StatKey = "str" | "agi" | "vit" | "foc";
+export type StatKey = "str" | "vit" | "foc";
 
 export type Difficulty = "normal" | "hard" | "nightmare";
 
@@ -40,7 +40,6 @@ export const DIFFICULTY_META: Record<
 
 export interface Stats {
   str: number;
-  agi: number;
   vit: number;
   foc: number;
 }
@@ -54,12 +53,6 @@ export const STAT_META: Record<
     short: "STR",
     blurb: "Raises attack power, which scales every attack and skill.",
     color: "#ff7a59",
-  },
-  agi: {
-    label: "Agility",
-    short: "AGI",
-    blurb: "Increases movement speed and shortens every attack animation.",
-    color: "#6ee7b7",
   },
   vit: {
     label: "Vitality",
@@ -215,7 +208,6 @@ export function deriveArenaStats(
   const fxSet = equippedSetEffects(equipped);
   const talent = totalTalentBonus(talents);
   const str = stats.str - BASE_STAT;
-  const agi = stats.agi - BASE_STAT;
   const vit = stats.vit - BASE_STAT;
   const foc = stats.foc - BASE_STAT;
   const ascendMult = 1 + Math.max(0, ascension) * ASCENSION_BONUS_PER_RANK;
@@ -232,11 +224,8 @@ export function deriveArenaStats(
     (cls.attackPower + str * 2.2 + (level - 1) * 1.6 + gear.attack + gearSet.attack) *
     (1 + talent.atkPct) *
     ascendMult;
-  const speedMult =
-    (1 + Math.min(0.4, Math.max(0, agi) * 0.013) + gear.speed + gearSet.speed) *
-    (1 + talent.speedPct);
-  const attackSpeed =
-    1 + Math.min(0.35, Math.max(0, agi) * 0.009) + gear.atkSpeed + gearSet.atkSpeed;
+  const speedMult = 1 + talent.speedPct;
+  const attackSpeed = 1;
   const power = Math.round(
     attackPower * 12 + maxHp * 0.8 + maxMana * 0.5 + level * 25
   );
@@ -318,7 +307,7 @@ export function createAdventureSave(
     level: 1,
     exp: 0,
     statPoints: 0,
-    stats: { str: 5, agi: 5, vit: 5, foc: 5 },
+    stats: { str: 5, vit: 5, foc: 5 },
     kills: 0,
     deaths: 0,
     stage: DEFAULT_STAGE,

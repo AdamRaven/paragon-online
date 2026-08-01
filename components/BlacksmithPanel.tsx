@@ -236,7 +236,7 @@ export const BlacksmithPanel = memo(function BlacksmithPanel({
 
             {(() => {
               const statsSpent =
-                save.stats.str + save.stats.agi + save.stats.vit + save.stats.foc - BASE_STAT * 4;
+                save.stats.str + save.stats.vit + save.stats.foc - BASE_STAT * 3;
               const talentsSpent = (save.talents ?? []).length;
               const spent = statsSpent + talentsSpent;
               const cost = spent * RESPEC_COST_PER_POINT;
@@ -244,7 +244,7 @@ export const BlacksmithPanel = memo(function BlacksmithPanel({
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
                   <h3 className="section-title">Respec</h3>
                   <p className="hint" style={{ marginBottom: 10 }}>
-                    Refund every point you&apos;ve put into Strength, Agility, Vitality and
+                    Refund every point you&apos;ve put into Strength, Vitality and
                     Focus, plus any talents chosen, so you can reallocate everything from scratch.
                   </p>
                   <button

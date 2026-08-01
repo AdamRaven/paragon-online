@@ -25,14 +25,14 @@ const SLOT_META: Record<EquipSlot, { label: string; hint: string; glyph: string 
   weapon: { label: "Weapon", hint: "Raises attack power", glyph: "⚔" },
   helmet: { label: "Helmet", hint: "Health and mana", glyph: "🪖" },
   chest: { label: "Chest", hint: "Raises health", glyph: "🛡" },
-  legs: { label: "Boots", hint: "Health and speed", glyph: "👢" },
-  hands: { label: "Gloves", hint: "Health and attack speed", glyph: "🧤" },
+  legs: { label: "Boots", hint: "Raises health", glyph: "👢" },
+  hands: { label: "Gloves", hint: "Health and attack", glyph: "🧤" },
   necklace: { label: "Necklace", hint: "Mana and utility", glyph: "📿" },
   belt: { label: "Belt", hint: "Health and attack", glyph: "🎗" },
-  earring1: { label: "Earring", hint: "Mana and attack speed", glyph: "◎" },
-  earring2: { label: "Earring", hint: "Mana and attack speed", glyph: "◎" },
-  ring1: { label: "Ring", hint: "Health, attack and speed", glyph: "◈" },
-  ring2: { label: "Ring", hint: "Health, attack and speed", glyph: "◈" },
+  earring1: { label: "Earring", hint: "Mana and utility", glyph: "◎" },
+  earring2: { label: "Earring", hint: "Mana and utility", glyph: "◎" },
+  ring1: { label: "Ring", hint: "Health and attack", glyph: "◈" },
+  ring2: { label: "Ring", hint: "Health and attack", glyph: "◈" },
 };
 
 /** Where each slot sits in the paper-doll grid — see .paper-doll in globals.css. */
@@ -57,8 +57,6 @@ export function statLine(item: Item): string {
   if (s.attack) parts.push(`+${s.attack} ATK`);
   if (s.hp) parts.push(`+${s.hp} HP`);
   if (s.mana) parts.push(`+${s.mana} MP`);
-  if (s.speed) parts.push(`+${Math.round(s.speed * 100)}% SPD`);
-  if (s.atkSpeed) parts.push(`+${Math.round(s.atkSpeed * 100)}% AS`);
   return parts.join("   ") || "—";
 }
 
@@ -90,8 +88,6 @@ function statDeltas(item: Item, equipped?: Item): Array<{ label: string; delta: 
   push("ATK", (a.attack ?? 0) - (b.attack ?? 0));
   push("HP", (a.hp ?? 0) - (b.hp ?? 0));
   push("MP", (a.mana ?? 0) - (b.mana ?? 0));
-  push("SPD", (a.speed ?? 0) - (b.speed ?? 0), true);
-  push("AS", (a.atkSpeed ?? 0) - (b.atkSpeed ?? 0), true);
   return rows;
 }
 

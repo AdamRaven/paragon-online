@@ -27,6 +27,7 @@ import {
   TutorialQuestBanner,
 } from "@/components/TutorialOverlay";
 import {
+  EFFECT_META,
   MAX_PLUS,
   STONE_PRICE,
   STORAGE_BASE_CAP,
@@ -43,6 +44,7 @@ import {
   totalUniqueCount,
   type EquipSlot,
   type Item,
+  type ItemEffect,
 } from "@/lib/arena/items";
 import {
   AdventureEngine,
@@ -553,7 +555,7 @@ export function AdventureClient() {
     () =>
       mutate((e) => {
         const s = e.save.stats;
-        const statsSpent = s.str + s.agi + s.vit + s.foc - BASE_STAT * 4;
+        const statsSpent = s.str + s.vit + s.foc - BASE_STAT * 3;
         const talentsSpent = (e.save.talents ?? []).length;
         const spent = statsSpent + talentsSpent;
         if (spent <= 0) {
@@ -567,7 +569,7 @@ export function AdventureClient() {
         }
         e.save.gold -= cost;
         e.save.statPoints += statsSpent;
-        e.save.stats = { str: BASE_STAT, agi: BASE_STAT, vit: BASE_STAT, foc: BASE_STAT };
+        e.save.stats = { str: BASE_STAT, vit: BASE_STAT, foc: BASE_STAT };
         e.save.talentPoints = (e.save.talentPoints ?? 0) + talentsSpent;
         e.save.talents = [];
         setShopMsg(`Respec complete — ${spent} points refunded for ${cost}g.`);
@@ -1138,13 +1140,16 @@ export function AdventureClient() {
   );
 }
 
-/** "+85 HP", "+2% SPD/AS", "+19 HP/s" — one set bonus tier, human-readable. */
-function describeSetBonus(b: { stats: { hp?: number; attack?: number; speed?: number; atkSpeed?: number }; effect?: { value: number } }): string {
+/** "+85 HP", "+20 MP", "20% shorter skill cooldowns" — one set bonus tier, human-readable. */
+function describeSetBonus(b: {
+  stats: { hp?: number; attack?: number; mana?: number };
+  effect?: { kind: ItemEffect; value: number };
+}): string {
   const parts: string[] = [];
   if (b.stats.hp) parts.push(`+${b.stats.hp} HP`);
   if (b.stats.attack) parts.push(`+${b.stats.attack} ATK`);
-  if (b.stats.speed) parts.push(`+${Math.round(b.stats.speed * 100)}% SPD/AS`);
-  if (b.effect) parts.push(`+${b.effect.value} regen`);
+  if (b.stats.mana) parts.push(`+${b.stats.mana} MP`);
+  if (b.effect) parts.push(EFFECT_META[b.effect.kind].describe(b.effect.value));
   return parts.join(" ");
 }
 

@@ -110,7 +110,6 @@ level gives 3 stat points:
 | Stat | Effect |
 | --- | --- |
 | **STR** | Attack power |
-| **AGI** | Move speed and attack animation speed |
 | **VIT** | Maximum health |
 | **FOC** | Maximum mana |
 
@@ -125,7 +124,7 @@ bosses roll four times with far better odds. Gear never drops above the mob's
 tier, and rarity (Common → Epic) multiplies its stats and value.
 
 Gear fills three slots — **weapon**, **armour**, **trinket** — and feeds
-straight into the fighter: attack power, health, mana and move speed. Open the
+straight into the fighter: attack power, health and mana. Open the
 bag with `I`.
 
 **Emberhold** is a safe town stage with no mobs. Walk to the merchant's stall
