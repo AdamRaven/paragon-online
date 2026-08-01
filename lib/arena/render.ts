@@ -876,10 +876,24 @@ const BIOMES: Record<string, {
   /** Surface cap and its lit edge. */
   cap: string;
   capLit: string;
+  /**
+   * Ground body colors below the cap — default to the universal cool
+   * blue-slate PAL.rock* set (dungeon/keep stonework). Town overrides these
+   * with warm browns continuing the cap's own hue instead of jumping to
+   * blue-grey a few pixels down, so the square doesn't look like it's built
+   * from Undercity masonry.
+   */
+  groundTop?: string;
+  groundLit?: string;
+  groundBody?: string;
+  groundDark?: string;
+  groundDeep?: string;
 }> = {
   town: {
     sky: ["#2c2340", "#6b4560", "#d98a52"], far: "#4a3a56", near: "#2a2034",
     accent: "#f6b352", stars: false, cap: "#6b5336", capLit: "#8f7047",
+    groundTop: "#7a6248", groundLit: "#9c8060",
+    groundBody: "#4a3b2e", groundDark: "#332822", groundDeep: "#231a15",
   },
   outskirts: {
     sky: ["#16213c", "#22314f", "#33405a"], far: "#1e3a34", near: "#162a26",
@@ -1441,6 +1455,11 @@ function drawTerrain(
 ) {
   const map = engine.map;
   const B = BIOMES[biomeId] ?? BIOMES.keep;
+  const groundTop = B.groundTop ?? PAL.rockTop;
+  const groundLit = B.groundLit ?? PAL.rockLit;
+  const groundBody = B.groundBody ?? PAL.rockBody;
+  const groundDark = B.groundDark ?? PAL.rockDark;
+  const groundDeep = B.groundDeep ?? PAL.rockDeep;
 
   // The pit between ground segments.
   for (let i = 0; i < map.ground.length - 1; i++) {
@@ -1450,7 +1469,7 @@ function drawTerrain(
     const x1 = wx(c.x);
     const y0 = wy(a.y);
     px(b, x0, y0, x1 - x0, vh - y0, PAL.void);
-    pxDither(b, x0, y0, x1 - x0, 10, PAL.rockDeep);
+    pxDither(b, x0, y0, x1 - x0, 10, groundDeep);
   }
 
   for (const g of map.ground) {
@@ -1459,8 +1478,8 @@ function drawTerrain(
     const w = Math.round(g.w / S);
     if (x > vw || x + w < 0) continue;
 
-    px(b, x, y, w, vh - y, PAL.rockBody);
-    px(b, x, y + 5, w, vh - y - 5, PAL.rockDark);
+    px(b, x, y, w, vh - y, groundBody);
+    px(b, x, y + 5, w, vh - y - 5, groundDark);
     // Ground segments now often span an entire (multi-thousand-pixel) map
     // rather than a short chunk, but the per-pixel texture work below only
     // ever shows up in the sliver actually on screen — clamping it to the
@@ -1468,16 +1487,16 @@ function drawTerrain(
     // wasted off-screen fillRect calls a frame into a few hundred at most.
     const visX0 = Math.max(x, -8);
     const visX1 = Math.min(x + w, vw + 8);
-    pxDither(b, visX0, y + 4, visX1 - visX0, 6, PAL.rockBody);
+    pxDither(b, visX0, y + 4, visX1 - visX0, 6, groundBody);
     // Surface cap: grass, moss or scorched rock depending on the biome.
     px(b, x, y, w, 3, B.cap);
     px(b, x, y, w, 1, B.capLit);
     // Brick seams.
     for (let bx = visX0 - (visX0 % 8); bx < visX1; bx += 8) {
-      px(b, bx, y + 3, 1, 7, PAL.rockDeep);
+      px(b, bx, y + 3, 1, 7, groundDeep);
     }
     for (let by = y + 10; by < vh; by += 7) {
-      px(b, x, by, w, 1, PAL.rockDeep);
+      px(b, x, by, w, 1, groundDeep);
     }
   }
 
