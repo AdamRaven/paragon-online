@@ -1968,20 +1968,35 @@ kbd {
 
 /* ------------------------------------------------------ campaign overlay */
 
-.camp-bar {
+/* Bottom-anchored stack for the achievement banner, minimap and camp bar —
+   grouped under one flex column instead of three independently
+   bottom-pinned elements at hand-picked pixel offsets, so if camp-bar wraps
+   onto extra rows (many buttons + a narrow window) it pushes the rest of
+   the stack up instead of sliding underneath it. */
+.campaign-bottom-stack {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
   bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 5;
+  max-width: 96vw;
+}
+
+.camp-bar {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
+  max-width: 100%;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 12px;
-  
-  z-index: 5;
 }
 
 .camp-level {
@@ -2045,7 +2060,6 @@ kbd {
 }
 
 @media (max-width: 720px) {
-  .camp-bar { flex-wrap: wrap; width: 92vw; }
   .expbar { width: 100%; }
 }
 
@@ -2055,11 +2069,8 @@ kbd {
 }
 
 .almost-there {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  z-index: 5;
   width: 200px;
+  max-width: 100%;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -2080,10 +2091,6 @@ kbd {
   margin-bottom: 0;
 }
 
-@media (max-width: 720px) {
-  .almost-there { display: none; }
-}
-
 .interact-hint {
   position: absolute;
   left: 50%;
@@ -2102,12 +2109,8 @@ kbd {
 }
 
 .stage-minimap {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 62px;
   width: min(320px, 34vw);
-  z-index: 5;
+  max-width: 100%;
 }
 
 .stage-minimap-track {

@@ -321,14 +321,17 @@ export function AdventureClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started, pushLog]);
 
-  // Pointer lock only while actually walking/fighting in the world — every
-  // panel here (sheet, map, inventory, blacksmith/vendor/storage, pause, combo
-  // list, tutorial) is ordinary DOM buttons that need a real visible cursor.
+  // Deliberately never pointer-locked: the HUD (Auto-Grind toggle, fish
+  // prompt, etc.) sits directly over the canvas even with no panel open, so
+  // the cursor needs to stay visible and clickable at all times rather than
+  // requiring Esc first. This trades away the pointer-lock trick that used
+  // to swallow the rare Shift+RMB "Inspect Element" browser escape hatch
+  // during a heavy-attack combo — contextmenu is still preventDefault()'d
+  // for the ordinary right-click case, just not that one.
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    if (started && panel === "none") input.lockPointer();
-    else input.unlockPointer();
+    input.unlockPointer();
   }, [started, panel]);
 
   // Panel hotkeys: C for the character sheet, M for stage travel.
@@ -751,99 +754,104 @@ export function AdventureClient() {
         <DevLevelTools level={live.level} maxLevel={MAX_LEVEL} onAdjust={devAdjustLevel} />
       )}
 
-      {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
-      <div className="camp-bar">
-        <div className="camp-level">
-          LV {exp.level}
-          {exp.points > 0 && <span className="pip">+{exp.points}</span>}
-        </div>
-        {STAGES[live.stage]?.crucible ? (
-          <div className="camp-wave">
-            Wave {wave}
-            <small>best {live.bestCrucibleWave ?? 0}</small>
-          </div>
-        ) : (
-          STAGES[live.stage]?.survival && (
-            <div className="camp-wave">
-              Wave {wave}
-              <small>best {live.bestSurvivalWave ?? 0}</small>
-            </div>
-          )
-        )}
-        {STAGES[live.stage]?.crucible && crucibleAffixes.length > 0 && (
-          <div className="camp-affixes" title={crucibleAffixes.map((a) => CRUCIBLE_AFFIX_META[a].blurb).join(" · ")}>
-            {crucibleAffixes.map((a) => (
-              <span key={a} className="camp-affix-pip">{CRUCIBLE_AFFIX_META[a].label}</span>
-            ))}
-          </div>
-        )}
-        {STAGES[live.stage]?.bossRush && (
-          <div className="camp-wave">
-            {bossRush.cleared
-              ? "Cleared!"
-              : `Boss ${Math.max(1, bossRush.index + 1)}/7`}
-            <small>
-              {bossRush.time.toFixed(1)}s
-              {live.bestBossRushTime !== undefined && ` · best ${live.bestBossRushTime.toFixed(1)}s`}
-            </small>
-          </div>
-        )}
-        {live.autoGrind && (
-          <div className="camp-wave" title="Manual input is ignored while this is on — toggle it off to take back control.">
-            ⚔️ Auto-Grinding…
-          </div>
-        )}
-        <div className="bar expbar">
-          <div className="bar-fill" style={{ width: `${expPct}%` }} />
-          <div className="bar-text">
-            {Number.isFinite(exp.next) ? `${exp.exp} / ${exp.next} EXP` : "MAX LEVEL"}
-          </div>
-        </div>
-        <span className="camp-purse">{live.gold}g · {live.stones}◆</span>
-        <button className="btn btn-ghost camp-btn" onClick={() => { setRev((r) => r + 1); setPanel("inventory"); }}>
-          Bag (I)
-        </button>
-        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("sheet")}>
-          Character (C)
-        </button>
-        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("map")}>
-          Stages (M)
-        </button>
-        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bounty")}>
-          Bounty
-        </button>
-        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bestiary")}>
-          Bestiary
-        </button>
-        <button className="btn btn-ghost camp-btn" onClick={() => setPanel("records")}>
-          Records
-        </button>
-        <button
-          className={`btn camp-btn ${live.autoGrind ? "" : "btn-ghost"}`}
-          title="AI-driven: walks to the nearest mob, uses E/R/F whenever they're off cooldown, and collects loot. No jumping, no Q/Shift — manual input is ignored while it's on."
-          onClick={toggleAutoGrind}
-        >
-          {live.autoGrind ? "Auto-Grind: On" : "Auto-Grind"}
-        </button>
-      </div>
-
-      {minimap && <StageMinimap data={minimap} />}
-
-      {(() => {
-        const nearest = nearestAchievement(live);
-        if (!nearest) return null;
-        return (
-          <div className="almost-there">
-            <span>Almost there: {nearest.achievement.name}</span>
-            <div className="bar hpbar">
-              <div className="bar-fill" style={{ width: `${Math.min(100, nearest.pct * 100)}%` }} />
-              <div className="bar-text">
-                {Math.min(nearest.current, nearest.goal)} / {nearest.goal}
+      {/* Grouped so a wrapped camp-bar (many buttons, narrow window) pushes
+          the minimap/achievement banner up instead of sliding underneath
+          them — see the .campaign-bottom-stack comment in globals.css. */}
+      <div className="campaign-bottom-stack">
+        {(() => {
+          const nearest = nearestAchievement(live);
+          if (!nearest) return null;
+          return (
+            <div className="almost-there">
+              <span>Almost there: {nearest.achievement.name}</span>
+              <div className="bar hpbar">
+                <div className="bar-fill" style={{ width: `${Math.min(100, nearest.pct * 100)}%` }} />
+                <div className="bar-text">
+                  {Math.min(nearest.current, nearest.goal)} / {nearest.goal}
+                </div>
               </div>
             </div>
+          );
+        })()}
+
+        {minimap && <StageMinimap data={minimap} />}
+
+        {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
+        <div className="camp-bar">
+          <div className="camp-level">
+            LV {exp.level}
+            {exp.points > 0 && <span className="pip">+{exp.points}</span>}
           </div>
-        );
-      })()}
+          {STAGES[live.stage]?.crucible ? (
+            <div className="camp-wave">
+              Wave {wave}
+              <small>best {live.bestCrucibleWave ?? 0}</small>
+            </div>
+          ) : (
+            STAGES[live.stage]?.survival && (
+              <div className="camp-wave">
+                Wave {wave}
+                <small>best {live.bestSurvivalWave ?? 0}</small>
+              </div>
+            )
+          )}
+          {STAGES[live.stage]?.crucible && crucibleAffixes.length > 0 && (
+            <div className="camp-affixes" title={crucibleAffixes.map((a) => CRUCIBLE_AFFIX_META[a].blurb).join(" · ")}>
+              {crucibleAffixes.map((a) => (
+                <span key={a} className="camp-affix-pip">{CRUCIBLE_AFFIX_META[a].label}</span>
+              ))}
+            </div>
+          )}
+          {STAGES[live.stage]?.bossRush && (
+            <div className="camp-wave">
+              {bossRush.cleared
+                ? "Cleared!"
+                : `Boss ${Math.max(1, bossRush.index + 1)}/7`}
+              <small>
+                {bossRush.time.toFixed(1)}s
+                {live.bestBossRushTime !== undefined && ` · best ${live.bestBossRushTime.toFixed(1)}s`}
+              </small>
+            </div>
+          )}
+          {live.autoGrind && (
+            <div className="camp-wave" title="Manual input is ignored while this is on — toggle it off to take back control.">
+              ⚔️ Auto-Grinding…
+            </div>
+          )}
+          <div className="bar expbar">
+            <div className="bar-fill" style={{ width: `${expPct}%` }} />
+            <div className="bar-text">
+              {Number.isFinite(exp.next) ? `${exp.exp} / ${exp.next} EXP` : "MAX LEVEL"}
+            </div>
+          </div>
+          <span className="camp-purse">{live.gold}g · {live.stones}◆</span>
+          <button className="btn btn-ghost camp-btn" onClick={() => { setRev((r) => r + 1); setPanel("inventory"); }}>
+            Bag (I)
+          </button>
+          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("sheet")}>
+            Character (C)
+          </button>
+          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("map")}>
+            Stages (M)
+          </button>
+          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bounty")}>
+            Bounty
+          </button>
+          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bestiary")}>
+            Bestiary
+          </button>
+          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("records")}>
+            Records
+          </button>
+          <button
+            className={`btn camp-btn ${live.autoGrind ? "" : "btn-ghost"}`}
+            title="AI-driven: walks to the nearest mob, uses E/R/F whenever they're off cooldown, and collects loot. No jumping, no Q/Shift — manual input is ignored while it's on."
+            onClick={toggleAutoGrind}
+          >
+            {live.autoGrind ? "Auto-Grind: On" : "Auto-Grind"}
+          </button>
+        </div>
+      </div>
 
       {panel === "sheet" && (
         <div className="overlay" onClick={() => setPanel("none")}>
