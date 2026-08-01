@@ -1,6 +1,12 @@
 import type { LootDrop } from "./adventure";
 import { getClass } from "./classes";
-import { JUMP_VELOCITY, MAX_FALL_SPEED, REFLECT_DURATION } from "./constants";
+import {
+  HITSTUN_SINGLE,
+  JUMP_VELOCITY,
+  KNOCKDOWN_DURATION,
+  MAX_FALL_SPEED,
+  REFLECT_DURATION,
+} from "./constants";
 import type { ArenaEngine } from "./engine";
 import { RARITY_META } from "./items";
 import { MOB_TYPES } from "./mobs";
@@ -330,19 +336,23 @@ function getPortraitImage(classId: string): HTMLImageElement | null {
 }
 
 /**
- * Paragon's walk cycle: 6 frames cut from a single sheet, already supplied
- * with real transparency (no checkerboard cleanup needed this time). Rects
- * were measured directly from the sheet's alpha channel — each frame keeps
- * its own natural width so the stride still narrows/widens like a real walk
- * cycle instead of being stretched into a uniform box.
+ * Paragon's walk cycle: 8 frames on a 4x2 sheet, real alpha (no checkerboard
+ * cleanup needed). Frame rects use each frame's own natural tight alpha
+ * bounds (for correct cropping), but every frame is drawn at the same fixed
+ * on-screen height regardless — scaling height off the natural crop instead
+ * makes the character visibly shrink in any frame whose bounds happen to be
+ * tighter, which reads as him shrinking mid-stride rather than the intended
+ * constant-height walk.
  */
 const WALK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 18, y: 338, w: 168, h: 249 },
-  { x: 186, y: 338, w: 142, h: 249 },
-  { x: 328, y: 338, w: 130, h: 249 },
-  { x: 458, y: 338, w: 139, h: 249 },
-  { x: 597, y: 338, w: 144, h: 249 },
-  { x: 741, y: 338, w: 162, h: 249 },
+  { x: 38, y: 58, w: 63, h: 104 },
+  { x: 170, y: 57, w: 50, h: 107 },
+  { x: 288, y: 57, w: 51, h: 106 },
+  { x: 401, y: 59, w: 64, h: 103 },
+  { x: 44, y: 212, w: 50, h: 108 },
+  { x: 166, y: 214, w: 50, h: 106 },
+  { x: 291, y: 213, w: 49, h: 108 },
+  { x: 403, y: 214, w: 71, h: 105 },
 ];
 let walkSprite: HTMLImageElement | null = null;
 
@@ -356,24 +366,19 @@ function getWalkSprite(): HTMLImageElement | null {
 }
 
 /**
- * Paragon's sprint cycle (double-tap A/D and hold): 8 frames, rebuilt from
- * the source sheet the same way as the RMB high kick — the source frames
- * are photographed poses rather than a hand-aligned sprite sheet, and the
- * forward-leaning sprint poses put the head noticeably further right,
- * relative to their own tight crop, than the upright poses do. Every rect
- * shares a fixed width anchored on a verified head-center x and a fixed
- * bottom-anchored height, so the head reads as fixed and only the stride
- * (and the natural foot-lift bob between planted frames) actually moves.
+ * Paragon's sprint cycle (double-tap A/D and hold): 8 frames on a 4x2 sheet,
+ * a low, energy-trailed sprint. Same fixed-height treatment as the walk
+ * cycle — natural bounds for cropping only, not for scaling.
  */
 const RUN_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 0, y: 0, w: 129, h: 140 },
-  { x: 129, y: 0, w: 129, h: 140 },
-  { x: 258, y: 0, w: 129, h: 140 },
-  { x: 387, y: 0, w: 129, h: 140 },
-  { x: 516, y: 0, w: 129, h: 140 },
-  { x: 645, y: 0, w: 129, h: 140 },
-  { x: 774, y: 0, w: 129, h: 140 },
-  { x: 903, y: 0, w: 129, h: 140 },
+  { x: 10, y: 81, w: 121, h: 96 },
+  { x: 131, y: 92, w: 114, h: 92 },
+  { x: 245, y: 89, w: 107, h: 92 },
+  { x: 360, y: 98, w: 118, h: 87 },
+  { x: 0, y: 328, w: 123, h: 107 },
+  { x: 132, y: 331, w: 109, h: 103 },
+  { x: 241, y: 331, w: 109, h: 104 },
+  { x: 358, y: 334, w: 113, h: 100 },
 ];
 let runSprite: HTMLImageElement | null = null;
 
@@ -415,19 +420,21 @@ function getIdleSprite(): HTMLImageElement | null {
 }
 
 /**
- * Paragon's jump arc: 7 poses laid out on the sheet following the actual
- * trajectory shape (crouch, rising, apex, falling, landing crouch) rather
- * than a straight row, so each frame's rect was isolated as its own
- * connected blob of alpha instead of sliced by column.
+ * Paragon's jump arc: 8 poses on a 4x2 sheet, following the actual
+ * trajectory shape (crouch/launch with a ground splash, rising, apex,
+ * floating, falling, landing splash, recovering crouch, ready stance).
+ * Drawn at the same fixed height as every other cycle — natural bounds are
+ * for cropping only.
  */
 const JUMP_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 18, y: 257, w: 68, h: 73 },
-  { x: 97, y: 195, w: 62, h: 127 },
-  { x: 160, y: 178, w: 59, h: 113 },
-  { x: 223, y: 157, w: 60, h: 95 },
-  { x: 291, y: 218, w: 57, h: 97 },
-  { x: 349, y: 250, w: 56, h: 80 },
-  { x: 404, y: 210, w: 80, h: 122 },
+  { x: 41, y: 83, w: 69, h: 95 },
+  { x: 149, y: 59, w: 81, h: 127 },
+  { x: 285, y: 37, w: 62, h: 140 },
+  { x: 401, y: 37, w: 70, h: 98 },
+  { x: 32, y: 251, w: 73, h: 122 },
+  { x: 146, y: 341, w: 89, h: 110 },
+  { x: 275, y: 352, w: 69, h: 96 },
+  { x: 393, y: 352, w: 70, h: 96 },
 ];
 let jumpSprite: HTMLImageElement | null = null;
 
@@ -440,13 +447,20 @@ function getJumpSprite(): HTMLImageElement | null {
   return jumpSprite.complete && jumpSprite.naturalWidth > 0 ? jumpSprite : null;
 }
 
-/** Paragon's basic-attack jab: guard, punch, recover, punch, guard. */
+/**
+ * Paragon's basic-attack jab: guard, wind-up, impact burst, follow-through,
+ * then a second full swing — 8 frames on a 4x2 sheet. Natural bounds for
+ * cropping, fixed height for drawing.
+ */
 const PUNCH_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 19, y: 326, w: 176, h: 267 },
-  { x: 195, y: 326, w: 172, h: 267 },
-  { x: 367, y: 326, w: 148, h: 267 },
-  { x: 515, y: 326, w: 194, h: 267 },
-  { x: 709, y: 326, w: 183, h: 267 },
+  { x: 34, y: 57, w: 73, h: 107 },
+  { x: 149, y: 63, w: 96, h: 101 },
+  { x: 265, y: 54, w: 129, h: 110 },
+  { x: 394, y: 59, w: 104, h: 105 },
+  { x: 29, y: 214, w: 93, h: 106 },
+  { x: 151, y: 214, w: 76, h: 107 },
+  { x: 277, y: 214, w: 82, h: 106 },
+  { x: 402, y: 213, w: 80, h: 107 },
 ];
 let punchSprite: HTMLImageElement | null = null;
 
@@ -459,14 +473,24 @@ function getPunchSprite(): HTMLImageElement | null {
   return punchSprite.complete && punchSprite.naturalWidth > 0 ? punchSprite : null;
 }
 
-/** Paragon's Titan Slam: wind-up, rising charge, overhead peak, release, recover. */
+/**
+ * Paragon's Titan Slam: now a Kamehameha-style beam — charge, charge, fire,
+ * full beam, then the recovery stance. 6 frames on a 3x2 sheet. Natural
+ * bounds for cropping, fixed height for drawing — this sheet's crop-height
+ * range is wide (84–125px) since some frames include the beam effect, so
+ * scaling by that range made him visibly shrink between poses. Boosted by
+ * TITAN_SLAM_SCALE_BOOST since, like Detonate, this is a signature ultimate
+ * that should read as bigger than his normal body height.
+ */
 const TITAN_SLAM_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 19, y: 219, w: 96, h: 102 },
-  { x: 120, y: 197, w: 89, h: 126 },
-  { x: 212, y: 166, w: 87, h: 157 },
-  { x: 298, y: 204, w: 93, h: 120 },
-  { x: 395, y: 194, w: 89, h: 130 },
+  { x: 33, y: 89, w: 71, h: 94 },
+  { x: 146, y: 98, w: 83, h: 84 },
+  { x: 252, y: 80, w: 248, h: 102 },
+  { x: 7, y: 310, w: 241, h: 125 },
+  { x: 279, y: 337, w: 84, h: 97 },
+  { x: 406, y: 327, w: 55, h: 109 },
 ];
+const TITAN_SLAM_SCALE_BOOST = 1.18;
 let titanSlamSprite: HTMLImageElement | null = null;
 
 function getTitanSlamSprite(): HTMLImageElement | null {
@@ -478,12 +502,22 @@ function getTitanSlamSprite(): HTMLImageElement | null {
   return titanSlamSprite.complete && titanSlamSprite.naturalWidth > 0 ? titanSlamSprite : null;
 }
 
-/** Paragon's ArmorBreak: chamber, knee-raise, extended kick, recover. */
+/**
+ * Paragon's ArmorBreak: chamber, knee-raise, spark-tipped kick, extended
+ * kick, a huge crescent-slash impact, then 4 recovery frames — 9 frames on
+ * a 3-row sheet (3+2+4). Natural bounds for cropping, fixed height for
+ * drawing.
+ */
 const ARMORBREAK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 17, y: 229, w: 82, h: 96 },
-  { x: 99, y: 216, w: 69, h: 115 },
-  { x: 176, y: 225, w: 125, h: 106 },
-  { x: 422, y: 235, w: 66, h: 96 },
+  { x: 42, y: 80, w: 70, h: 90 },
+  { x: 174, y: 65, w: 74, h: 105 },
+  { x: 299, y: 58, w: 125, h: 112 },
+  { x: 55, y: 208, w: 127, h: 105 },
+  { x: 276, y: 178, w: 153, h: 139 },
+  { x: 30, y: 351, w: 66, h: 97 },
+  { x: 155, y: 349, w: 68, h: 99 },
+  { x: 276, y: 344, w: 68, h: 104 },
+  { x: 394, y: 352, w: 73, h: 96 },
 ];
 let armorbreakSprite: HTMLImageElement | null = null;
 
@@ -497,33 +531,19 @@ function getArmorbreakSprite(): HTMLImageElement | null {
 }
 
 /**
- * Paragon's heavy attack (RMB): idle, crouch, chamber, high kick, recover.
- *
- * This sheet needed more than a frame-rect table. The source art had three
- * problems layered on top of each other: (1) two of its "extended kick"
- * shots are mirror-image angles of the same pose rather than sequential
- * motion, so only one is used; (2) the kick pose's leg is pixel-connected to
- * a separate small "enemy getting hit" sprite right where the boot lands,
- * with no gap between them at all, so any simple crop either amputates the
- * boot or drags in a chunk of someone else's body; (3) the source frames sit
- * close enough together on the sheet that a wide-enough crop to fully catch
- * the boot pulls in stray pixels from the neighbouring dropped frame too.
- * None of that is fixable with plain x/y/w/h rects into the original sheet,
- * so this is instead a rebuilt sheet (see scratch script, not checked in):
- * connected-component analysis on the source art separated Paragon's own
- * pixels from both the dropped mirrored frame and the fused enemy sprite,
- * an eyeballed head-center x (verified with a grid overlay) anchors every
- * frame at an identical offset, and each frame was re-rasterised onto a
- * clean transparent canvas of the same size. The result: the head stays
- * visually fixed and only the leg swings, with nothing missing and nothing
- * borrowed from a neighbour.
+ * Paragon's heavy attack (RMB): chamber, rising knee, kick with a spark at
+ * the boot, impact burst, follow-through — 8 frames on a 4x2 sheet. Natural
+ * bounds for cropping, fixed height for drawing.
  */
 const HIGH_KICK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 0, y: 0, w: 106, h: 118 },
-  { x: 106, y: 0, w: 106, h: 97 },
-  { x: 212, y: 0, w: 106, h: 111 },
-  { x: 318, y: 0, w: 106, h: 105 },
-  { x: 424, y: 0, w: 106, h: 106 },
+  { x: 42, y: 82, w: 66, h: 96 },
+  { x: 157, y: 65, w: 61, h: 114 },
+  { x: 258, y: 67, w: 100, h: 110 },
+  { x: 377, y: 56, w: 112, h: 122 },
+  { x: 22, y: 338, w: 105, h: 110 },
+  { x: 155, y: 338, w: 69, h: 110 },
+  { x: 275, y: 350, w: 73, h: 98 },
+  { x: 394, y: 352, w: 73, h: 96 },
 ];
 let highKickSprite: HTMLImageElement | null = null;
 
@@ -536,12 +556,19 @@ function getHighKickSprite(): HTMLImageElement | null {
   return highKickSprite.complete && highKickSprite.naturalWidth > 0 ? highKickSprite : null;
 }
 
-/** Paragon's Reflect: raising the kinetic-shield stance. */
+/**
+ * Paragon's Reflect: raising the kinetic-shield stance — 8 frames on a 4x2
+ * sheet. Natural bounds for cropping, fixed height for drawing.
+ */
 const BLOCK_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 10, y: 164, w: 118, h: 177 },
-  { x: 137, y: 164, w: 101, h: 177 },
-  { x: 251, y: 166, w: 110, h: 175 },
-  { x: 367, y: 164, w: 119, h: 177 },
+  { x: 42, y: 82, w: 66, h: 95 },
+  { x: 171, y: 78, w: 57, h: 100 },
+  { x: 279, y: 76, w: 72, h: 102 },
+  { x: 387, y: 76, w: 80, h: 102 },
+  { x: 30, y: 335, w: 83, h: 112 },
+  { x: 155, y: 336, w: 83, h: 111 },
+  { x: 276, y: 344, w: 69, h: 105 },
+  { x: 394, y: 352, w: 73, h: 97 },
 ];
 let blockSprite: HTMLImageElement | null = null;
 
@@ -555,6 +582,60 @@ function getBlockSprite(): HTMLImageElement | null {
 }
 
 /**
+ * Paragon's light-hit reaction: ready, flinch, stumble, recover, settle —
+ * 8 frames on a 4x2 sheet. Natural bounds for cropping, fixed height for
+ * drawing. Plays over HITSTUN_SINGLE, the same brief window the engine
+ * itself uses for a single hit's hitstun.
+ */
+const GOT_HIT_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 41, y: 79, w: 71, h: 91 },
+  { x: 150, y: 45, w: 87, h: 125 },
+  { x: 280, y: 71, w: 83, h: 99 },
+  { x: 391, y: 67, w: 70, h: 103 },
+  { x: 30, y: 356, w: 81, h: 92 },
+  { x: 155, y: 348, w: 69, h: 100 },
+  { x: 275, y: 343, w: 70, h: 107 },
+  { x: 394, y: 352, w: 73, h: 97 },
+];
+let gotHitSprite: HTMLImageElement | null = null;
+
+function getGotHitSprite(): HTMLImageElement | null {
+  if (!gotHitSprite) {
+    if (typeof Image === "undefined") return null;
+    gotHitSprite = new Image();
+    gotHitSprite.src = "/art/paragon/source/paragon-got-hit-removebg-preview.png";
+  }
+  return gotHitSprite.complete && gotHitSprite.naturalWidth > 0 ? gotHitSprite : null;
+}
+
+/**
+ * Paragon's heavy-hit knockdown: standing, launched backward, crashing down
+ * in a burst of dust, sliding, then lying stunned on the ground — 6 frames.
+ * Natural per-frame bounds, scaled off GROUND_HIT_REFERENCE_H (the standing
+ * first frame, conveniently also the tallest) — this is what makes the
+ * lying frames read as genuinely flat instead of stretched tall.
+ */
+const GROUND_HIT_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
+  { x: 41, y: 79, w: 68, h: 91 },
+  { x: 354, y: 77, w: 107, h: 58 },
+  { x: 46, y: 229, w: 121, h: 87 },
+  { x: 264, y: 263, w: 200, h: 55 },
+  { x: 113, y: 412, w: 138, h: 39 },
+  { x: 333, y: 410, w: 138, h: 41 },
+];
+const GROUND_HIT_REFERENCE_H = Math.max(...GROUND_HIT_FRAMES.map((f) => f.h));
+let groundHitSprite: HTMLImageElement | null = null;
+
+function getGroundHitSprite(): HTMLImageElement | null {
+  if (!groundHitSprite) {
+    if (typeof Image === "undefined") return null;
+    groundHitSprite = new Image();
+    groundHitSprite.src = "/art/paragon/source/paragon-hits-the-ground-removebg-preview.png";
+  }
+  return groundHitSprite.complete && groundHitSprite.naturalWidth > 0 ? groundHitSprite : null;
+}
+
+/**
  * Paragon's Detonate: crouching charge-up building through a full aura,
  * into a released burst, the actual explosion, and a smoking recovery — 8
  * frames on a 4x2 sheet. Like the RMB high kick, this sheet wasn't a clean
@@ -564,25 +645,24 @@ function getBlockSprite(): HTMLImageElement | null {
  * out that exact checkerboard's two grey bands and despeckling the
  * leftover noise (connected-component filtering).
  *
- * Every frame shares one fixed height (290px, the tallest pose — the
- * explosion) anchored to each row's own consistent feet line, not each
- * pose's own tight bounding box — the draw call always scales `h` to the
- * same on-screen height (see paragonActionSprite's caller), so per-frame
- * bounding boxes of differing heights made the character visibly grow and
- * shrink frame to frame instead of animating at a fixed scale. Width still
- * varies per frame (arms/effects extending sideways), same as every other
- * hand-authored sheet here.
+ * Each frame keeps its own natural tight alpha bounds (including the
+ * flame/aura effects, which is why the heights genuinely differ frame to
+ * frame — 178 for a bare charge-up vs 290 for the full explosion) purely
+ * for cropping; drawn at a fixed height like every other cycle, boosted by
+ * DETONATE_SCALE_BOOST since this is the game's biggest, most dramatic
+ * skill and should read as noticeably larger than his normal body height.
  */
 const DETONATE_FRAMES: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 71, y: 44, w: 147, h: 290 },
-  { x: 306, y: 44, w: 151, h: 290 },
-  { x: 544, y: 44, w: 170, h: 290 },
-  { x: 791, y: 44, w: 192, h: 290 },
-  { x: 15, y: 364, w: 216, h: 290 },
+  { x: 71, y: 119, w: 147, h: 215 },
+  { x: 306, y: 156, w: 151, h: 178 },
+  { x: 544, y: 130, w: 170, h: 204 },
+  { x: 791, y: 82, w: 192, h: 252 },
+  { x: 15, y: 425, w: 216, h: 229 },
   { x: 258, y: 364, w: 300, h: 290 },
-  { x: 561, y: 364, w: 181, h: 290 },
-  { x: 814, y: 364, w: 171, h: 290 },
+  { x: 561, y: 402, w: 181, h: 252 },
+  { x: 814, y: 438, w: 171, h: 216 },
 ];
+const DETONATE_SCALE_BOOST = 1.08;
 let detonateSprite: HTMLImageElement | null = null;
 
 function getDetonateSprite(): HTMLImageElement | null {
@@ -597,30 +677,68 @@ function getDetonateSprite(): HTMLImageElement | null {
 interface ActionSprite {
   img: HTMLImageElement;
   frame: { x: number; y: number; w: number; h: number };
+  /** Scale this frame off its own natural size (calibrated against
+   *  GROUND_HIT_REFERENCE_H) instead of the usual fixed on-screen height —
+   *  only ground-hit/knockdown wants this, since it's the one cycle where
+   *  the body is genuinely meant to compress from standing to lying flat. */
+  naturalScale?: boolean;
+  /** Extra multiplier on top of the usual fixed on-screen height, for
+   *  skills that should read as visually larger than his normal body size. */
+  scaleBoost?: number;
 }
 
 /**
  * Picks whichever special pose sheet applies to Paragon right now, in
- * priority order — Detonate, Titan Slam, ArmorBreak, Reflect, the jab and
- * the RMB high kick all fully take over the body, so they win over just
- * being airborne. Everyone else (and Paragon doing nothing special) falls
- * through to the walk cycle or static portrait.
+ * priority order — hitstun and knockdown (both reactive, and mutually
+ * exclusive with everything else since the engine clears `action` on
+ * either) come first, then Detonate, Titan Slam, ArmorBreak, Reflect, the
+ * jab and the RMB high kick all fully take over the body, so they win over
+ * just being airborne. Everyone else (and Paragon doing nothing special)
+ * falls through to the walk cycle or static portrait.
  */
 function paragonActionSprite(f: Fighter): ActionSprite | null {
   if (f.classId !== "paragon") return null;
   const action = f.action;
 
-  if (action?.spec.id === "detonate") {
+  if (f.state === "knockdown") {
+    const img = getGroundHitSprite();
+    if (img) {
+      const t = Math.min(0.999, Math.max(0, f.stateTime / KNOCKDOWN_DURATION));
+      return {
+        img,
+        frame: GROUND_HIT_FRAMES[Math.floor(t * GROUND_HIT_FRAMES.length)],
+        naturalScale: true,
+      };
+    }
+  } else if (f.state === "hitstun") {
+    const img = getGotHitSprite();
+    if (img) {
+      // f.stateTime isn't reset when hitstun starts (only knockdown resets
+      // it) — f.hitstun itself is the reliable signal, counting down from
+      // HITSTUN_SINGLE (or STUNLOCK_DURATION on a repeat hit) to 0, so its
+      // inverse stands in for "how far through the reaction" instead.
+      const t = Math.min(0.999, Math.max(0, 1 - f.hitstun / HITSTUN_SINGLE));
+      return { img, frame: GOT_HIT_FRAMES[Math.floor(t * GOT_HIT_FRAMES.length)] };
+    }
+  } else if (action?.spec.id === "detonate") {
     const img = getDetonateSprite();
     if (img) {
       const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
-      return { img, frame: DETONATE_FRAMES[Math.floor(t * DETONATE_FRAMES.length)] };
+      return {
+        img,
+        frame: DETONATE_FRAMES[Math.floor(t * DETONATE_FRAMES.length)],
+        scaleBoost: DETONATE_SCALE_BOOST,
+      };
     }
   } else if (action?.spec.id === "titan-slam") {
     const img = getTitanSlamSprite();
     if (img) {
       const t = Math.min(0.999, Math.max(0, action.elapsed / action.spec.castTime));
-      return { img, frame: TITAN_SLAM_FRAMES[Math.floor(t * TITAN_SLAM_FRAMES.length)] };
+      return {
+        img,
+        frame: TITAN_SLAM_FRAMES[Math.floor(t * TITAN_SLAM_FRAMES.length)],
+        scaleBoost: TITAN_SLAM_SCALE_BOOST,
+      };
     }
   } else if (action?.spec.id === "armorbreak") {
     const img = getArmorbreakSprite();
@@ -721,8 +839,12 @@ export function renderFighterPortraits(
     if (f.isMob || f.state === "dead") continue;
 
     // Paragon has real animations for jumping, jabbing and Detonate, plus
-    // separate walk and sprint cycles; everyone else (and Paragon doing none
-    // of the above) falls back to the static reference portrait.
+    // separate walk and sprint cycles. Everything else Paragon might be
+    // doing (hitstun, knockdown, dash, dead, ...) falls back to the idle
+    // sheet too — frozen on its first frame rather than looping — since the
+    // old static portrait.webp no longer matches the new animation art.
+    // Only non-Paragon classes (no idle sheet of their own yet) still use
+    // the static reference portrait.
     const actionSprite = paragonActionSprite(f);
     const sprinting = f.state === "sprint";
     const walking = f.state === "walk";
@@ -732,7 +854,9 @@ export function renderFighterPortraits(
     const runSpriteImg =
       !actionSprite && f.classId === "paragon" && sprinting ? getRunSprite() : null;
     const idleSpriteImg =
-      !actionSprite && f.classId === "paragon" && idling ? getIdleSprite() : null;
+      !actionSprite && !walkSpriteImg && !runSpriteImg && f.classId === "paragon"
+        ? getIdleSprite()
+        : null;
     const img =
       actionSprite?.img ?? walkSpriteImg ?? runSpriteImg ?? idleSpriteImg ?? getPortraitImage(f.classId);
     if (!img) continue;
@@ -761,7 +885,17 @@ export function renderFighterPortraits(
       sy = actionSprite.frame.y;
       sw = actionSprite.frame.w;
       sh = actionSprite.frame.h;
-      drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
+      const baseDrawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
+      // Ground-hit frames keep their own natural proportions (see
+      // GROUND_HIT_FRAMES) instead of all sharing one fixed height, so the
+      // lying-flat frames actually read as flat instead of stretched tall.
+      // Every other sheet draws at one fixed height regardless of its own
+      // crop tightness — scaling by natural crop height there just made him
+      // shrink in whichever frame happened to be tightly cropped, which read
+      // as him shrinking mid-animation rather than any real size change.
+      drawH = actionSprite.naturalScale
+        ? baseDrawH * (sh / GROUND_HIT_REFERENCE_H)
+        : baseDrawH * (actionSprite.scaleBoost ?? 1);
     } else if (walkSpriteImg) {
       const step = Math.floor(engine.time * 9) % WALK_FRAMES.length;
       const frame = WALK_FRAMES[step];
@@ -780,7 +914,10 @@ export function renderFighterPortraits(
       drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
     } else if (idleSpriteImg) {
       // Slower cadence than walk/run — a calm breathing loop, not a stride.
-      const step = Math.floor(engine.time * 6) % IDLE_FRAMES.length;
+      // Every other fallback state (hitstun, knockdown, dash, dead, ...)
+      // freezes on the idle sheet's first frame instead of looping, since
+      // those are reactive states rather than something to animate through.
+      const step = idling ? Math.floor(engine.time * 6) % IDLE_FRAMES.length : 0;
       const frame = IDLE_FRAMES[step];
       sx = frame.x;
       sy = frame.y;
@@ -809,7 +946,12 @@ export function renderFighterPortraits(
 
     fx.save();
     fx.translate(x, yFeet);
-    if (knockdown) fx.rotate((f.facing === 1 ? 1 : -1) * (Math.PI / 2.1));
+    // Paragon's own ground-hit sprite (see GROUND_HIT_FRAMES) already draws
+    // him crashing down and lying flat frame by frame — rotating that art on
+    // top would double up on the fall. Only the generic static-portrait
+    // fallback (classes without dedicated knockdown art) still needs the
+    // rotate hack to fake "lying down" out of a standing portrait.
+    if (knockdown && !actionSprite) fx.rotate((f.facing === 1 ? 1 : -1) * (Math.PI / 2.1));
     if (f.facing === -1) fx.scale(-1, 1);
     fx.imageSmoothingEnabled = true;
     fx.imageSmoothingQuality = "high";

@@ -2623,6 +2623,12 @@ body {
   border: 2px solid #05070c;
 }
 
+/* Off over Emberhold: painted background art reads as smudged/lined under
+   the scanline pass, unlike the blocky procedural biomes it was built for. */
+.arena-stage.town::after {
+  display: none;
+}
+
 /* Scanline overlay ties the whole screen together. */
 .arena-stage::after {
   content: "";

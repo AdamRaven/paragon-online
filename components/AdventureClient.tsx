@@ -767,7 +767,7 @@ export function AdventureClient() {
   const expPct = Number.isFinite(exp.next) ? (exp.exp / exp.next) * 100 : 100;
 
   return (
-    <div className="arena-stage campaign">
+    <div className={`arena-stage campaign${STAGES[live.stage]?.isTown ? " town" : ""}`}>
       <canvas ref={canvasRef} tabIndex={0} />
       <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
       {hud && <ArenaHud hud={hud} logs={logs} hideSkills />}
