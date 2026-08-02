@@ -2831,6 +2831,20 @@ function drawMobFlourish(
       px(b, x - half + 1, topY + 1, w - 2, 2, col(m.color));
       break;
     }
+    case "bog-slime": {
+      // Amorphous and dripping — no real face, just a wide glowing eye sunk
+      // into the ooze, ragged bumps along the head instead of a hairline,
+      // and drips hanging off the torso rather than a normal hem.
+      px(b, x - half - 1, topY - 1, w + 2, 3, col(m.accent));
+      px(b, x - half + 1, topY - 2, 2, 2, col(m.color));
+      px(b, x + half - 3, topY - 2, 2, 2, col(m.color));
+      pxGlow(b, x, topY + 3, 4, "#bef264", 0.6);
+      px(b, x - 1, topY + 3, 3, 2, "#ecfccb");
+      for (let i = 0; i < 3; i++) {
+        px(b, x - half + i * Math.round(w / 3), torsoY + torsoH, 2, 2 + (i % 2) * 2, col(m.accent));
+      }
+      break;
+    }
     case "colossus": {
       // Stone slabs, cracks and a glowing core.
       px(b, x - half - 2, torsoY - 1, 4, 6, col(m.accent));
@@ -2901,6 +2915,18 @@ function drawMobFlourish(
       px(b, x + dir * 5, topY + 1, 2, 1, "#eaf9ff");
       break;
     }
+    case "frost-adept": {
+      // A hooded ice-caster — same "reads as ranged" language as the
+      // cultist's charged bolt, but a slow-pulsing frost orb and rime
+      // dusted across the hood instead of cyan lightning.
+      px(b, x - half, topY + 1, w, 3, col(m.color));
+      px(b, x - half + 1, torsoY, torsoW2(w) - 2, torsoH, col(m.accent));
+      px(b, x - half, topY, w, 1, "#e0f7ff");
+      pxGlow(b, x + dir * (half + 3), torsoY + 2, 5, "#a5f3fc", 0.75);
+      px(b, x + dir * (half + 3), torsoY + 2, 2, 2, "#f0fbff");
+      px(b, x + dir * (half + 2), torsoY + 5, 1, 3, "#7dd3fc");
+      break;
+    }
     case "frostking": {
       // The reach's frozen monarch: a jagged ice crown and a wide, slow
       // aura in near-white — the coldest, biggest presence on the map.
@@ -2923,6 +2949,21 @@ function drawMobFlourish(
       }
       px(b, x + dir * 2, topY + 3, 2, 1, "#fff7ed");
       px(b, x - dir * (half + 2), y - 4, 2, 3, col(m.accent));
+      break;
+    }
+    case "cinder-imp": {
+      // Small and quick — curled horns and ember eyes instead of a normal
+      // brow, plus a flame-tipped tail lashing behind it, so it reads as a
+      // lesser demon rather than a shrunk-down brawler.
+      px(b, x - dir * 2, topY - 2, 1, 3, col(m.accent));
+      px(b, x - dir * 4, topY - 1, 1, 2, col(m.accent));
+      px(b, x + dir * 2, topY + 3, 1, 1, "#fed7aa");
+      px(b, x + dir * 4, topY + 3, 1, 1, "#fed7aa");
+      const tailLen = Math.round(h * 0.3);
+      for (let i = 0; i < tailLen; i++) {
+        px(b, x - dir * (half + i), y - 2 - Math.round(Math.sin(i * 0.6) * 2), 2, 2, col(m.accent));
+      }
+      pxGlow(b, x - dir * (half + tailLen), y - 3, 3, "#fb923c", 0.7);
       break;
     }
     case "forgeheart": {
@@ -2948,6 +2989,18 @@ function drawMobFlourish(
       }
       px(b, x + dir * (half + 3), topY + 2, 1, 6, "#eff6ff");
       px(b, x + dir * (half + 4), topY, 1, 3, "#eff6ff");
+      break;
+    }
+    case "storm-wisp": {
+      // Ethereal and crackling — a translucent violet glow standing in for
+      // solid shading, with small arcs jutting off both hands, the same
+      // "reads as ranged" language as the cultist/frost-adept but electric.
+      pxGlow(b, x, y - h * 0.5, h * 0.55, "#c4b5fd", 0.55);
+      px(b, x + dir * (half + 1), torsoY + 2, 2, 1, "#f5f3ff");
+      px(b, x + dir * (half + 3), torsoY + 1, 1, 1, "#ede9fe");
+      px(b, x - dir * (half + 2), torsoY + torsoH - 2, 1, 1, "#ddd6fe");
+      pxGlow(b, x + dir * (half + 4), torsoY + 3, 4, "#a78bfa", 0.7);
+      px(b, x + dir * (half + 4), torsoY + 3, 1, 1, "#f5f3ff");
       break;
     }
     case "tempestwarden": {
