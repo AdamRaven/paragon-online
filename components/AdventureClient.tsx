@@ -10,12 +10,8 @@ import { DevLevelTools } from "@/components/DevTools";
 import { EscapeMenu } from "@/components/EscapeMenu";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { MapPanel } from "@/components/MapPanel";
-import { BestiaryPanel } from "@/components/BestiaryPanel";
 import { BlacksmithPanel } from "@/components/BlacksmithPanel";
-import { BountyBoard } from "@/components/BountyBoard";
-import { HallOfRecordsPanel } from "@/components/HallOfRecordsPanel";
 import { RunCompleteModal } from "@/components/RunCompleteModal";
-import { claimWeeklyMilestone } from "@/lib/arena/weekly";
 import { featuredBaseId } from "@/lib/arena/featuredItem";
 import { VendorPanel } from "@/components/VendorPanel";
 import { StoragePanel } from "@/components/StoragePanel";
@@ -138,9 +134,6 @@ export function AdventureClient() {
     | "escape"
     | "combo"
     | "tutorial"
-    | "bounty"
-    | "bestiary"
-    | "records"
   >("none");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   /** Bumped whenever the save mutates, to re-render the panels. */
@@ -451,9 +444,7 @@ export function AdventureClient() {
 
   const closePanel = useCallback(() => setPanel("none"), []);
 
-  const claimBounty = () => mutate((e) => e.claimBounty());
   const toggleAutoGrind = () => mutate((e) => e.toggleAutoGrind());
-  const claimWeekly = (index: number) => mutate((e) => claimWeeklyMilestone(e.save, index));
 
   const importSaveFile = (file: File) => {
     const reader = new FileReader();
@@ -896,15 +887,6 @@ export function AdventureClient() {
           <button className="btn btn-ghost camp-btn" onClick={() => setPanel("map")}>
             Stages (M)
           </button>
-          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bounty")}>
-            Bounty
-          </button>
-          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("bestiary")}>
-            Bestiary
-          </button>
-          <button className="btn btn-ghost camp-btn" onClick={() => setPanel("records")}>
-            Records
-          </button>
           {!STAGES[live.stage]?.isTown && (
             <button
               className={`btn camp-btn ${live.autoGrind ? "" : "btn-ghost"}`}
@@ -1137,19 +1119,6 @@ export function AdventureClient() {
           onClose={() => setPanel("none")}
         />
       )}
-
-      {panel === "bounty" && (
-        <BountyBoard
-          save={live}
-          onClaim={claimBounty}
-          onClaimWeekly={claimWeekly}
-          onClose={() => setPanel("none")}
-        />
-      )}
-
-      {panel === "bestiary" && <BestiaryPanel save={live} onClose={() => setPanel("none")} />}
-
-      {panel === "records" && <HallOfRecordsPanel save={live} onClose={() => setPanel("none")} />}
 
       {panel === "escape" && (
         <EscapeMenu

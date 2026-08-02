@@ -4,7 +4,6 @@ import {
   HITSTUN_SINGLE,
   JUMP_VELOCITY,
   KNOCKDOWN_DURATION,
-  MAX_FALL_SPEED,
   REFLECT_DURATION,
 } from "./constants";
 import type { ArenaEngine } from "./engine";
@@ -686,6 +685,16 @@ interface ActionSprite {
   scaleBoost?: number;
 }
 
+/** Was this fighter airborne last time we drew it — lets the landing-hold
+ *  logic below detect the exact tick it touches down. */
+const wasAirborne = new Map<string, boolean>();
+/** Fighter id -> engine time the landing-hold pose expires. */
+const landingHoldUntil = new Map<string, number>();
+/** How long to keep showing the last jump frame after touchdown before the
+ *  walk/idle sprite takes over — a beat to "stand up" instead of snapping
+ *  straight from mid-fall into standing the instant onGround flips true. */
+const LANDING_HOLD_DURATION = 0.16;
+
 /**
  * Picks whichever special pose sheet applies to Paragon right now, in
  * priority order — hitstun and knockdown (both reactive, and mutually
@@ -695,7 +704,7 @@ interface ActionSprite {
  * just being airborne. Everyone else (and Paragon doing nothing special)
  * falls through to the walk cycle or static portrait.
  */
-function paragonActionSprite(f: Fighter): ActionSprite | null {
+function paragonActionSprite(f: Fighter, time: number): ActionSprite | null {
   if (f.classId !== "paragon") return null;
   const action = f.action;
 
@@ -768,11 +777,29 @@ function paragonActionSprite(f: Fighter): ActionSprite | null {
       return { img, frame: HIGH_KICK_FRAMES[Math.floor(t * HIGH_KICK_FRAMES.length)] };
     }
   } else if (f.state === "air") {
+    wasAirborne.set(f.id, true);
     const img = getJumpSprite();
     if (img) {
-      const span = JUMP_VELOCITY + MAX_FALL_SPEED;
+      // Falling half is normalized against JUMP_VELOCITY rather than the much
+      // larger MAX_FALL_SPEED — a same-height jump lands around vy===
+      // JUMP_VELOCITY, which almost never reaches MAX_FALL_SPEED, so the old
+      // span meant the fall animation was still stuck mid-descent at the
+      // exact moment he actually hit the ground. This reaches the last frame
+      // right around touchdown instead, so the fall itself reads as quicker.
+      const span = JUMP_VELOCITY + JUMP_VELOCITY;
       const step = Math.round(((f.vy + JUMP_VELOCITY) / span) * (JUMP_FRAMES.length - 1));
       return { img, frame: JUMP_FRAMES[Math.max(0, Math.min(JUMP_FRAMES.length - 1, step))] };
+    }
+  } else {
+    // Just touched down (or never jumped at all — the map lookups below are
+    // no-ops either way). Hold the landing frame a beat longer instead of
+    // cutting straight to the walk/idle sprite the instant onGround flips.
+    if (wasAirborne.get(f.id)) landingHoldUntil.set(f.id, time + LANDING_HOLD_DURATION);
+    wasAirborne.set(f.id, false);
+    const holdUntil = landingHoldUntil.get(f.id);
+    if (holdUntil !== undefined && time < holdUntil) {
+      const img = getJumpSprite();
+      if (img) return { img, frame: JUMP_FRAMES[JUMP_FRAMES.length - 1] };
     }
   }
   return null;
@@ -844,7 +871,7 @@ export function renderFighterPortraits(
     // old static portrait.webp no longer matches the new animation art.
     // Only non-Paragon classes (no idle sheet of their own yet) still use
     // the static reference portrait.
-    const actionSprite = paragonActionSprite(f);
+    const actionSprite = paragonActionSprite(f, engine.time);
     const sprinting = f.state === "sprint";
     const walking = f.state === "walk";
     const idling = f.state === "idle";
