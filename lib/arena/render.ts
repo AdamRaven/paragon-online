@@ -1088,7 +1088,12 @@ const BIOMES: Record<string, {
   },
   keep: {
     sky: ["#2a1220", "#43182a", "#5c2130"], far: "#331526", near: "#20101c",
-    accent: "#e05a3c", stars: false, cap: "#5b2a22", capLit: "#a34a2c",
+    accent: "#e05a3c", stars: false, cap: "#8c2413", capLit: "#ee6b1b",
+    // Sampled straight off the Hölle backdrop's cracked-lava floor, so the
+    // procedural ground reads as the same crust instead of the default
+    // blue-slate dungeon rock every other biome falls back to.
+    groundTop: "#8c2413", groundLit: "#ee6b1b",
+    groundBody: "#5c1612", groundDark: "#371013", groundDeep: "#15070e",
   },
   abyss: {
     sky: ["#0a0616", "#180a2e", "#241040"], far: "#1c0e38", near: "#120a24",
@@ -1144,6 +1149,23 @@ function getTownBgImage(): HTMLImageElement | null {
  *  game's actual ground plane instead of characters floating over it. */
 const TOWN_BG_GROUND_FRAC = 0.846;
 
+/** Warden's Keep's painted lava-cave backdrop — same real-art replacement
+ *  as the town street, for the "keep" biome only (see the early return in
+ *  drawSky). Pre-cropped from the source hand-off art to strip its baked-in
+ *  "HÖLLE — 1500 AD" title/caption bars top and bottom. */
+let keepBgImage: HTMLImageElement | null = null;
+function getKeepBgImage(): HTMLImageElement | null {
+  if (!keepBgImage) {
+    if (typeof Image === "undefined") return null;
+    keepBgImage = new Image();
+    keepBgImage.src = "/art/keep-bg.png";
+  }
+  return keepBgImage.complete && keepBgImage.naturalWidth > 0 ? keepBgImage : null;
+}
+/** Fraction down the source image where the flat cracked-lava floor sits —
+ *  measured directly off the art, same idea as TOWN_BG_GROUND_FRAC. */
+const KEEP_BG_GROUND_FRAC = 0.87;
+
 function drawSky(
   b: CanvasRenderingContext2D,
   vw: number,
@@ -1164,6 +1186,26 @@ function drawSky(
       const scaledW = img.naturalWidth * scale;
       const scaledH = img.naturalHeight * scale;
       const drawY = Math.round(groundWy - TOWN_BG_GROUND_FRAC * scaledH);
+      const shift = Math.round(camX * 0.35);
+      const off = -shift % scaledW;
+      for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {
+        b.drawImage(img, Math.round(x), drawY, Math.ceil(scaledW) + 1, Math.ceil(scaledH));
+      }
+      return;
+    }
+  }
+
+  if (biomeId === "keep") {
+    const img = getKeepBgImage();
+    if (img) {
+      // Unlike the town street (a low skyline with open sky above), this
+      // cave scene fills the whole vertical frame floor-to-ceiling, so it's
+      // scaled to slightly overshoot viewport height rather than a fraction
+      // of it — no separate sky fill needed underneath.
+      const scale = (vh * 1.05) / img.naturalHeight;
+      const scaledW = img.naturalWidth * scale;
+      const scaledH = img.naturalHeight * scale;
+      const drawY = Math.round(groundWy - KEEP_BG_GROUND_FRAC * scaledH);
       const shift = Math.round(camX * 0.35);
       const off = -shift % scaledW;
       for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {

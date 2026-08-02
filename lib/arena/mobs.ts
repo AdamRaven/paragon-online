@@ -704,9 +704,12 @@ const GROUND_Y = 560;
 
 /**
  * Builds a side-scrolling level with a single continuous floor — no chasms
- * to fall through and respawn from — plus one-way platforms floating above
- * it for verticality. `hazards` are floor-level damage patches — [x, w, dps,
- * kind] — that tick anyone standing in them; omit for a plain floor.
+ * to fall through and respawn from. `platforms` still supports one-way
+ * floating terrain if a stage ever wants it, but every stage below passes
+ * an empty array — no elevated ground for the player or mobs to jump up
+ * onto, just the flat floor. `hazards` are floor-level damage patches —
+ * [x, w, dps, kind] — that tick anyone standing in them; omit for a plain
+ * floor.
  */
 function makeMap(
   width: number,
@@ -723,24 +726,6 @@ function makeMap(
     killY: 760,
     hazards: hazards.map(([x, w, dps, kind]) => ({ x, w, y: GROUND_Y, dps, kind })),
   };
-}
-
-/**
- * Adds a lower stepping-ledge beneath each high platform, so climbing off
- * the floor reads as a real staircase rather than one long floating slab —
- * and gives mobs a second tier to stand and patrol on.
- */
-function withLedges(
-  highs: Array<[number, number, number]>
-): Array<[number, number, number]> {
-  const lows: Array<[number, number, number]> = highs.map(
-    ([x, , w]): [number, number, number] => [
-      x - 40,
-      GROUND_Y - 100,
-      Math.max(120, w - 50),
-    ]
-  );
-  return [...lows, ...highs];
 }
 
 /** A small deterministic PRNG (mulberry32) so a stage's terrain is stable
@@ -764,65 +749,36 @@ export function hashSeed(s: string): number {
 }
 
 /**
- * Procedurally lays out a stage's floating terrain from a stable per-stage
- * seed, so every map gets its own irregular arrangement of ledges and
- * platforms — rather than the same evenly-spaced row of four blocks copied
- * into every biome. Each anchor is a low stepping-ledge paired with a high
- * platform above it, always close enough together that both stay reachable
- * by a normal jump. Also returns each high platform's centre, so mobs can be
- * spawned standing on the new upper terrain instead of just the floor.
+ * Spreads a handful of extra mob-spawn x-positions evenly (with a little
+ * jitter) across a stage from a stable per-stage seed, so every map gets its
+ * own irregular roster spacing instead of the same evenly-spaced row copied
+ * into every biome. Every map is flat ground now — no floating terrain for
+ * mobs (or the player) to perch or jump up onto — so this only ever feeds
+ * ground-level spawn x-coordinates.
  */
-function proceduralTerrain(
-  seed: string,
-  width: number,
-  count: number,
-  opts: { minLow: number; maxLow: number; minHigh: number; maxHigh: number; minW: number; maxW: number }
-): { platforms: Array<[number, number, number]>; perches: Array<{ x: number; y: number }> } {
+function proceduralSpawnX(seed: string, width: number, count: number): number[] {
   const rand = mulberry32(hashSeed(seed));
-  const platforms: Array<[number, number, number]> = [];
-  const perches: Array<{ x: number; y: number }> = [];
   const margin = 340;
   const usable = width - margin * 2;
   const step = usable / count;
+  const xs: number[] = [];
   for (let i = 0; i < count; i++) {
     const jitter = (rand() - 0.5) * step * 0.6;
-    const x = Math.round(margin + i * step + step / 2 + jitter);
-    const lowY = GROUND_Y - Math.round(opts.minLow + rand() * (opts.maxLow - opts.minLow));
-    const highY = lowY - Math.round(opts.minHigh + rand() * (opts.maxHigh - opts.minHigh));
-    const lw = Math.round(120 + rand() * 70);
-    const hw = Math.round(opts.minW + rand() * (opts.maxW - opts.minW));
-    const lx = Math.round(x - 30 + rand() * 60 - lw / 2);
-    platforms.push([lx, lowY, lw]);
-    platforms.push([Math.round(x - hw / 2), highY, hw]);
-    perches.push({ x, y: highY });
+    xs.push(Math.round(margin + i * step + step / 2 + jitter));
   }
-  return { platforms, perches };
+  return xs;
 }
 
-// Each late-game stage gets its own irregular terrain instead of the same
-// evenly-spaced four platforms repeated everywhere — seeded per stage so the
+// Each late-game stage gets its own irregular extra-spawn spacing instead of
+// the same evenly-spaced row repeated everywhere — seeded per stage so the
 // layout is fixed and reviewable, not a fresh reroll on every page load.
-const SANCTUM_TERRAIN = proceduralTerrain("sanctum-abyss", 3500, 5, {
-  minLow: 70, maxLow: 130, minHigh: 90, maxHigh: 170, minW: 160, maxW: 240,
-});
-const FROSTBOUND_TERRAIN = proceduralTerrain("frostbound-ice", 3600, 4, {
-  minLow: 90, maxLow: 140, minHigh: 100, maxHigh: 170, minW: 170, maxW: 230,
-});
-const FORGE_TERRAIN = proceduralTerrain("forge-catwalks", 3600, 6, {
-  minLow: 60, maxLow: 100, minHigh: 60, maxHigh: 110, minW: 150, maxW: 210,
-});
-const TEMPEST_TERRAIN = proceduralTerrain("tempest-fortress", 3600, 4, {
-  minLow: 100, maxLow: 150, minHigh: 120, maxHigh: 180, minW: 180, maxW: 240,
-});
-const BLIGHT_TERRAIN = proceduralTerrain("blight-hummocks", 3600, 6, {
-  minLow: 40, maxLow: 80, minHigh: 50, maxHigh: 90, minW: 140, maxW: 200,
-});
-const THRONE_TERRAIN = proceduralTerrain("throne-risers", 3600, 5, {
-  minLow: 80, maxLow: 120, minHigh: 90, maxHigh: 140, minW: 200, maxW: 260,
-});
-const HOLLOW_TERRAIN = proceduralTerrain("hollow-beyond", 3600, 5, {
-  minLow: 80, maxLow: 130, minHigh: 100, maxHigh: 160, minW: 190, maxW: 250,
-});
+const SANCTUM_PERCH_X = proceduralSpawnX("sanctum-abyss", 3500, 5);
+const FROSTBOUND_PERCH_X = proceduralSpawnX("frostbound-ice", 3600, 4);
+const FORGE_PERCH_X = proceduralSpawnX("forge-catwalks", 3600, 6);
+const TEMPEST_PERCH_X = proceduralSpawnX("tempest-fortress", 3600, 4);
+const BLIGHT_PERCH_X = proceduralSpawnX("blight-hummocks", 3600, 6);
+const THRONE_PERCH_X = proceduralSpawnX("throne-risers", 3600, 5);
+const HOLLOW_PERCH_X = proceduralSpawnX("hollow-beyond", 3600, 5);
 
 export const STAGES: Stage[] = [
   {
@@ -844,14 +800,7 @@ export const STAGES: Stage[] = [
     name: "The Outskirts",
     subtitle: "Where the husks wander",
     requiredLevel: 1,
-    map: makeMap(
-      2600,
-      withLedges([
-        [400, 410, 180],
-        [940, 400, 220],
-        [1980, 400, 200],
-      ])
-    ),
+    map: makeMap(2600, []),
     spawns: [
       { typeId: "husk", x: 500 },
       { typeId: "husk", x: 700 },
@@ -862,11 +811,10 @@ export const STAGES: Stage[] = [
       { typeId: "husk", x: 2400 },
       { typeId: "rabid-cur", x: 1150 },
       { typeId: "rabid-cur", x: 1850 },
-      // Same wandering husks/brawlers, up on the new terraces.
-      { typeId: "husk", x: 400, y: 410 },
-      { typeId: "brawler", x: 940, y: 400 },
-      { typeId: "husk", x: 1980, y: 400 },
-      { typeId: "husk", x: 900, y: 460 },
+      { typeId: "husk", x: 400 },
+      { typeId: "brawler", x: 940 },
+      { typeId: "husk", x: 1980 },
+      { typeId: "husk", x: 900 },
     ],
   },
   {
@@ -875,19 +823,10 @@ export const STAGES: Stage[] = [
     name: "The Undercity",
     subtitle: "Brawlers, wraiths and cultists in the dark",
     requiredLevel: 5,
-    map: makeMap(
-      3000,
-      withLedges([
-        [300, 400, 180],
-        [800, 400, 220],
-        [1740, 390, 200],
-        [2580, 400, 200],
-      ]),
-      [
-        [1000, 140, 18, "spikes"],
-        [2250, 140, 18, "spikes"],
-      ]
-    ),
+    map: makeMap(3000, [], [
+      [1000, 140, 18, "spikes"],
+      [2250, 140, 18, "spikes"],
+    ]),
     spawns: [
       { typeId: "brawler", x: 420 },
       { typeId: "rabid-cur", x: 560 },
@@ -903,10 +842,10 @@ export const STAGES: Stage[] = [
       { typeId: "bog-slime", x: 2650 },
       { typeId: "cultist", x: 2820 },
       { typeId: "shieldbearer", x: 2980 },
-      { typeId: "brawler", x: 300, y: 400 },
-      { typeId: "blade-wraith", x: 800, y: 400 },
-      { typeId: "cultist", x: 1740, y: 390 },
-      { typeId: "blade-wraith", x: 2580, y: 400 },
+      { typeId: "brawler", x: 300 },
+      { typeId: "blade-wraith", x: 800 },
+      { typeId: "cultist", x: 1740 },
+      { typeId: "blade-wraith", x: 2580 },
     ],
   },
   {
@@ -915,14 +854,7 @@ export const STAGES: Stage[] = [
     name: "Warden's Keep",
     subtitle: "The Warden is waiting at the far end",
     requiredLevel: 12,
-    map: makeMap(
-      3200,
-      withLedges([
-        [880, 390, 220],
-        [1820, 390, 220],
-        [2500, 400, 220],
-      ])
-    ),
+    map: makeMap(3200, []),
     spawns: [
       { typeId: "colossus", x: 480 },
       { typeId: "blade-wraith", x: 660 },
@@ -933,9 +865,9 @@ export const STAGES: Stage[] = [
       { typeId: "colossus", x: 2200 },
       { typeId: "blade-wraith", x: 2400 },
       { typeId: "warden", x: 2950 },
-      { typeId: "colossus", x: 880, y: 390 },
-      { typeId: "blade-wraith", x: 1820, y: 390 },
-      { typeId: "colossus", x: 2500, y: 400 },
+      { typeId: "colossus", x: 880 },
+      { typeId: "blade-wraith", x: 1820 },
+      { typeId: "colossus", x: 2500 },
     ],
   },
   {
@@ -944,7 +876,7 @@ export const STAGES: Stage[] = [
     name: "The Abyssal Sanctum",
     subtitle: "Beyond the Keep — the Sovereign holds court at the far end",
     requiredLevel: 20,
-    map: makeMap(3500, SANCTUM_TERRAIN.platforms),
+    map: makeMap(3500, []),
     spawns: [
       { typeId: "revenant", x: 480 },
       { typeId: "colossus", x: 700 },
@@ -957,7 +889,7 @@ export const STAGES: Stage[] = [
       { typeId: "colossus", x: 2700 },
       { typeId: "sovereign", x: 3300 },
       ...["revenant", "colossus", "revenant", "blade-wraith", "revenant"].map(
-        (typeId, i) => ({ typeId, x: SANCTUM_TERRAIN.perches[i].x, y: SANCTUM_TERRAIN.perches[i].y })
+        (typeId, i) => ({ typeId, x: SANCTUM_PERCH_X[i] })
       ),
     ],
   },
@@ -967,7 +899,7 @@ export const STAGES: Stage[] = [
     name: "The Frostbound Reach",
     subtitle: "Beyond the Sanctum — the Frostking rules an endless winter",
     requiredLevel: 28,
-    map: makeMap(3600, FROSTBOUND_TERRAIN.platforms),
+    map: makeMap(3600, []),
     spawns: [
       { typeId: "frostfang", x: 500 },
       { typeId: "frostfang", x: 740 },
@@ -983,8 +915,7 @@ export const STAGES: Stage[] = [
       { typeId: "frostking", x: 3400 },
       ...["frostfang", "frostfang", "revenant", "frostfang"].map((typeId, i) => ({
         typeId,
-        x: FROSTBOUND_TERRAIN.perches[i].x,
-        y: FROSTBOUND_TERRAIN.perches[i].y,
+        x: FROSTBOUND_PERCH_X[i],
       })),
     ],
   },
@@ -994,7 +925,7 @@ export const STAGES: Stage[] = [
     name: "The Sundered Forge",
     subtitle: "Beyond the Reach — the Forgeheart burns at the far end",
     requiredLevel: 36,
-    map: makeMap(3600, FORGE_TERRAIN.platforms, [
+    map: makeMap(3600, [], [
       [900, 180, 26, "lava"],
       [2000, 180, 26, "lava"],
       [3050, 160, 26, "lava"],
@@ -1012,7 +943,7 @@ export const STAGES: Stage[] = [
       { typeId: "cinder-imp", x: 3180 },
       { typeId: "forgeheart", x: 3400 },
       ...["cinderwraith", "cinderwraith", "frostking", "cinderwraith", "cinderwraith", "frostking"].map(
-        (typeId, i) => ({ typeId, x: FORGE_TERRAIN.perches[i].x, y: FORGE_TERRAIN.perches[i].y })
+        (typeId, i) => ({ typeId, x: FORGE_PERCH_X[i] })
       ),
     ],
   },
@@ -1022,7 +953,7 @@ export const STAGES: Stage[] = [
     name: "The Tempest Spire",
     subtitle: "Beyond the Forge — a sky fortress adrift in an endless storm",
     requiredLevel: 42,
-    map: makeMap(3600, TEMPEST_TERRAIN.platforms),
+    map: makeMap(3600, []),
     spawns: [
       { typeId: "stormcaller", x: 500 },
       { typeId: "stormcaller", x: 740 },
@@ -1037,8 +968,7 @@ export const STAGES: Stage[] = [
       { typeId: "tempestwarden", x: 3400 },
       ...["stormcaller", "stormcaller", "forgeheart", "stormcaller"].map((typeId, i) => ({
         typeId,
-        x: TEMPEST_TERRAIN.perches[i].x,
-        y: TEMPEST_TERRAIN.perches[i].y,
+        x: TEMPEST_PERCH_X[i],
       })),
     ],
   },
@@ -1048,7 +978,7 @@ export const STAGES: Stage[] = [
     name: "The Blighted Hollow",
     subtitle: "Beyond the Spire — a poisoned grove where nothing living remains",
     requiredLevel: 46,
-    map: makeMap(3600, BLIGHT_TERRAIN.platforms, [
+    map: makeMap(3600, [], [
       [850, 220, 14, "poison"],
       [1900, 220, 14, "poison"],
       [2950, 220, 14, "poison"],
@@ -1063,7 +993,7 @@ export const STAGES: Stage[] = [
       { typeId: "plaguebound", x: 2960 },
       { typeId: "rotmother", x: 3400 },
       ...["plaguebound", "plaguebound", "tempestwarden", "plaguebound", "plaguebound", "tempestwarden"].map(
-        (typeId, i) => ({ typeId, x: BLIGHT_TERRAIN.perches[i].x, y: BLIGHT_TERRAIN.perches[i].y })
+        (typeId, i) => ({ typeId, x: BLIGHT_PERCH_X[i] })
       ),
     ],
   },
@@ -1073,7 +1003,7 @@ export const STAGES: Stage[] = [
     name: "The Sundered Throne",
     subtitle: "The last road — a shattered heaven where a fallen king still reigns",
     requiredLevel: 50,
-    map: makeMap(3600, THRONE_TERRAIN.platforms),
+    map: makeMap(3600, []),
     spawns: [
       { typeId: "seraphremnant", x: 500 },
       { typeId: "seraphremnant", x: 740 },
@@ -1084,7 +1014,7 @@ export const STAGES: Stage[] = [
       { typeId: "seraphremnant", x: 2960 },
       { typeId: "sunderedking", x: 3400 },
       ...["seraphremnant", "seraphremnant", "rotmother", "seraphremnant", "seraphremnant"].map(
-        (typeId, i) => ({ typeId, x: THRONE_TERRAIN.perches[i].x, y: THRONE_TERRAIN.perches[i].y })
+        (typeId, i) => ({ typeId, x: THRONE_PERCH_X[i] })
       ),
     ],
   },
@@ -1132,7 +1062,7 @@ export const STAGES: Stage[] = [
     name: "The Hollow Beyond",
     subtitle: "Past the Throne, past the last road — whatever's out here was never meant to be found",
     requiredLevel: 50,
-    map: makeMap(3600, HOLLOW_TERRAIN.platforms),
+    map: makeMap(3600, []),
     spawns: [
       { typeId: "voidling", x: 500 },
       { typeId: "voidling", x: 740 },
@@ -1144,8 +1074,7 @@ export const STAGES: Stage[] = [
       { typeId: "thehollow", x: 3400 },
       ...["voidling", "voidling", "hollowsentinel", "voidling", "voidling"].map((typeId, i) => ({
         typeId,
-        x: HOLLOW_TERRAIN.perches[i].x,
-        y: HOLLOW_TERRAIN.perches[i].y,
+        x: HOLLOW_PERCH_X[i],
       })),
     ],
   },
