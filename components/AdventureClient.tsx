@@ -19,6 +19,7 @@ import { claimWeeklyMilestone } from "@/lib/arena/weekly";
 import { featuredBaseId } from "@/lib/arena/featuredItem";
 import { VendorPanel } from "@/components/VendorPanel";
 import { StoragePanel } from "@/components/StoragePanel";
+import { TouchControls } from "@/components/TouchControls";
 import {
   hasFinishedTutorialQuest,
   hasSeenTutorial,
@@ -321,6 +322,26 @@ export function AdventureClient() {
     input.unlockPointer();
   }, [started, panel]);
 
+  // E doubles as "talk" when standing at any of the town NPCs — shared by
+  // the keyboard handler below and the touch "Talk to ..." button, which
+  // has no KeyE event of its own to listen for.
+  const interactWithNpc = useCallback(() => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    if (eng.nearBlacksmith) {
+      setShopMsg(null);
+      setRev((r) => r + 1);
+      setPanel((p) => (p === "blacksmith" ? "none" : "blacksmith"));
+    } else if (eng.nearVendor) {
+      setShopMsg(null);
+      setRev((r) => r + 1);
+      setPanel((p) => (p === "vendor" ? "none" : "vendor"));
+    } else if (eng.nearBank) {
+      setRev((r) => r + 1);
+      setPanel((p) => (p === "storage" ? "none" : "storage"));
+    }
+  }, []);
+
   // Panel hotkeys: C for the character sheet, M for stage travel.
   useEffect(() => {
     if (!started) return;
@@ -332,21 +353,7 @@ export function AdventureClient() {
         setRev((r) => r + 1);
         setPanel((p) => (p === "inventory" ? "none" : "inventory"));
       } else if (e.code === "KeyE") {
-        // E doubles as "talk" when standing at any of the town NPCs.
-        const eng = engineRef.current;
-        if (!eng) return;
-        if (eng.nearBlacksmith) {
-          setShopMsg(null);
-          setRev((r) => r + 1);
-          setPanel((p) => (p === "blacksmith" ? "none" : "blacksmith"));
-        } else if (eng.nearVendor) {
-          setShopMsg(null);
-          setRev((r) => r + 1);
-          setPanel((p) => (p === "vendor" ? "none" : "vendor"));
-        } else if (eng.nearBank) {
-          setRev((r) => r + 1);
-          setPanel((p) => (p === "storage" ? "none" : "storage"));
-        }
+        interactWithNpc();
       } else if (e.code === "Escape") {
         setPanel((p) => {
           if (p === "tutorial") markTutorialSeen();
@@ -359,7 +366,7 @@ export function AdventureClient() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [started]);
+  }, [started, interactWithNpc]);
 
   const spend = (stat: StatKey) => {
     const e = engineRef.current;
@@ -783,6 +790,10 @@ export function AdventureClient() {
         <DevLevelTools level={live.level} maxLevel={MAX_LEVEL} onAdjust={devAdjustLevel} />
       )}
 
+      {started && hud && panel === "none" && inputRef.current && (
+        <TouchControls input={inputRef.current} nearNpc={hud.nearNpc} onInteract={interactWithNpc} />
+      )}
+
       {/* Grouped so a wrapped camp-bar (many buttons, narrow window) pushes
           the console up instead of sliding underneath it — see the
           .campaign-bottom-stack comment in globals.css. */}
@@ -790,7 +801,7 @@ export function AdventureClient() {
         {/* One console: skills stacked directly above the XP/gold/nav row,
             inside a single bordered window instead of two stacked panels. */}
         <div className="camp-console">
-          {hud && <SkillBar hud={hud} />}
+          {hud && <SkillBar hud={hud} input={inputRef.current ?? undefined} />}
 
           {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
           <div className="camp-bar">
@@ -1319,6 +1330,13 @@ function buildHud(engine: AdventureEngine, input: ArenaInput): ArenaHudData {
     freeze: p.freezeTimer,
     shock: p.shockTimer,
     state: p.state,
+    nearNpc: engine.nearBlacksmith
+      ? "Blacksmith"
+      : engine.nearVendor
+        ? "Vendor"
+        : engine.nearBank
+          ? "Storage"
+          : null,
   };
 }
 

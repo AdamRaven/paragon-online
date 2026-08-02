@@ -321,4 +321,53 @@ export class ArenaInput {
     this.bindings = bindings;
     this.reset();
   }
+
+  // ---------------------------------------------------------------- touch
+  // On-screen touch controls (see components/TouchControls.tsx) have no
+  // real KeyboardEvent/MouseEvent to listen for, so they drive the same
+  // held/pressed/mouseHeld state directly through these instead — every
+  // other method above (isDown, consume, lmbDown, moveX, ...) reads that
+  // state without caring whether a real DOM event or a touch button set it.
+
+  /** Presses a bound key from an on-screen touch control — same effect as a
+   *  real keydown. Idempotent, so a duplicate call while already held
+   *  (e.g. a stray pointer event) doesn't re-arm the one-shot `pressed`. */
+  touchKeyDown(code: string) {
+    if (this.held.has(code)) return;
+    this.held.add(code);
+    this.pressed.add(code);
+  }
+
+  /** Releases a key pressed via touchKeyDown(). */
+  touchKeyUp(code: string) {
+    this.held.delete(code);
+  }
+
+  /** Fires a single edge-triggered press — e.g. tapping a skill icon —
+   *  without also setting `held`, since nothing here needs isDown() to
+   *  read true afterwards and a stuck `held` entry would be a real bug. */
+  touchTap(code: string) {
+    this.pressed.add(code);
+  }
+
+  /** Presses LMB (0) or RMB (2) from an on-screen touch control — same
+   *  effect as a real mousedown on the canvas, minus the pointer-lock/focus
+   *  side effects that only make sense for an actual mouse. */
+  touchMouseDown(button: 0 | 2) {
+    if (this.mouseHeld[button]) return;
+    this.mouseHeld[button] = true;
+    this.mousePressed[button] = true;
+  }
+
+  /** Releases a button pressed via touchMouseDown(). */
+  touchMouseUp(button: 0 | 2) {
+    this.mouseHeld[button] = false;
+  }
+
+  /** Arms/disarms sprint directly for a touch control — there's no keyboard
+   *  double-tap gesture to detect here, so the move pad calls this once a
+   *  drag crosses its own sprint threshold. */
+  setTouchSprintDir(dir: -1 | 0 | 1) {
+    this.sprintDir = dir;
+  }
 }

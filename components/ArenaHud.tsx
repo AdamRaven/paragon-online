@@ -9,8 +9,27 @@ import {
   MANASTOP_COST,
   SHEDIM_BLAST_MANA_THRESHOLD,
 } from "@/lib/arena/constants";
+import type { ArenaInput } from "@/lib/arena/input";
 import { playSound } from "@/lib/arena/sound";
-import type { ClassId, CombatLogEntry } from "@/lib/arena/types";
+import type { ClassId, CombatLogEntry, SkillSlot } from "@/lib/arena/types";
+
+/** Which bound key a skill's slot corresponds to, for tap-to-cast on touch
+ *  devices — see SkillBar's onClick below. */
+function slotBindingCode(input: ArenaInput, slot: SkillSlot): string {
+  const b = input.getBindings();
+  switch (slot) {
+    case "Q":
+      return b.q;
+    case "E":
+      return b.e;
+    case "R":
+      return b.r;
+    case "F":
+      return b.f;
+    case "SHIFT":
+      return b.shift;
+  }
+}
 
 export interface ArenaHudData {
   playerName: string;
@@ -45,6 +64,9 @@ export interface ArenaHudData {
   shock?: number;
   sprinting: boolean;
   state: string;
+  /** Which town NPC the player is standing next to, if any — drives the
+   *  "Talk" touch button (see TouchControls.tsx). Desktop just uses E. */
+  nearNpc?: "Blacksmith" | "Vendor" | "Storage" | null;
 }
 
 export function ArenaHud({
@@ -170,7 +192,7 @@ export function ArenaHud({
  * corner — PVP duel mode has no camp-bar, so ArenaHud still renders this
  * itself there.
  */
-export function SkillBar({ hud }: { hud: ArenaHudData }) {
+export function SkillBar({ hud, input }: { hud: ArenaHudData; input?: ArenaInput }) {
   const cls = getClass(hud.playerClass);
 
   // Tracks which skills just came off a fresh activation (cooldown rising
@@ -227,8 +249,13 @@ export function SkillBar({ hud }: { hud: ArenaHudData }) {
               key={s.id}
               className={`skill${poor ? " poor" : ""}${ready && !poor ? " ready" : ""}${
                 justUsed ? " skill-flash" : ""
-              }`}
+              }${input ? " skill-tappable" : ""}`}
               title={`${s.label} — ${s.description}`}
+              // Tap-to-cast for touch controls: fires the same one-shot
+              // press the bound key would, so it flows through readIntent()
+              // exactly like a real Q/E/R/F/C press. No-op when `input`
+              // isn't passed in (PVP duel mode's ArenaHud doesn't touch this).
+              onClick={input ? () => input.touchTap(slotBindingCode(input, s.slot)) : undefined}
             >
               <span className="skill-key">{skillKeyLabel(s.slot)}</span>
               <span className="skill-name">{s.label}</span>

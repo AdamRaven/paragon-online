@@ -44,6 +44,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: "#0b0d12",
+  // Lets content (the touch controls' env(safe-area-inset-*) offsets, see
+  // .touch-pad/.touch-buttons in globals.css) draw under a notch/home
+  // indicator instead of being letterboxed away from it on iOS.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -1642,17 +1642,21 @@ kbd {
 
 /* ------------------------------------------------------------------- touch */
 
+/* Always mounted (see components/TouchControls.tsx) so a finger landing on
+   the screen works instantly — visibility is CSS-only, driven by the
+   device's primary pointer type rather than any JS user-agent guessing. */
 .touch {
   position: absolute;
   inset: 0;
+  z-index: 5;
   pointer-events: none;
   display: none;
 }
 
 .touch-pad {
   position: absolute;
-  left: 18px;
-  bottom: 18px;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
   width: 132px;
   height: 132px;
   border-radius: 50%;
@@ -1676,8 +1680,8 @@ kbd {
 
 .touch-buttons {
   position: absolute;
-  right: 18px;
-  bottom: 18px;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: repeat(3, 58px);
   gap: 8px;
@@ -1701,12 +1705,75 @@ kbd {
   background: rgba(110, 231, 183, 0.3);
 }
 
+/* Contextual "Talk to ..." prompt — a pill, not a circle, since it carries
+   a label rather than a 3-letter icon, centered above the skill bar so it
+   reads as a prompt over the character rather than another corner control. */
+.touch-interact {
+  position: absolute;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  width: auto;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 22px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
 @media (pointer: coarse) {
   .touch {
     display: block;
   }
   .log {
     display: none;
+  }
+}
+
+/* Small phones (iPhone SE / most Android phones in portrait, ~360-420px) —
+   the touch controls and HUD chrome both need to shrink further than the
+   720/780px breakpoints below already take them, or the corner controls
+   and the centered skill console start crowding each other. */
+@media (max-width: 420px) {
+  .touch-pad {
+    width: 104px;
+    height: 104px;
+  }
+  .touch-nub {
+    width: 44px;
+    height: 44px;
+    left: 29px;
+    top: 29px;
+  }
+  .touch-buttons {
+    grid-template-columns: repeat(3, 48px);
+    gap: 6px;
+  }
+  .touch-btn {
+    height: 48px;
+    font-size: 10px;
+  }
+  .touch-interact {
+    bottom: 106px;
+    height: 38px;
+    padding: 0 14px;
+    font-size: 12px;
+  }
+  .camp-console {
+    padding: 6px;
+    gap: 6px;
+  }
+  .camp-bar {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .campaign-bottom-stack .camp-btn {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+  .campaign-bottom-stack .skill {
+    width: 50px;
+    height: 48px;
   }
 }
 
@@ -1992,6 +2059,12 @@ kbd {
 }
 
 .skill.poor { opacity: 0.4; }
+
+/* Tap-to-cast, when a SkillBar is wired to an ArenaInput (see
+   components/ArenaHud.tsx) — harmless on desktop too, just an alternate way
+   to fire a skill besides its bound key. */
+.skill-tappable { cursor: pointer; }
+.skill-tappable:active { transform: scale(0.94); }
 
 /* Off cooldown and affordable: a slow breathing glow in the class's aura
    colour, the "this is worth pressing" tell that a flat icon can't give. */
