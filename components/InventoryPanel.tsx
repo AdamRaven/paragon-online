@@ -164,8 +164,8 @@ function ItemHoverCard({
   const top = Math.min(window.innerHeight - margin, rect.bottom + 8);
   return createPortal(
     <div className="item-hover-card" style={{ left, top, width }}>
-      {b.unique && <div className="item-hover-unique">★ Unique</div>}
-      <strong style={{ color }}>{itemName(item)}</strong>
+      {b.unique && <div className="item-hover-unique">★ Mythic</div>}
+      <strong style={{ color: r.color }}>{itemName(item)}</strong>
       <small className="item-hover-sub">
         {r.label} · {b.kind}
         {b.tier ? ` · tier ${b.tier}` : ""}

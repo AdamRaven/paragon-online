@@ -37,7 +37,7 @@ function rowsFor(save: AdventureSave): Array<{ label: string; value: number; dis
       display: `${save.bestCrucibleWave ?? 0}`,
     },
     {
-      label: "Uniques found",
+      label: "Mythics found",
       value: (save.uniquesFound ?? []).length,
       display: `${(save.uniquesFound ?? []).length} / ${totalUniqueCount()}`,
     },

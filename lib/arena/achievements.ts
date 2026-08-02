@@ -81,7 +81,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "named-and-claimed",
     name: "Named and Claimed",
-    description: "Loot a unique item.",
+    description: "Loot a mythic item.",
     title: "Keeper of Relics",
     check: (s) =>
       [...s.inventory, ...s.storage, ...Object.values(s.equipped)].some(
