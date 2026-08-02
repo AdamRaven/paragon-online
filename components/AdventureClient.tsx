@@ -121,6 +121,12 @@ export function AdventureClient() {
   const [visitedTown, setVisitedTown] = useState(false);
   const [showRunComplete, setShowRunComplete] = useState(false);
   const [logs, setLogs] = useState<CombatLogEntry[]>([]);
+  /** Mobile only — the level/XP/gold/nav-button row is collapsed behind a
+   *  menu toggle by default there (see .camp-menu-toggle in globals.css) so
+   *  it doesn't eat the screen; desktop always shows it and never reads
+   *  this. Closed automatically whenever a real panel opens, same as the
+   *  touch controls, so it can't linger over a modal. */
+  const [campMenuOpen, setCampMenuOpen] = useState(false);
   const [panel, setPanel] = useState<
     | "none"
     | "sheet"
@@ -321,6 +327,12 @@ export function AdventureClient() {
     if (!input) return;
     input.unlockPointer();
   }, [started, panel]);
+
+  // The mobile menu (camp-bar's level/XP/nav-button row) shouldn't linger
+  // open behind a real panel once one opens.
+  useEffect(() => {
+    if (panel !== "none") setCampMenuOpen(false);
+  }, [panel]);
 
   // E doubles as "talk" when standing at any of the town NPCs — shared by
   // the keyboard handler below and the touch "Talk to ..." button, which
@@ -777,7 +789,7 @@ export function AdventureClient() {
     <div className={`arena-stage campaign${STAGES[live.stage]?.isTown ? " town" : ""}`}>
       <canvas ref={canvasRef} tabIndex={0} />
       <canvas ref={fxCanvasRef} className="arena-fx-canvas" />
-      {hud && <ArenaHud hud={hud} logs={logs} hideSkills />}
+      {hud && <ArenaHud hud={hud} logs={logs} hideSkills expPct={expPct} />}
       {!hasFinishedTutorialQuest() && (
         <TutorialQuestBanner state={{ kills: live.kills, level: live.level, visitedTown }} />
       )}
@@ -803,8 +815,19 @@ export function AdventureClient() {
         <div className="camp-console">
           {hud && <SkillBar hud={hud} input={inputRef.current ?? undefined} />}
 
+          {/* Mobile only — desktop hides this and always shows .camp-bar
+              open (see the pointer:coarse rules in globals.css). */}
+          <button
+            type="button"
+            className="camp-menu-toggle"
+            aria-label={campMenuOpen ? "Close menu" : "Open menu"}
+            onClick={() => setCampMenuOpen((o) => !o)}
+          >
+            {campMenuOpen ? "✕" : "☰"}
+          </button>
+
           {/* Campaign-only overlay: level, EXP bar and the panel buttons. */}
-          <div className="camp-bar">
+          <div className={`camp-bar${campMenuOpen ? " open" : ""}`}>
           <div className="camp-level">
             LV {exp.level}
             {exp.points > 0 && <span className="pip">+{exp.points}</span>}

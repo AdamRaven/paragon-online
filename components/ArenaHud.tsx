@@ -73,6 +73,7 @@ export function ArenaHud({
   hud,
   logs,
   hideSkills,
+  expPct,
 }: {
   hud: ArenaHudData;
   logs: CombatLogEntry[];
@@ -80,6 +81,11 @@ export function ArenaHud({
    *  XP row instead of pinned to the HUD's own bottom-right corner — see
    *  AdventureClient.tsx's .campaign-bottom-stack. */
   hideSkills?: boolean;
+  /** Campaign mode only: renders a compact EXP bar under the player's mana
+   *  bar, visible on mobile only (see .fighter-panel .expbar-mini in
+   *  globals.css) — the bottom console's own XP row is hidden at the same
+   *  breakpoint so it isn't shown twice. */
+  expPct?: number;
 }) {
   const cls = getClass(hud.playerClass);
   const enemyCls = getClass(hud.enemyClass);
@@ -105,6 +111,7 @@ export function ArenaHud({
           maxMana={hud.playerMaxMana}
           manaLabel={cls.manaLabel}
           align="left"
+          expPct={expPct}
         />
         <div className="arena-center">
           {hud.sprinting && <span className="arena-tag sprint">DASH ×2</span>}
@@ -292,6 +299,7 @@ function FighterPanel({
   manaLabel,
   hideMana,
   align,
+  expPct,
 }: {
   name: string;
   classId: ClassId;
@@ -305,6 +313,9 @@ function FighterPanel({
   manaLabel: string;
   hideMana?: boolean;
   align: "left" | "right";
+  /** Mobile-only compact EXP bar, rendered under the mana bar — see
+   *  ArenaHud's own expPct prop. */
+  expPct?: number;
 }) {
   const hpPct = hp / maxHp;
   return (
@@ -336,6 +347,11 @@ function FighterPanel({
           <div className="bar-text">
             {manaLabel} {Math.round(mana)} / {maxMana}
           </div>
+        </div>
+      )}
+      {expPct !== undefined && (
+        <div className="bar expbar-mini">
+          <div className="bar-fill" style={{ width: `${Math.min(100, Math.max(0, expPct))}%` }} />
         </div>
       )}
     </div>
