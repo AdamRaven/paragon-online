@@ -38,7 +38,7 @@ import {
   base,
   familySlots,
   itemName,
-  itemScore,
+  itemScoreDelta,
   itemValue,
   makeItem,
   storageExpansionCost,
@@ -491,7 +491,7 @@ export function AdventureClient() {
           slots.reduce((worst, s) => {
             const w = e.save.equipped[worst];
             const c = e.save.equipped[s];
-            return w && c && itemScore(c) < itemScore(w) ? s : worst;
+            return w && c && itemScoreDelta(c, w) < 0 ? s : worst;
           }, slots[0]);
         const current = e.save.equipped[target];
         e.save.inventory = e.save.inventory.filter((i) => i.uid !== item.uid);

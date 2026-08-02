@@ -13,6 +13,7 @@ import {
   itemLore,
   itemName,
   itemScore,
+  itemScoreDelta,
   itemStats,
   itemValue,
   weakestInFamily,
@@ -67,10 +68,13 @@ export function effectLine(item: Item): string | null {
   return EFFECT_META[item.effect.kind].describe(item.effect.value);
 }
 
-/** Difference in attack/hp against whatever occupies the same slot. */
+/** Difference in attack/hp against whatever occupies the same slot — uniques
+ *  are always best-in-slot (see itemScoreDelta), so a non-unique never reads
+ *  as an upgrade over an equipped unique, and a unique always reads as one
+ *  over a non-unique. */
 export function compare(item: Item, equipped?: Item): { text: string; good: boolean } | null {
   if (!equipped) return null;
-  const d = itemScore(item) - itemScore(equipped);
+  const d = itemScoreDelta(item, equipped);
   if (Math.abs(d) < 0.5) return null;
   return { text: d > 0 ? "UPGRADE" : "worse", good: d > 0 };
 }
@@ -120,7 +124,7 @@ function withUpgradesFirst(items: Item[], save: AdventureSave): Item[] {
       const family = base(item.baseId).slot;
       const open = hasOpenSlot(save, family);
       const ref = open ? undefined : referenceFor(save, family);
-      const upgrade = open || !ref || itemScore(item) - itemScore(ref) > 0.5;
+      const upgrade = open || !ref || itemScoreDelta(item, ref) > 0.5;
       return { item, idx, upgrade, score: itemScore(item) };
     })
     .sort((a, b) => {

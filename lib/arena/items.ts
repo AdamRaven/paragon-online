@@ -1354,6 +1354,21 @@ export function itemScore(item: Item): number {
 }
 
 /**
+ * Score delta for an equip/upgrade comparison — positive means `a` beats
+ * `b`. Uniques are always best-in-slot: one-of-a-kind, boss-gated gear
+ * shouldn't ever get flagged as "worse" than some random epic that happens
+ * to roll a higher raw stat total, so a unique beats any non-unique (and
+ * loses to none) regardless of itemScore. Two uniques — or two non-uniques
+ * — still get compared on stats like normal.
+ */
+export function itemScoreDelta(a: Item, b: Item): number {
+  const aUnique = !!base(a.baseId).unique;
+  const bUnique = !!base(b.baseId).unique;
+  if (aUnique !== bUnique) return aUnique ? Infinity : -Infinity;
+  return itemScore(a) - itemScore(b);
+}
+
+/**
  * The item a candidate for this family should be compared against: `undefined`
  * whenever the family still has an open slot (nothing to replace, so it's
  * always worth equipping), otherwise the weaker of the two current occupants
@@ -1366,7 +1381,7 @@ export function weakestInFamily(
   const slots = familySlots(family);
   const held = slots.map((s) => equipped[s]).filter((i): i is Item => !!i);
   if (held.length < slots.length) return undefined;
-  return held.reduce((worst, i) => (itemScore(i) < itemScore(worst) ? i : worst));
+  return held.reduce((worst, i) => (itemScoreDelta(i, worst) < 0 ? i : worst));
 }
 
 // ------------------------------------------------------------------- sets
