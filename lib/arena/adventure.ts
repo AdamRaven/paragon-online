@@ -1046,7 +1046,6 @@ const BOSS_PHASE2: Partial<
   tempestwarden: { hpFrac: 0.5, announce: "The Tempest Warden calls down the storm!" },
   rotmother: { hpFrac: 0.4, announce: "The Rotmother's decay spreads across the field!" },
   sunderedking: { hpFrac: 0.25, announce: "The Sundered King refuses to fall!" },
-  thehollow: { hpFrac: 0.35, announce: "The Hollow unmakes itself to become something worse." },
 };
 
 class MobBrain {
@@ -1131,13 +1130,6 @@ class MobBrain {
       self.speedMult *= 1.25;
       self.attackSpeed *= 1.2;
       self.attackPower = Math.round(self.attackPower * 1.15);
-    } else if (this.type.id === "thehollow") {
-      // The last boss combines the Sundered King's hyper-armour with the
-      // Sovereign's lifesteal — both proven fields, just stacked together
-      // for the one fight meant to ask everything of the previous ones at once.
-      self.stoicTimer = 9999;
-      self.lifesteal = Math.max(self.lifesteal, 0.3);
-      self.attackPower = Math.round(self.attackPower * 1.2);
     }
   }
 

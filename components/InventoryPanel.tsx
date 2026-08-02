@@ -9,6 +9,7 @@ import {
   SET_NAME,
   base,
   familySlots,
+  itemColor,
   itemLore,
   itemName,
   itemScore,
@@ -147,6 +148,7 @@ function ItemHoverCard({
 }) {
   const b = base(item.baseId);
   const r = RARITY_META[item.rarity];
+  const color = itemColor(item);
   const fx = effectLine(item);
   const deltas = compareTo ? statDeltas(item, compareTo) : [];
   const width = 230;
@@ -159,7 +161,7 @@ function ItemHoverCard({
   return createPortal(
     <div className="item-hover-card" style={{ left, top, width }}>
       {b.unique && <div className="item-hover-unique">★ Unique</div>}
-      <strong style={{ color: r.color }}>{itemName(item)}</strong>
+      <strong style={{ color }}>{itemName(item)}</strong>
       <small className="item-hover-sub">
         {r.label} · {b.kind}
         {b.tier ? ` · tier ${b.tier}` : ""}
@@ -227,23 +229,24 @@ export function ItemRow({
 }) {
   const b = base(item.baseId);
   const r = RARITY_META[item.rarity];
+  const color = itemColor(item);
   const cmp = compare(item, compareTo);
   const fx = effectLine(item);
   const hover = useItemHoverCard(item, compareTo);
   return (
     <div
       className="item-row"
-      style={{ borderLeft: `4px solid ${r.color}` }}
+      style={{ borderLeft: `4px solid ${color}` }}
       ref={hover.ref}
       onMouseEnter={hover.onMouseEnter}
       onMouseLeave={hover.onMouseLeave}
     >
-      <ItemIcon icon={b.icon} color={r.color} />
+      <ItemIcon icon={b.icon} color={color} />
       <span className="item-main">
-        <strong style={{ color: r.color }}>{itemName(item)}</strong>
+        <strong style={{ color }}>{itemName(item)}</strong>
         <small className="item-stats">{statLine(item)}</small>
         {fx && (
-          <small className="item-effect" style={{ color: r.color }}>
+          <small className="item-effect" style={{ color }}>
             {fx}
           </small>
         )}
@@ -275,7 +278,7 @@ function SlotCard({
   onUnequip: (slot: EquipSlot) => void;
 }) {
   const meta = SLOT_META[slot];
-  const r = item ? RARITY_META[item.rarity] : null;
+  const color = item ? itemColor(item) : null;
   const hover = useItemHoverCard(item);
   return (
     <div
@@ -285,21 +288,21 @@ function SlotCard({
       className={`slot-card${item ? "" : " empty"}`}
       style={
         {
-          ...(r ? { borderColor: r.color } : {}),
+          ...(color ? { borderColor: color } : {}),
           "--slot-area": SLOT_GRID_AREA[slot],
         } as React.CSSProperties
       }
       title={item ? undefined : `${meta.label} — Empty · ${meta.hint}`}
     >
       {item ? (
-        <ItemIcon icon={base(item.baseId).icon} color={r!.color} size={28} />
+        <ItemIcon icon={base(item.baseId).icon} color={color!} size={28} />
       ) : (
         <span className="slot-glyph">{meta.glyph}</span>
       )}
       <span className="slot-body">
         <span className="slot-name">{meta.label}</span>
         {item ? (
-          <strong style={{ color: r!.color }}>{itemName(item)}</strong>
+          <strong style={{ color: color! }}>{itemName(item)}</strong>
         ) : (
           <small className="slot-hint">Empty</small>
         )}

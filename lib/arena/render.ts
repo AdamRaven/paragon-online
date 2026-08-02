@@ -8,7 +8,7 @@ import {
   REFLECT_DURATION,
 } from "./constants";
 import type { ArenaEngine } from "./engine";
-import { RARITY_META } from "./items";
+import { itemColor, itemGlow } from "./items";
 import { MOB_TYPES } from "./mobs";
 import {
   WORLD_PER_PIXEL as S,
@@ -43,7 +43,6 @@ const BOSS_PHASE2_HP_FRAC: Partial<Record<string, number>> = {
   tempestwarden: 0.5,
   rotmother: 0.4,
   sunderedking: 0.25,
-  thehollow: 0.35,
 };
 
 /** Elite affix -> rim-glow colour, so the fight tells you what you're
@@ -2118,14 +2117,15 @@ function drawLootDrops(
     const x = wx(d.x);
     const y = wy(d.y);
     if (!onScreen(x, y, vw, vh, 20)) continue;
-    const rarity = RARITY_META[d.item.rarity];
+    const glow = itemGlow(d.item);
+    const color = itemColor(d.item);
     const bob = d.onGround ? Math.round(Math.sin(d.age * 3) * 1) : 0;
     const flicker = 0.5 + 0.5 * Math.sin(d.age * 4);
-    pxGlow(b, x, y - 6 + bob, 7, rarity.glow, 0.35 + flicker * 0.2);
+    pxGlow(b, x, y - 6 + bob, 7, glow, 0.35 + flicker * 0.2);
     px(b, x - 4, y - 8 + bob, 8, 7, "#4a3626");
     px(b, x - 4, y - 8 + bob, 8, 1, "#6b4a2e");
     px(b, x - 3, y - 9 + bob, 6, 2, "#7a5636");
-    px(b, x - 1, y - 6 + bob, 3, 3, rarity.color);
+    px(b, x - 1, y - 6 + bob, 3, 3, color);
     px(b, x, y - 7 + bob, 1, 1, "#ffffff");
   }
 }

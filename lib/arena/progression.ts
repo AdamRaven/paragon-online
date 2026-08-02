@@ -222,10 +222,10 @@ export function deriveArenaStats(
   );
   const attackPower =
     (cls.attackPower + str * 2.2 + (level - 1) * 1.6 + gear.attack + gearSet.attack) *
-    (1 + talent.atkPct) *
+    (1 + talent.atkPct + fx.dmg) *
     ascendMult;
-  const speedMult = 1 + talent.speedPct;
-  const attackSpeed = 1;
+  const speedMult = 1 + talent.speedPct + fx.movespeed;
+  const attackSpeed = 1 + fx.atkspeed;
   const power = Math.round(
     attackPower * 12 + maxHp * 0.8 + maxMana * 0.5 + level * 25
   );

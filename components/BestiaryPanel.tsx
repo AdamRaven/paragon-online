@@ -11,7 +11,6 @@ const BOSS_LORE: Record<string, string> = {
   tempestwarden: "Guards a fortress that's been falling for a century and hasn't hit the ground yet.",
   rotmother: "Loved the Hollow so much she became its gardener. Everything she plants grows wrong.",
   sunderedking: "The throne cracked under him once. He's made sure it'll never crack again — or move.",
-  thehollow: "Was something, once. Whatever it was, it isn't anymore, and it resents you for asking.",
 };
 
 const MOB_LORE_THRESHOLD = 10;
@@ -31,8 +30,6 @@ const MOB_LORE: Record<string, string> = {
   stormcaller: "Talks to the weather. The weather, unfortunately, talks back.",
   plaguebound: "The plague passed through Emberhold a decade ago. Something stayed behind.",
   seraphremnant: "Half of a much larger thing that used to have a much better reason to exist.",
-  voidling: "Doesn't so much attack you as forget you were ever supposed to be there.",
-  hollowsentinel: "Stands watch at the edge of somewhere that stopped being anywhere.",
   "bog-slime": "Fire hurts it more than anything else ever could. It has not learned this yet.",
   "frost-adept": "Studied the Frostking's court so long she started freezing along with it.",
   "cinder-imp": "Too small to matter alone. It has never once been alone.",

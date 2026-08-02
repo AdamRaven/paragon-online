@@ -74,8 +74,32 @@ export const RARITY_META: Record<
   legendary: { label: "Legendary", color: "#ff8a3d", glow: "#ff6a00", statMult: 3.4, valueMult: 18 },
 };
 
-/** The magical affixes only a legendary item can roll. */
-export type ItemEffect = "lifesteal" | "negation" | "regen" | "cdr";
+/** A named unique reads as its own thing, not just "a legendary that
+ *  happened to drop" — every one of them renders in this red instead of the
+ *  usual orange, everywhere an item's rarity color/glow is shown. */
+export const UNIQUE_COLOR = "#ff3b3b";
+export const UNIQUE_GLOW = "#c81e1e";
+
+/** Display color for an item — red for uniques (regardless of rarity),
+ *  otherwise the normal rarity color. Use this instead of reading
+ *  `RARITY_META[item.rarity].color` directly anywhere a player sees the item. */
+export function itemColor(item: Item): string {
+  return base(item.baseId).unique ? UNIQUE_COLOR : RARITY_META[item.rarity].color;
+}
+
+/** Same idea as `itemColor`, for the softer glow/accent variant. */
+export function itemGlow(item: Item): string {
+  return base(item.baseId).unique ? UNIQUE_GLOW : RARITY_META[item.rarity].glow;
+}
+
+/**
+ * The magical affixes a legendary item can roll — plus three more
+ * (`dmg`/`atkspeed`/`movespeed`) reserved exclusively for the fixed effects
+ * on named uniques (see `fixedEffect` below and `rollEffect`, which never
+ * produces them) so a unique's identity is always something a random drop
+ * can't match.
+ */
+export type ItemEffect = "lifesteal" | "negation" | "regen" | "cdr" | "dmg" | "atkspeed" | "movespeed";
 
 export const EFFECT_META: Record<
   ItemEffect,
@@ -96,6 +120,18 @@ export const EFFECT_META: Record<
   cdr: {
     label: "Cooldown Reduction",
     describe: (v) => `${Math.round(v * 100)}% shorter skill cooldowns`,
+  },
+  dmg: {
+    label: "Overall Damage",
+    describe: (v) => `${Math.round(v * 100)}% overall damage`,
+  },
+  atkspeed: {
+    label: "Attack Speed",
+    describe: (v) => `${Math.round(v * 100)}% attack speed`,
+  },
+  movespeed: {
+    label: "Movement Speed",
+    describe: (v) => `${Math.round(v * 100)}% movement speed`,
   },
 };
 
@@ -710,35 +746,60 @@ export const ITEM_BASES: Record<string, ItemBase> = {
   },
 
   // --- uniques: one-of-a-kind, boss-gated, fixed (never randomly rolled) --
-  "wardens-judgment": {
-    id: "wardens-judgment", name: "The Warden's Judgment", kind: "armor", slot: "chest",
-    tier: 15, stats: { hp: 260 }, value: 8000, icon: "onyx-plate",
+  // Exactly 11 — one per equip slot family, with a second ring and a second
+  // earring so both of those paired slots have their own distinct chase
+  // item. Each carries its own signature affix (see the dmg/atkspeed/
+  // movespeed ItemEffect kinds above, reserved for uniques only) rather than
+  // everything converging on the same lifesteal/regen "just heal more" — the
+  // weapon keeps lifesteal as its identity since a life-drinking blade is
+  // the one place that always reads right.
+  "wardens-aegis": {
+    id: "wardens-aegis", name: "The Warden's Aegis", kind: "armor", slot: "chest",
+    tier: 15, stats: { hp: 280 }, value: 8000, icon: "onyx-plate",
     unique: true, dropFrom: "warden",
-    fixedEffect: { kind: "negation", value: 0.25 },
+    fixedEffect: { kind: "negation", value: 0.2 },
   },
-  "sovereigns-jewel": {
-    id: "sovereigns-jewel", name: "The Sovereign's Crown Jewel", kind: "trinket", slot: "ring",
-    tier: 20, stats: { attack: 20, mana: 70 }, value: 9500, icon: "gem-ring",
+  "wardens-crown": {
+    id: "wardens-crown", name: "The Warden's Crown", kind: "armor", slot: "helmet",
+    tier: 15, stats: { hp: 140, mana: 50 }, value: 8500, icon: "plate-helm",
+    unique: true, dropFrom: "warden",
+    fixedEffect: { kind: "cdr", value: 0.1 },
+  },
+  "sovereigns-signet": {
+    id: "sovereigns-signet", name: "Sovereign's Signet", kind: "trinket", slot: "ring",
+    tier: 24, stats: { attack: 18, hp: 60 }, value: 9500, icon: "gem-ring",
     unique: true, dropFrom: "sovereign",
-    fixedEffect: { kind: "lifesteal", value: 0.2 },
+    fixedEffect: { kind: "lifesteal", value: 0.15 },
   },
-  "frostkings-diadem": {
-    id: "frostkings-diadem", name: "The Frostking's Diadem", kind: "armor", slot: "helmet",
-    tier: 27, stats: { hp: 150, mana: 70 }, value: 11000, icon: "plate-helm",
+  "sovereigns-pendant": {
+    id: "sovereigns-pendant", name: "Sovereign's Pendant", kind: "trinket", slot: "earring",
+    tier: 24, stats: { mana: 100 }, value: 9800, icon: "gem-earring",
+    unique: true, dropFrom: "sovereign",
+    fixedEffect: { kind: "regen", value: 20 },
+  },
+  "frostkings-chill": {
+    id: "frostkings-chill", name: "The Frostking's Chill", kind: "trinket", slot: "earring",
+    tier: 32, stats: { mana: 110 }, value: 11000, icon: "gem-earring",
     unique: true, dropFrom: "frostking",
-    fixedEffect: { kind: "regen", value: 30 },
+    fixedEffect: { kind: "negation", value: 0.22 },
   },
   "forgehearts-grasp": {
     id: "forgehearts-grasp", name: "Forgeheart's Grasp", kind: "armor", slot: "hands",
-    tier: 38, stats: { hp: 110 }, value: 13000, icon: "plate-gloves",
+    tier: 40, stats: { hp: 150, attack: 22 }, value: 13000, icon: "plate-gloves",
     unique: true, dropFrom: "forgeheart",
-    fixedEffect: { kind: "lifesteal", value: 0.25 },
+    fixedEffect: { kind: "atkspeed", value: 0.12 },
+  },
+  "forgehearts-warband": {
+    id: "forgehearts-warband", name: "Forgeheart's Warband", kind: "trinket", slot: "belt",
+    tier: 40, stats: { hp: 220 }, value: 13200, icon: "plate-belt",
+    unique: true, dropFrom: "forgeheart",
+    fixedEffect: { kind: "dmg", value: 0.1 },
   },
   "tempest-wardens-stride": {
     id: "tempest-wardens-stride", name: "Tempest Warden's Stride", kind: "armor", slot: "legs",
-    tier: 44, stats: { hp: 200 }, value: 14000, icon: "plate-boots",
+    tier: 46, stats: { hp: 260 }, value: 14000, icon: "plate-boots",
     unique: true, dropFrom: "tempestwarden",
-    fixedEffect: { kind: "negation", value: 0.3 },
+    fixedEffect: { kind: "movespeed", value: 0.15 },
   },
   "rotmothers-embrace": {
     id: "rotmothers-embrace", name: "Rotmother's Embrace", kind: "trinket", slot: "necklace",
@@ -746,17 +807,17 @@ export const ITEM_BASES: Record<string, ItemBase> = {
     unique: true, dropFrom: "rotmother",
     fixedEffect: { kind: "regen", value: 40 },
   },
+  "rotmothers-signet": {
+    id: "rotmothers-signet", name: "Rotmother's Signet", kind: "trinket", slot: "ring",
+    tier: 50, stats: { attack: 32, hp: 90 }, value: 15500, icon: "gem-ring",
+    unique: true, dropFrom: "rotmother",
+    fixedEffect: { kind: "dmg", value: 0.15 },
+  },
   "sundered-kings-vow": {
     id: "sundered-kings-vow", name: "The Sundered King's Vow", kind: "weapon", slot: "weapon",
-    tier: 54, stats: { attack: 140 }, value: 20000, weight: 3.4,
+    tier: 54, stats: { attack: 150 }, value: 20000, weight: 3.4,
     icon: "sundered-kings-vow", unique: true, dropFrom: "sunderedking",
-    fixedEffect: { kind: "lifesteal", value: 0.35 },
-  },
-  "the-hollow-crown": {
-    id: "the-hollow-crown", name: "The Hollow Crown", kind: "armor", slot: "helmet",
-    tier: 58, stats: { hp: 300, mana: 120 }, value: 24000, icon: "plate-helm",
-    unique: true, dropFrom: "thehollow",
-    fixedEffect: { kind: "negation", value: 0.32 },
+    fixedEffect: { kind: "lifesteal", value: 0.3 },
   },
 
   // --- trash: no stats, sold for gold --------------------------------------
@@ -1229,6 +1290,9 @@ export interface GearEffects {
   regenHp: number;
   regenMana: number;
   cdr: number;
+  dmg: number;
+  atkspeed: number;
+  movespeed: number;
 }
 
 /** Sum of every equipped legendary's combat affix, softly capped so stacking
@@ -1240,12 +1304,18 @@ export function equippedEffects(
   let negation = 0;
   let regenHp = 0;
   let cdr = 0;
+  let dmg = 0;
+  let atkspeed = 0;
+  let movespeed = 0;
   for (const item of Object.values(equipped)) {
     if (!item?.effect) continue;
     if (item.effect.kind === "lifesteal") lifesteal += item.effect.value;
     else if (item.effect.kind === "negation") negation += item.effect.value;
     else if (item.effect.kind === "regen") regenHp += item.effect.value;
     else if (item.effect.kind === "cdr") cdr += item.effect.value;
+    else if (item.effect.kind === "dmg") dmg += item.effect.value;
+    else if (item.effect.kind === "atkspeed") atkspeed += item.effect.value;
+    else if (item.effect.kind === "movespeed") movespeed += item.effect.value;
   }
   return {
     lifesteal: Math.min(0.5, lifesteal),
@@ -1255,6 +1325,11 @@ export function equippedEffects(
     // Capped well short of 100% so even a full CDR-stacked build can't spam
     // an 18s ultimate every couple seconds.
     cdr: Math.min(0.4, cdr),
+    // Only uniques ever grant these three, so a hard cap mostly just guards
+    // against a future multi-unique stacking combo getting out of hand.
+    dmg: Math.min(0.5, dmg),
+    atkspeed: Math.min(0.5, atkspeed),
+    movespeed: Math.min(0.5, movespeed),
   };
 }
 

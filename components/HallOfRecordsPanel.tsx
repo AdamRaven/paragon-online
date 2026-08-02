@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ACHIEVEMENTS } from "@/lib/arena/achievements";
 import { todayKey } from "@/lib/arena/bounties";
+import { totalUniqueCount } from "@/lib/arena/items";
 import { importAdventureSave, type AdventureSave } from "@/lib/arena/progression";
 
 function fmtTime(seconds: number | undefined): string {
@@ -38,7 +39,7 @@ function rowsFor(save: AdventureSave): Array<{ label: string; value: number; dis
     {
       label: "Uniques found",
       value: (save.uniquesFound ?? []).length,
-      display: `${(save.uniquesFound ?? []).length} / 8`,
+      display: `${(save.uniquesFound ?? []).length} / ${totalUniqueCount()}`,
     },
     {
       label: "Achievements",

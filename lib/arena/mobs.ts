@@ -402,60 +402,6 @@ export const MOB_TYPES: Record<string, MobType> = {
     accent: "#92400e",
     isBoss: true,
   },
-  voidling: {
-    id: "voidling",
-    name: "Voidling",
-    level: 52,
-    maxHp: 5200,
-    damage: 165,
-    speed: 3.4,
-    expValue: 5800,
-    range: 80,
-    windup: 0.2,
-    recover: 0.24,
-    aggro: 620,
-    w: 32,
-    h: 78,
-    color: "#4c1d95",
-    accent: "#1e0a3c",
-  },
-  hollowsentinel: {
-    id: "hollowsentinel",
-    name: "Hollow Sentinel",
-    level: 53,
-    maxHp: 6100,
-    damage: 172,
-    speed: 1.6,
-    expValue: 6400,
-    range: 300,
-    windup: 0.5,
-    recover: 0.4,
-    aggro: 680,
-    w: 40,
-    h: 92,
-    color: "#312e81",
-    accent: "#0f0a2e",
-    ranged: true,
-  },
-  thehollow: {
-    id: "thehollow",
-    name: "The Hollow",
-    level: 58,
-    maxHp: 18500,
-    damage: 245,
-    speed: 2.5,
-    expValue: 28000,
-    range: 120,
-    windup: 0.34,
-    recover: 0.36,
-    aggro: 950,
-    w: 66,
-    h: 122,
-    color: "#c4b5fd",
-    accent: "#1e0a3c",
-    isBoss: true,
-  },
-
   // --- elemental enemies: built around DamageType/MobType.resist (types.ts/
   // mobs.ts) so bringing the right element is a real decision, not flavor.
   "bog-slime": {
@@ -778,7 +724,6 @@ const FORGE_PERCH_X = proceduralSpawnX("forge-catwalks", 3600, 6);
 const TEMPEST_PERCH_X = proceduralSpawnX("tempest-fortress", 3600, 4);
 const BLIGHT_PERCH_X = proceduralSpawnX("blight-hummocks", 3600, 6);
 const THRONE_PERCH_X = proceduralSpawnX("throne-risers", 3600, 5);
-const HOLLOW_PERCH_X = proceduralSpawnX("hollow-beyond", 3600, 5);
 
 export const STAGES: Stage[] = [
   {
@@ -1018,77 +963,13 @@ export const STAGES: Stage[] = [
       ),
     ],
   },
-  // Appended at the end rather than slotted in by level, so it never shifts
-  // any other stage's array index — existing saves store `stage` as a plain
-  // index into this array, and reordering would silently teleport them.
-  {
-    id: "survival-fields",
-    biome: "outskirts",
-    name: "The Survival Fields",
-    subtitle: "No fixed foes here — just endless waves. How far can you get?",
-    requiredLevel: 1,
-    survival: true,
-    map: makeMap(1800, []),
-    spawns: [],
-  },
-  // Also appended last, for the same array-index-stability reason as
-  // survival-fields above.
-  {
-    id: "boss-rush",
-    biome: "divine",
-    name: "The Boss Rush",
-    subtitle: "Every boss you've faced, back to back. Full heal between each. How fast can you clear it?",
-    requiredLevel: 50,
-    bossRush: true,
-    map: makeMap(2000, []),
-    spawns: [],
-  },
-  // Also appended last, for the same array-index-stability reason.
-  {
-    id: "crucible",
-    biome: "abyss",
-    name: "The Sundered Crucible",
-    subtitle: "Endless waves, warped by whatever the Crucible rolls this time. Survive as long as you can.",
-    requiredLevel: 50,
-    survival: true,
-    crucible: true,
-    map: makeMap(1800, []),
-    spawns: [],
-  },
-  // Also appended last, for the same array-index-stability reason.
-  {
-    id: "hollow",
-    biome: "void",
-    name: "The Hollow Beyond",
-    subtitle: "Past the Throne, past the last road — whatever's out here was never meant to be found",
-    requiredLevel: 50,
-    map: makeMap(3600, []),
-    spawns: [
-      { typeId: "voidling", x: 500 },
-      { typeId: "voidling", x: 740 },
-      { typeId: "hollowsentinel", x: 1300 },
-      { typeId: "voidling", x: 1540 },
-      { typeId: "voidling", x: 2150 },
-      { typeId: "hollowsentinel", x: 2450 },
-      { typeId: "voidling", x: 2960 },
-      { typeId: "thehollow", x: 3400 },
-      ...["voidling", "voidling", "hollowsentinel", "voidling", "voidling"].map((typeId, i) => ({
-        typeId,
-        x: HOLLOW_PERCH_X[i],
-      })),
-    ],
-  },
-  // Also appended last, for the same array-index-stability reason.
-  {
-    id: "daily-challenge",
-    biome: "abyss",
-    name: "The Daily Rift",
-    subtitle: "A fixed roster, the same for everyone today. How fast can you clear it?",
-    requiredLevel: 20,
-    dailyChallenge: true,
-    map: makeMap(2000, []),
-    spawns: [],
-  },
+  // Survival Fields / Boss Rush / Sundered Crucible / The Hollow Beyond /
+  // Daily Rift have been pulled for now — The Sundered Throne is the only
+  // endgame stage while map and mob design gets focus on this shorter arc.
+  // The underlying engine systems (updateSurvival, updateBossRush, crucible
+  // affixes, daily-challenge tracking) are left in place, just unreachable,
+  // so bringing any of them back later is a matter of re-appending a STAGES
+  // entry rather than rebuilding the mechanic.
 ];
 
 /** New characters start in the field, not the town hub. */

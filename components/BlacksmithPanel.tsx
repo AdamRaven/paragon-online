@@ -6,10 +6,10 @@ import { ItemRow, effectLine, statLine } from "@/components/InventoryPanel";
 import {
   DOWNGRADE_FLOOR,
   MAX_PLUS,
-  RARITY_META,
   STONE_PRICE,
   base,
   enhanceChance,
+  itemColor,
   itemName,
   itemValue,
   type Item,
@@ -273,17 +273,18 @@ export const BlacksmithPanel = memo(function BlacksmithPanel({
               {enhanceable.length === 0 && <p className="hint">Nothing to enhance.</p>}
               {enhanceable.map((i) => {
                 const b = base(i.baseId);
+                const color = itemColor(i);
                 const maxed = i.plus >= MAX_PLUS;
                 const chance = Math.round(enhanceChance(i) * 100);
                 const risky = i.plus >= DOWNGRADE_FLOOR;
                 return (
                   <div className="item-row" key={i.uid}>
                     <span className="icon-plus-wrap">
-                      <ItemIcon icon={b.icon} color={RARITY_META[i.rarity].color} />
+                      <ItemIcon icon={b.icon} color={color} />
                       {i.plus > 0 && <span className="icon-plus-badge">+{i.plus}</span>}
                     </span>
                     <span className="item-main">
-                      <strong style={{ color: RARITY_META[i.rarity].color }}>
+                      <strong style={{ color }}>
                         {itemName(i)}
                       </strong>
                       <small>
@@ -291,7 +292,7 @@ export const BlacksmithPanel = memo(function BlacksmithPanel({
                         {b.weight ? ` · weight ${b.weight.toFixed(2)}` : ""}
                       </small>
                       {effectLine(i) && (
-                        <small className="item-effect" style={{ color: RARITY_META[i.rarity].color }}>
+                        <small className="item-effect" style={{ color }}>
                           {effectLine(i)}
                         </small>
                       )}
