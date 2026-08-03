@@ -251,6 +251,57 @@ const PORTRAIT_SCALE: Partial<Record<string, number>> = {
 const portraitCache = new Map<string, HTMLImageElement>();
 
 /**
+ * Warden's Keep and the Outskirts both have hand-painted art for their
+ * regular mobs and boss, not just the playable classes — same crisp-overlay
+ * treatment, layered over the procedural pixel body every other stage still
+ * uses. Each source PNG is already trimmed tight to its content (no portrait-
+ * style padding), so it draws with the same "tight crop" height formula the
+ * animation frame sheets use below rather than the padded-portrait one.
+ *
+ * Keyed per-stage rather than just per-mobTypeId: several mobTypeIds (e.g.
+ * blade-wraith, colossus, shieldbearer) are reused procedurally across
+ * multiple stages, and only the one stage each set of art was painted for
+ * should ever show it — everywhere else, that same mobTypeId keeps the
+ * ordinary pixel-art look.
+ */
+const STAGE_MOB_SPRITE_SRC: Partial<Record<string, Partial<Record<string, string>>>> = {
+  "warden-keep": {
+    shieldbearer: "/art/wardens-keep/shieldbearer.png",
+    "blade-wraith": "/art/wardens-keep/blade-wraith.png",
+    colossus: "/art/wardens-keep/colossus.png",
+    warden: "/art/wardens-keep/warden.png",
+  },
+  outskirts: {
+    husk: "/art/the-outskirt/thorn-blob.png",
+    brawler: "/art/the-outskirt/moss-golem.png",
+    "rabid-cur": "/art/the-outskirt/spirit-wisp.png",
+    treant: "/art/the-outskirt/treant.png",
+  },
+};
+/** Bosses need to read as one at a glance — their hitboxes are only a notch
+ *  taller than the toughest regular mob in their stage, nowhere near enough
+ *  of a size gap on their own, so they get an extra draw-size bump on top of
+ *  the shared tight-crop formula. Feet stay planted at yFeet regardless (see
+ *  destTop below) — this only grows them upward. */
+const MOB_SPRITE_SCALE: Partial<Record<string, number>> = {
+  warden: 1.8,
+  treant: 1.6,
+};
+const mobSpriteCache = new Map<string, HTMLImageElement>();
+function getMobSpriteImage(stageId: string | undefined, mobTypeId: string): HTMLImageElement | null {
+  const src = stageId ? STAGE_MOB_SPRITE_SRC[stageId]?.[mobTypeId] : undefined;
+  if (!src) return null;
+  let img = mobSpriteCache.get(mobTypeId);
+  if (!img) {
+    if (typeof Image === "undefined") return null;
+    img = new Image();
+    img.src = src;
+    mobSpriteCache.set(mobTypeId, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+/**
  * Emberhold's shopkeepers all have hand-painted reference art now, same
  * "crisp fx overlay" treatment as the three playable classes rather than the
  * chunky procedural pixel art every other town prop still gets. `crop` is
@@ -836,10 +887,9 @@ export function renderFighterPortraits(
 
   const stage = (
     engine as ArenaEngine & {
-      stage?: { isTown?: boolean; npcX?: number; vendorX?: number; bankX?: number };
+      stage?: { id?: string; isTown?: boolean; npcX?: number; vendorX?: number; bankX?: number };
     }
   ).stage;
-
   // Emberhold's three shopkeepers all stand in for hand-painted reference
   // art now — same crisp overlay treatment as the playable classes, rather
   // than the chunky low-res pixel art every other town prop still gets.
@@ -862,7 +912,10 @@ export function renderFighterPortraits(
   }
 
   for (const f of engine.fighters) {
-    if (f.isMob || f.state === "dead") continue;
+    if (f.state === "dead") continue;
+    const mobSpriteImg =
+      f.isMob && f.mobTypeId ? getMobSpriteImage(stage?.id, f.mobTypeId) : null;
+    if (f.isMob && !mobSpriteImg) continue;
 
     // Paragon has real animations for jumping, jabbing and Detonate, plus
     // separate walk and sprint cycles. Everything else Paragon might be
@@ -876,15 +929,19 @@ export function renderFighterPortraits(
     const walking = f.state === "walk";
     const idling = f.state === "idle";
     const walkSpriteImg =
-      !actionSprite && f.classId === "paragon" && walking ? getWalkSprite() : null;
+      !f.isMob && !actionSprite && f.classId === "paragon" && walking ? getWalkSprite() : null;
     const runSpriteImg =
-      !actionSprite && f.classId === "paragon" && sprinting ? getRunSprite() : null;
+      !f.isMob && !actionSprite && f.classId === "paragon" && sprinting ? getRunSprite() : null;
     const idleSpriteImg =
-      !actionSprite && !walkSpriteImg && !runSpriteImg && f.classId === "paragon"
+      !f.isMob && !actionSprite && !walkSpriteImg && !runSpriteImg && f.classId === "paragon"
         ? getIdleSprite()
         : null;
+    // Sprite mobs are resolved first and short-circuit the portrait branch
+    // entirely (also guarded above, but kept explicit here too).
     const img =
-      actionSprite?.img ?? walkSpriteImg ?? runSpriteImg ?? idleSpriteImg ?? getPortraitImage(f.classId);
+      mobSpriteImg ??
+      actionSprite?.img ?? walkSpriteImg ?? runSpriteImg ?? idleSpriteImg ??
+      (f.isMob ? null : getPortraitImage(f.classId));
     if (!img) continue;
 
     const x = px2(f.x);
@@ -950,8 +1007,14 @@ export function renderFighterPortraits(
       sw = frame.w;
       sh = frame.h;
       drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
+    } else if (mobSpriteImg) {
+      // Trimmed tight to the creature like the walk/run/idle frames above,
+      // so it gets the same tight-crop height formula rather than the
+      // padded-portrait default.
+      drawH = hArt * physicalPerArtPixel * 1.28 * 0.736;
     }
     drawH *= PORTRAIT_SCALE[f.classId] ?? 1;
+    if (mobSpriteImg && f.mobTypeId) drawH *= MOB_SPRITE_SCALE[f.mobTypeId] ?? 1;
     const drawW = drawH * (sw / sh);
 
     // The static portraits carry blank space below the feet (see
@@ -961,7 +1024,7 @@ export function renderFighterPortraits(
     // stand higher when idle than when walking. Shifting the draw down by
     // that margin's share of the frame puts the real feet at yFeet either way.
     const marginBottomFrac =
-      actionSprite || walkSpriteImg || runSpriteImg || idleSpriteImg
+      actionSprite || walkSpriteImg || runSpriteImg || idleSpriteImg || mobSpriteImg
         ? 0
         : (img.naturalHeight - (PORTRAIT_CONTENT_BOTTOM[f.classId] ?? img.naturalHeight)) /
           img.naturalHeight;
@@ -1035,6 +1098,7 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
   trackStateSounds(engine);
 
   const biome = (engine as ArenaEngine & { stage?: { biome?: string } }).stage?.biome ?? "keep";
+  const stageId = (engine as ArenaEngine & { stage?: { id?: string } }).stage?.id;
   const groundWy = wy(engine.map.ground[0]?.y ?? 560);
   drawSky(b, vw, vh, camX, camY, biome, groundWy);
   drawTerrain(b, engine, wx, wy, vw, vh, biome);
@@ -1052,7 +1116,9 @@ export function renderArena(ctx: CanvasRenderingContext2D, engine: ArenaEngine) 
     // Every fighter still ticks off-screen (Survival waves, big maps), but
     // there's no reason to pay for its gradients/glyphs/nameplate/flourish
     // when it's nowhere near the viewport this frame.
-    if (onScreen(wx(f.x), wy(f.y), vw, vh, 100)) drawFighter(b, f, wx, wy, engine.time);
+    if (onScreen(wx(f.x), wy(f.y), vw, vh, 100)) {
+      drawFighter(b, f, wx, wy, engine.time, stageId);
+    }
   }
   drawHitboxes(b, engine, wx, wy, vw, vh);
   for (const p of engine.projectiles) {
@@ -1107,6 +1173,11 @@ const BIOMES: Record<string, {
   outskirts: {
     sky: ["#16213c", "#22314f", "#33405a"], far: "#1e3a34", near: "#162a26",
     accent: "#5f9e63", stars: true, cap: "#4a7a52", capLit: "#63a065",
+    // Sampled off the forest backdrop's mossy log path, so the procedural
+    // ground reads as the same undergrowth instead of the default blue-slate
+    // dungeon rock every other biome falls back to.
+    groundTop: "#3f5a34", groundLit: "#5a7a45",
+    groundBody: "#3a2c1e", groundDark: "#241a12", groundDeep: "#120c08",
   },
   undercity: {
     sky: ["#0d0f1c", "#141a2c", "#1b2036"], far: "#1a1f38", near: "#12162a",
@@ -1192,6 +1263,23 @@ function getKeepBgImage(): HTMLImageElement | null {
  *  measured directly off the art, same idea as TOWN_BG_GROUND_FRAC. */
 const KEEP_BG_GROUND_FRAC = 0.87;
 
+/** The Outskirts' painted forest backdrop — same real-art replacement as
+ *  the town street and Warden's Keep cave, for the "outskirts" biome only
+ *  (see the early return in drawSky). No cropping needed: unlike the Keep's
+ *  hand-off art, this one came without baked-in title/caption bars. */
+let outskirtsBgImage: HTMLImageElement | null = null;
+function getOutskirtsBgImage(): HTMLImageElement | null {
+  if (!outskirtsBgImage) {
+    if (typeof Image === "undefined") return null;
+    outskirtsBgImage = new Image();
+    outskirtsBgImage.src = "/art/the-outskirt/forest-background.png";
+  }
+  return outskirtsBgImage.complete && outskirtsBgImage.naturalWidth > 0 ? outskirtsBgImage : null;
+}
+/** Fraction down the source image where the top of the mossy log path sits —
+ *  measured directly off the art, same idea as TOWN_BG_GROUND_FRAC. */
+const OUTSKIRTS_BG_GROUND_FRAC = 0.78;
+
 function drawSky(
   b: CanvasRenderingContext2D,
   vw: number,
@@ -1232,6 +1320,24 @@ function drawSky(
       const scaledW = img.naturalWidth * scale;
       const scaledH = img.naturalHeight * scale;
       const drawY = Math.round(groundWy - KEEP_BG_GROUND_FRAC * scaledH);
+      const shift = Math.round(camX * 0.35);
+      const off = -shift % scaledW;
+      for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {
+        b.drawImage(img, Math.round(x), drawY, Math.ceil(scaledW) + 1, Math.ceil(scaledH));
+      }
+      return;
+    }
+  }
+
+  if (biomeId === "outskirts") {
+    const img = getOutskirtsBgImage();
+    if (img) {
+      // Same floor-to-ceiling treatment as the Keep's cave — the forest
+      // canopy fills the whole frame top to bottom, no open sky underneath.
+      const scale = (vh * 1.05) / img.naturalHeight;
+      const scaledW = img.naturalWidth * scale;
+      const scaledH = img.naturalHeight * scale;
+      const drawY = Math.round(groundWy - OUTSKIRTS_BG_GROUND_FRAC * scaledH);
       const shift = Math.round(camX * 0.35);
       const off = -shift % scaledW;
       for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {
@@ -2319,7 +2425,8 @@ function drawFighter(
   f: Fighter,
   wx: (v: number) => number,
   wy: (v: number) => number,
-  time: number
+  time: number,
+  stageId: string | undefined
 ) {
   if (f.state === "dead" && f.isMob) return;
 
@@ -2418,14 +2525,17 @@ function drawFighter(
   // below. Falls back to the procedural body while the image is still
   // loading (or if it ever fails to load).
   const usesPortrait = (hero || knight || paladin) && !!getPortraitImage(f.classId);
+  const usesMobSprite =
+    f.isMob && !!f.mobTypeId && !!getMobSpriteImage(stageId, f.mobTypeId);
+  const usesImageArt = usesPortrait || usesMobSprite;
 
   if (f.state === "knockdown") {
-    if (!usesPortrait) drawDowned(b, x, y, w, h, p, col);
+    if (!usesImageArt) drawDowned(b, x, y, w, h, p, col);
     drawNameplate(b, f, x, y - h - 6);
     return;
   }
 
-  if (usesPortrait) {
+  if (usesImageArt) {
     drawNameplate(b, f, x, y - h - 3);
     return;
   }
@@ -2797,6 +2907,19 @@ function drawMobFlourish(
       for (let i = 0; i < 2; i++) {
         px(b, x - half + i * (w - 3), torsoY + torsoH, 2, 3, col(m.accent));
       }
+      break;
+    }
+    case "treant": {
+      // Gnarled bark plating and a leafy crown — the Outskirts' own boss,
+      // same "crowned heavy silhouette" language as Warden's aura/pauldrons
+      // below. Only ever seen if its sprite art hasn't finished loading yet.
+      pxGlow(b, x, y - h * 0.55, h * 0.7, "#84cc16", 0.5);
+      px(b, x - half - 2, torsoY - 2, 4, 6, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 4, 6, col(m.accent));
+      for (let i = 0; i < 5; i += 2) {
+        px(b, x - half + i * 2, topY - 3, 1, 3, "#65a30d");
+      }
+      px(b, x - half, topY + 3, w, 1, "#4d7c0f");
       break;
     }
     case "blade-wraith": {
