@@ -277,6 +277,26 @@ const STAGE_MOB_SPRITE_SRC: Partial<Record<string, Partial<Record<string, string
     "rabid-cur": "/art/the-outskirt/spirit-wisp.png",
     treant: "/art/the-outskirt/treant.png",
   },
+  undercity: {
+    brawler: "/art/undercity/brute.png",
+    "blade-wraith": "/art/undercity/wraith-ghost.png",
+    cultist: "/art/undercity/shadow-rogue.png",
+    dreadknight: "/art/undercity/dreadknight.png",
+    // rabid-cur, bog-slime, shieldbearer and colossus have no Undercity-
+    // themed art — deliberately NOT reusing Outskirts' forest wisp or
+    // Warden's Keep's lava sprites here, since a mob's look should match
+    // the stage it's standing in, not just its mobTypeId. They keep the
+    // plain pixel-art look until Undercity-specific art exists for them.
+  },
+  sanctum: {
+    revenant: "/art/abyssal-sanctum/void-kraken.png",
+    sentinel: "/art/abyssal-sanctum/abyss-sentinel.png",
+    "blade-wraith": "/art/abyssal-sanctum/void-swarmer.png",
+    sovereign: "/art/abyssal-sanctum/sovereign.png",
+    // colossus has no Sanctum-specific art and was dropped from this
+    // stage's spawn list entirely rather than showing Warden's Keep's lava
+    // look here — see the spawns comment in mobs.ts.
+  },
 };
 /** Bosses need to read as one at a glance — their hitboxes are only a notch
  *  taller than the toughest regular mob in their stage, nowhere near enough
@@ -286,17 +306,23 @@ const STAGE_MOB_SPRITE_SRC: Partial<Record<string, Partial<Record<string, string
 const MOB_SPRITE_SCALE: Partial<Record<string, number>> = {
   warden: 1.8,
   treant: 1.6,
+  dreadknight: 1.6,
+  sovereign: 1.5,
 };
+// Keyed by "stageId:mobTypeId", not just mobTypeId — brawler and blade-wraith
+// each wear different art in different stages, so a mobTypeId-only cache key
+// would serve whichever stage's image got requested (and cached) first.
 const mobSpriteCache = new Map<string, HTMLImageElement>();
 function getMobSpriteImage(stageId: string | undefined, mobTypeId: string): HTMLImageElement | null {
   const src = stageId ? STAGE_MOB_SPRITE_SRC[stageId]?.[mobTypeId] : undefined;
   if (!src) return null;
-  let img = mobSpriteCache.get(mobTypeId);
+  const cacheKey = `${stageId}:${mobTypeId}`;
+  let img = mobSpriteCache.get(cacheKey);
   if (!img) {
     if (typeof Image === "undefined") return null;
     img = new Image();
     img.src = src;
-    mobSpriteCache.set(mobTypeId, img);
+    mobSpriteCache.set(cacheKey, img);
   }
   return img.complete && img.naturalWidth > 0 ? img : null;
 }
@@ -924,7 +950,13 @@ export function renderFighterPortraits(
     // old static portrait.webp no longer matches the new animation art.
     // Only non-Paragon classes (no idle sheet of their own yet) still use
     // the static reference portrait.
-    const actionSprite = paragonActionSprite(f, engine.time);
+    // Mobs inherit `classId` from the player fighter they were spawned from
+    // (see spawnMob's `base = this.fighters[0]` spread), so without this
+    // guard a boss mid-attack (any state matching one of Paragon's own
+    // action specs, or just "hitstun") would pick up Paragon's action-sprite
+    // crop rect and apply it against the mob's own image — cropping it down
+    // to whatever tiny region Paragon's sheet happens to have there.
+    const actionSprite = f.isMob ? null : paragonActionSprite(f, engine.time);
     const sprinting = f.state === "sprint";
     const walking = f.state === "walk";
     const idling = f.state === "idle";
@@ -1182,6 +1214,11 @@ const BIOMES: Record<string, {
   undercity: {
     sky: ["#0d0f1c", "#141a2c", "#1b2036"], far: "#1a1f38", near: "#12162a",
     accent: "#7c5cc4", stars: false, cap: "#3a4a55", capLit: "#526b74",
+    // Sampled off the back-alley backdrop's cobblestone street, so the
+    // procedural ground reads as the same stone instead of the default
+    // blue-slate dungeon rock every other biome falls back to.
+    groundTop: "#3a3540", groundLit: "#524a5c",
+    groundBody: "#242030", groundDark: "#16131c", groundDeep: "#0c0a10",
   },
   keep: {
     sky: ["#2a1220", "#43182a", "#5c2130"], far: "#331526", near: "#20101c",
@@ -1195,6 +1232,11 @@ const BIOMES: Record<string, {
   abyss: {
     sky: ["#0a0616", "#180a2e", "#241040"], far: "#1c0e38", near: "#120a24",
     accent: "#c4b5fd", stars: true, cap: "#2e1a4a", capLit: "#5b3a8f",
+    // Sampled off the floating-cathedral backdrop's crystalline floor, so
+    // the procedural ground reads as the same crystal instead of the
+    // default blue-slate dungeon rock every other biome falls back to.
+    groundTop: "#123f5e", groundLit: "#2e7692",
+    groundBody: "#0c2e42", groundDark: "#081a2b", groundDeep: "#040c1a",
   },
   frost: {
     sky: ["#0c1c2e", "#1c3c56", "#3f6f92"], far: "#193349", near: "#122636",
@@ -1280,6 +1322,38 @@ function getOutskirtsBgImage(): HTMLImageElement | null {
  *  measured directly off the art, same idea as TOWN_BG_GROUND_FRAC. */
 const OUTSKIRTS_BG_GROUND_FRAC = 0.78;
 
+/** The Undercity's painted back-alley backdrop — same real-art replacement
+ *  as the other hand-painted stages, for the "undercity" biome only (see the
+ *  early return in drawSky). No cropping needed. */
+let undercityBgImage: HTMLImageElement | null = null;
+function getUndercityBgImage(): HTMLImageElement | null {
+  if (!undercityBgImage) {
+    if (typeof Image === "undefined") return null;
+    undercityBgImage = new Image();
+    undercityBgImage.src = "/art/undercity/undercity-background.png";
+  }
+  return undercityBgImage.complete && undercityBgImage.naturalWidth > 0 ? undercityBgImage : null;
+}
+/** Fraction down the source image where the cobblestone street sits —
+ *  measured directly off the art, same idea as TOWN_BG_GROUND_FRAC. */
+const UNDERCITY_BG_GROUND_FRAC = 0.82;
+
+/** The Abyssal Sanctum's painted floating-cathedral backdrop — same real-art
+ *  replacement as the other hand-painted stages, for the "abyss" biome only
+ *  (see the early return in drawSky). No cropping needed. */
+let sanctumBgImage: HTMLImageElement | null = null;
+function getSanctumBgImage(): HTMLImageElement | null {
+  if (!sanctumBgImage) {
+    if (typeof Image === "undefined") return null;
+    sanctumBgImage = new Image();
+    sanctumBgImage.src = "/art/abyssal-sanctum/abyssal-sanctum-background.png";
+  }
+  return sanctumBgImage.complete && sanctumBgImage.naturalWidth > 0 ? sanctumBgImage : null;
+}
+/** Fraction down the source image where the crystalline floor sits —
+ *  measured directly off the art, same idea as TOWN_BG_GROUND_FRAC. */
+const SANCTUM_BG_GROUND_FRAC = 0.78;
+
 function drawSky(
   b: CanvasRenderingContext2D,
   vw: number,
@@ -1338,6 +1412,44 @@ function drawSky(
       const scaledW = img.naturalWidth * scale;
       const scaledH = img.naturalHeight * scale;
       const drawY = Math.round(groundWy - OUTSKIRTS_BG_GROUND_FRAC * scaledH);
+      const shift = Math.round(camX * 0.35);
+      const off = -shift % scaledW;
+      for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {
+        b.drawImage(img, Math.round(x), drawY, Math.ceil(scaledW) + 1, Math.ceil(scaledH));
+      }
+      return;
+    }
+  }
+
+  if (biomeId === "undercity") {
+    const img = getUndercityBgImage();
+    if (img) {
+      // Same floor-to-ceiling treatment as the Keep's cave and the
+      // Outskirts' canopy — the back-alley buildings fill the whole frame
+      // top to bottom, no open sky underneath.
+      const scale = (vh * 1.05) / img.naturalHeight;
+      const scaledW = img.naturalWidth * scale;
+      const scaledH = img.naturalHeight * scale;
+      const drawY = Math.round(groundWy - UNDERCITY_BG_GROUND_FRAC * scaledH);
+      const shift = Math.round(camX * 0.35);
+      const off = -shift % scaledW;
+      for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {
+        b.drawImage(img, Math.round(x), drawY, Math.ceil(scaledW) + 1, Math.ceil(scaledH));
+      }
+      return;
+    }
+  }
+
+  if (biomeId === "abyss") {
+    const img = getSanctumBgImage();
+    if (img) {
+      // Same floor-to-ceiling treatment as the other hand-painted stages —
+      // the floating cathedral and starfield fill the whole frame top to
+      // bottom, no open sky underneath.
+      const scale = (vh * 1.05) / img.naturalHeight;
+      const scaledW = img.naturalWidth * scale;
+      const scaledH = img.naturalHeight * scale;
+      const drawY = Math.round(groundWy - SANCTUM_BG_GROUND_FRAC * scaledH);
       const shift = Math.round(camX * 0.35);
       const off = -shift % scaledW;
       for (let x = off - scaledW; x < vw + scaledW; x += scaledW) {
@@ -2920,6 +3032,19 @@ function drawMobFlourish(
         px(b, x - half + i * 2, topY - 3, 1, 3, "#65a30d");
       }
       px(b, x - half, topY + 3, w, 1, "#4d7c0f");
+      break;
+    }
+    case "dreadknight": {
+      // The Undercity's own boss: black plate and a huge violet flaming
+      // greatsword, same "crowned heavy silhouette" language as the other
+      // bosses. Only ever seen if its sprite art hasn't finished loading yet.
+      pxGlow(b, x, y - h * 0.55, h * 0.8, "#a78bfa", 0.55);
+      px(b, x - half - 3, torsoY - 2, 5, 7, col(m.accent));
+      px(b, x + half - 2, torsoY - 2, 5, 7, col(m.accent));
+      const bl = Math.round(h * 0.7);
+      for (let i = 0; i < bl; i++) {
+        px(b, x + dir * (half + 2 + Math.round(i * 0.2)), topY - i, 1, 1, "#c4b5fd");
+      }
       break;
     }
     case "blade-wraith": {

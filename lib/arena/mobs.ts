@@ -174,6 +174,24 @@ export const MOB_TYPES: Record<string, MobType> = {
     color: "#475569",
     accent: "#1e293b",
   },
+  dreadknight: {
+    id: "dreadknight",
+    name: "The Dread Knight",
+    level: 12,
+    maxHp: 1400,
+    damage: 46,
+    speed: 2.0,
+    expValue: 900,
+    range: 78,
+    windup: 0.32,
+    recover: 0.36,
+    aggro: 560,
+    w: 42,
+    h: 90,
+    color: "#312e81",
+    accent: "#1e1b4b",
+    isBoss: true,
+  },
   warden: {
     id: "warden",
     name: "The Warden",
@@ -787,29 +805,33 @@ export const STAGES: Stage[] = [
     name: "The Undercity",
     subtitle: "Brawlers, wraiths and cultists in the dark",
     requiredLevel: 5,
-    map: makeMap(3000, [], [
-      [1000, 140, 18, "spikes"],
-      [2250, 140, 18, "spikes"],
-    ]),
+    map: makeMap(3300, []),
     spawns: [
+      // Only brawler / blade-wraith / cultist here — the only regular mobs
+      // with Undercity-specific art (see STAGE_MOB_SPRITE_SRC in render.ts).
+      // rabid-cur, bog-slime, shieldbearer and colossus used to fill out
+      // this list too, but they'd show the plain pixel-art look with no art
+      // of their own, so they're gone from this stage entirely rather than
+      // spawning half-dressed.
       { typeId: "brawler", x: 420 },
-      { typeId: "rabid-cur", x: 560 },
+      { typeId: "cultist", x: 560 },
       { typeId: "brawler", x: 640 },
-      { typeId: "bog-slime", x: 980 },
+      { typeId: "blade-wraith", x: 980 },
       { typeId: "blade-wraith", x: 1200 },
       { typeId: "cultist", x: 1450 },
-      { typeId: "bog-slime", x: 1680 },
-      { typeId: "shieldbearer", x: 1900 },
+      { typeId: "cultist", x: 1680 },
+      { typeId: "brawler", x: 1900 },
       { typeId: "brawler", x: 2100 },
       { typeId: "blade-wraith", x: 2300 },
-      { typeId: "colossus", x: 2450 },
-      { typeId: "bog-slime", x: 2650 },
+      { typeId: "cultist", x: 2450 },
+      { typeId: "brawler", x: 2650 },
       { typeId: "cultist", x: 2820 },
-      { typeId: "shieldbearer", x: 2980 },
+      { typeId: "blade-wraith", x: 2980 },
       { typeId: "brawler", x: 300 },
       { typeId: "blade-wraith", x: 800 },
       { typeId: "cultist", x: 1740 },
       { typeId: "blade-wraith", x: 2580 },
+      { typeId: "dreadknight", x: 3150 },
     ],
   },
   {
@@ -842,17 +864,23 @@ export const STAGES: Stage[] = [
     requiredLevel: 20,
     map: makeMap(3500, []),
     spawns: [
+      // Only revenant / sentinel / blade-wraith here — the only regular
+      // mobs with Abyssal Sanctum-specific art (see STAGE_MOB_SPRITE_SRC in
+      // render.ts). colossus used to fill out this list too, but it'd show
+      // Warden's Keep's lava-golem look with no art of its own for this
+      // stage, so it's gone from here entirely rather than spawning
+      // half-dressed.
       { typeId: "revenant", x: 480 },
-      { typeId: "colossus", x: 700 },
+      { typeId: "sentinel", x: 700 },
       { typeId: "sentinel", x: 1050 },
       { typeId: "revenant", x: 1300 },
       { typeId: "blade-wraith", x: 1520 },
       { typeId: "revenant", x: 2100 },
       { typeId: "sentinel", x: 2300 },
       { typeId: "revenant", x: 2420 },
-      { typeId: "colossus", x: 2700 },
+      { typeId: "blade-wraith", x: 2700 },
       { typeId: "sovereign", x: 3300 },
-      ...["revenant", "colossus", "revenant", "blade-wraith", "revenant"].map(
+      ...["revenant", "sentinel", "revenant", "blade-wraith", "revenant"].map(
         (typeId, i) => ({ typeId, x: SANCTUM_PERCH_X[i] })
       ),
     ],
@@ -889,11 +917,7 @@ export const STAGES: Stage[] = [
     name: "The Sundered Forge",
     subtitle: "Beyond the Reach — the Forgeheart burns at the far end",
     requiredLevel: 36,
-    map: makeMap(3600, [], [
-      [900, 180, 26, "lava"],
-      [2000, 180, 26, "lava"],
-      [3050, 160, 26, "lava"],
-    ]),
+    map: makeMap(3600, []),
     spawns: [
       { typeId: "cinderwraith", x: 500 },
       { typeId: "cinderwraith", x: 740 },
@@ -942,11 +966,7 @@ export const STAGES: Stage[] = [
     name: "The Blighted Hollow",
     subtitle: "Beyond the Spire — a poisoned grove where nothing living remains",
     requiredLevel: 46,
-    map: makeMap(3600, [], [
-      [850, 220, 14, "poison"],
-      [1900, 220, 14, "poison"],
-      [2950, 220, 14, "poison"],
-    ]),
+    map: makeMap(3600, []),
     spawns: [
       { typeId: "plaguebound", x: 500 },
       { typeId: "plaguebound", x: 740 },

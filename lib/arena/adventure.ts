@@ -1047,6 +1047,7 @@ const BOSS_PHASE2: Partial<
   rotmother: { hpFrac: 0.4, announce: "The Rotmother's decay spreads across the field!" },
   sunderedking: { hpFrac: 0.25, announce: "The Sundered King refuses to fall!" },
   treant: { hpFrac: 0.5, announce: "The Elder Treant's roots surge with fury!" },
+  dreadknight: { hpFrac: 0.5, announce: "The Dread Knight's blade ignites with abyssal fire!" },
 };
 
 class MobBrain {
@@ -1133,6 +1134,9 @@ class MobBrain {
       self.attackPower = Math.round(self.attackPower * 1.15);
     } else if (this.type.id === "treant") {
       self.attackPower = Math.round(self.attackPower * 1.2);
+      self.speedMult *= 1.15;
+    } else if (this.type.id === "dreadknight") {
+      self.attackPower = Math.round(self.attackPower * 1.25);
       self.speedMult *= 1.15;
     }
   }
